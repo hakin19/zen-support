@@ -1,8 +1,8 @@
-# AAA Network Support - Virtual Network Engineer (vNE)
+# Zen & Zen Network Support - Virtual Network Engineer (vNE)
 
 ## Overview
 
-AAA Network Support provides an AI-powered Virtual Network Engineer delivered via a plug-and-play hardware device. This solution helps SMBs and mid-market companies resolve network issues quickly, from catastrophic outages to performance degradations, using secure out-of-band cellular connectivity.
+Zen & Zen Network Support provides an AI-powered Virtual Network Engineer delivered via a plug-and-play hardware device. This solution helps SMBs and mid-market companies resolve network issues quickly, from catastrophic outages to performance degradations, using secure out-of-band cellular connectivity.
 
 ## Problem
 
@@ -61,7 +61,7 @@ Simple flat-fee monthly subscription per location (e.g., $99/month)
 
 ## Getting Started
 
-1. Subscribe to AAA Network Support
+1. Subscribe to Zen & Zen Network Support
 2. Receive pre-configured vNE device
 3. Connect device to network when issues arise
 4. Call support number for AI-guided resolution
@@ -69,13 +69,13 @@ Simple flat-fee monthly subscription per location (e.g., $99/month)
 ## Security & Privacy
 
 - Multi-factor authentication (Caller ID + SMS OTP)
-- On-device data sanitization before cloud processing
+- Cloud-based PII sanitization before AI processing
 - All network changes require explicit user approval
 - Audit trail for all actions taken
 
 ## Contact
 
-For more information about AAA Network Support and the Virtual Network Engineer solution, visit our website or contact our sales team.
+For more information about Zen & Zen Network Support and the Virtual Network Engineer solution, visit our website or contact our sales team.
 
 ---
 

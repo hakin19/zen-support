@@ -1,4 +1,4 @@
-Product Requirements Document: AAA Network Support (vNE MVP)
+Product Requirements Document: Zen & Zen Network Support (vNE MVP)
 Version: 1.0
 
 1. Introduction
@@ -6,7 +6,7 @@ Version: 1.0
 Small and Medium-sized Businesses (SMBs) and mid-market companies with remote branches lose significant time and money when their networks fail or underperform. Their current support options are inadequate: on-site IT staff are often generalists who lack deep networking expertise, and traditional remote support services (like MSPs) are rendered helpless during a total network outage. This leaves businesses unable to operate and their IT managers without a viable path to a quick resolution.
 
 1.2. Proposed Solution
-This document outlines the requirements for the Minimum Viable Product (MVP) of "AAA Network Support." The solution is a subscription service that provides an AI-powered Virtual Network Engineer (vNE). The vNE is delivered via a small, off-the-shelf hardware device that the subscriber plugs into their network on-demand. Using a secure, out-of-band cellular connection, the vNE can diagnose and, with user permission, remediate the full spectrum of network issues—from catastrophic outages to subtle performance degradations.
+This document outlines the requirements for the Minimum Viable Product (MVP) of "Zen & Zen Network Support." The solution is a subscription service that provides an AI-powered Virtual Network Engineer (vNE). The vNE is delivered via a small, off-the-shelf hardware device that the subscriber plugs into their network on-demand. Using a secure, out-of-band cellular connection, the vNE can diagnose and, with user permission, remediate the full spectrum of network issues—from catastrophic outages to subtle performance degradations.
 
 1.3. Goals of this Document
 The purpose of this PRD is to define the specific features, user flows, and technical requirements for the MVP. This document will serve as the single source of truth for the engineering and design teams to build and launch the initial version of the service.
@@ -34,7 +34,7 @@ Security & Privacy:
 
 MFA: Authentication requires both Caller ID and an SMS-based OTP.
 
-Data Sanitization: A small, on-device "nano LLM" will find and obfuscate all sensitive data (PII, credentials) before it is sent to the cloud for analysis.
+Data Sanitization: Raw diagnostic data is transmitted to the cloud where PII sanitization occurs before analysis by foundational AI models, protecting sensitive information from AI exposure.
 
 HITL: All state-altering actions must be approved by the user via the secure web portal (hosted in the cloud), which provides an audit trail of consent.
 
@@ -55,7 +55,7 @@ Target Audience: IT Generalists at SMBs (under 500 employees) and Centralized IT
 
 Initial Verticals: Multi-location healthcare clinics and retail chains.
 
-Positioning: "AAA Network Support: Assured Access & Assistance." We provide "peace of mind" with an on-demand, AI-powered network specialist.
+Positioning: "Zen & Zen Network Support: Assured Access & Assistance." We provide "peace of mind" with an on-demand, AI-powered network specialist.
 
 Pricing: A simple, flat-fee monthly subscription per location (e.g., $99/month).
 

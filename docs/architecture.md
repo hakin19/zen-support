@@ -1,4 +1,4 @@
-# AAA Network Support - System Architecture
+# Zen & Zen Network Support - System Architecture
 
 ## Executive Summary
 
@@ -8,7 +8,7 @@ The Zen & Zen Support system implements a "hands on-prem, brains in-the-cloud" a
 
 The system consists of three main layers:
 
-1. **Device Layer**: Raspberry Pi hardware with LTE connectivity that executes diagnostics locally and sanitizes data before cloud transmission
+1. **Device Layer**: Raspberry Pi hardware with LTE connectivity that collects raw network diagnostic data and transmits it securely to cloud
 2. **Cloud Services**: Simple API backend with AI orchestration, authentication, and web portal
 3. **User Interface**: Multi-modal experience combining voice calls with a secure web portal for approvals
 
@@ -20,7 +20,7 @@ The architecture prioritizes security (MFA + HITL approval), simplicity (minimal
 
 **Device Agent** (Raspberry Pi)
 - Execute network diagnostic commands locally
-- Sanitize sensitive data before cloud transmission
+- Collect and transmit raw diagnostic data to cloud
 - Manage secure LTE connection to cloud
 - Handle multi-color LED status indication
 - Execute approved remediation scripts
@@ -253,7 +253,7 @@ The architecture handles 10x growth through:
 
 ### Security
 Primary threat vectors and mitigations:
-- **Device Compromise**: Data sanitization on-device, outbound-only connections, immutable OS
+- **Device Compromise**: Secure data transmission, outbound-only connections, immutable OS
 - **Man-in-the-Middle**: Certificate pinning, TLS 1.3, VPN-like security model
 - **Unauthorized Access**: Multi-factor auth (Caller ID + SMS), short-lived JWT tokens
 - **Data Breach**: Minimal PII storage, encryption at rest, audit logging
@@ -281,7 +281,7 @@ The system deploys through a simple pipeline:
 ```mermaid
 graph TB
     subgraph "Customer Network"
-        RPI[Raspberry Pi Device<br/>- Execute diagnostics<br/>- Sanitize data<br/>- LTE connection]
+        RPI[Raspberry Pi Device<br/>- Execute diagnostics<br/>- Transmit raw data<br/>- LTE connection]
         NET[Network Equipment<br/>- Routers<br/>- Switches<br/>- Modems]
         RPI <--> NET
     end

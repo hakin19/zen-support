@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is the AAA Network Support (Aizen vNE) project - an AI-powered Virtual Network Engineer system that provides intelligent network diagnostics and remediation through on-premise hardware agents and cloud-based AI services. The solution helps SMBs and mid-market companies resolve network issues quickly using a plug-and-play device with secure out-of-band cellular connectivity.
+This is the Zen & Zen Network Support (Aizen vNE) project - an AI-powered Virtual Network Engineer system that provides intelligent network diagnostics and remediation through on-premise hardware agents and cloud-based AI services. The solution helps SMBs and mid-market companies resolve network issues quickly using a plug-and-play device with secure out-of-band cellular connectivity.
 
 ## Architecture Overview
 
@@ -12,7 +12,7 @@ The system follows a "hands on-prem, brains in-the-cloud" architecture:
 
 - **On-Device Agent (Raspberry Pi)**: Executes diagnostic commands locally, manages credentials, serves secure web portal
 - **Cloud AI Services**: Fine-tuned LLM for planning and analysis, diagnostic engine for script generation
-- **Security Layer**: MFA authentication, on-device data sanitization, human-in-the-loop approval for all state changes
+- **Security Layer**: MFA authentication, cloud-based data sanitization, human-in-the-loop approval for all state changes
 - **User Interface**: Multi-modal experience via phone (voice) and web portal
 
 ## Planned Monorepo Structure
@@ -20,7 +20,7 @@ The system follows a "hands on-prem, brains in-the-cloud" architecture:
 The project will be organized as a monorepo with the following structure:
 
 - `packages/device-agent/` - Raspberry Pi agent (Node.js/TypeScript)
-- `packages/nano-llm/` - On-device PII sanitization (ONNX/TensorFlow Lite)
+- `packages/pii-sanitizer/` - Cloud-based PII sanitization service
 - `packages/web-portal/` - Customer portal (Next.js 14, TypeScript, Tailwind)
 - `packages/api-gateway/` - Main API service (Node.js, Express/Fastify)
 - `packages/ai-orchestrator/` - Claude Code SDK integration
@@ -38,7 +38,7 @@ The project will be organized as a monorepo with the following structure:
 - **API**: Express or Fastify
 - **Database**: PostgreSQL via Supabase (auth, real-time, RLS)
 - **Cache**: Redis 7
-- **AI**: Claude Code SDK, custom nano-LLM for sanitization
+- **AI**: Claude Code SDK, cloud-based PII sanitization service
 - **Voice**: Pipecat (self-hosted), Daily.co
 - **Container**: Docker
 - **Cloud**: AWS (ECS Fargate, ALB, CloudFront, S3, ElastiCache)
@@ -84,13 +84,13 @@ npm run deploy:production
 
 1. **Foundation** (Weeks 1-2): Monorepo setup, Docker environment, CI/CD
 2. **Core Services** (Weeks 3-6): API Gateway, device simulator, web portal, Supabase
-3. **AI Integration** (Weeks 7-10): Claude Code SDK, diagnostic engine, voice service, nano-LLM
+3. **AI Integration** (Weeks 7-10): Claude Code SDK, diagnostic engine, voice service, cloud PII sanitizer
 4. **Testing & Deployment** (Weeks 11-12): E2E testing, security audit, AWS deployment
 
 ## Security Considerations
 
 - All device-to-cloud communication is outbound-only via LTE
-- Data sanitization happens on-device before cloud transmission
+- Raw diagnostic data is transmitted securely to cloud where PII sanitization occurs before AI processing
 - Multi-factor authentication: Caller ID + SMS OTP
 - All remediation actions require explicit user approval via secure web portal
 - Service-to-service communication uses mTLS
@@ -108,4 +108,4 @@ The project is in the initial planning and architecture phase. The PRD and archi
 **Import Task Master's development workflow commands and guidelines, treat as if import is in the main CLAUDE.md file.**
 @./.taskmaster/CLAUDE.md
 
-- Remember to search for appropriate subagents to use before starting a task and run subagents in parallel if that makes sense.
+- Remember to search for appropriate subagents to use before starting a task and run subagents in the background and also in parallel if that makes sense.
