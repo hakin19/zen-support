@@ -54,3 +54,25 @@ ENV/
 
 # Worktrees
 worktrees/
+
+# Claude agents
+.claude/agents/
+
+# Taskmaster files
+.taskmaster
+.claude/commands/tm
+
+dev-debug.log
+# Environment variables
+.idea
+.vscode
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+# OS specific
+
+# Task files
+# tasks.json
+# tasks/ 

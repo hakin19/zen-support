@@ -1,0 +1,42 @@
+{
+	"mcpServers": {
+		"context7": {
+			"type": "stdio",
+			"command": "npx",
+			"args": [
+				"-y",
+				"@upstash/context7-mcp@latest"
+			],
+			"env": {}
+		},
+		"exa": {
+			"type": "stdio",
+			"command": "npx",
+			"args": [
+				"-y",
+				"exa-mcp-server"
+			],
+			"env": {
+				"EXA_API_KEY": "67f18d56-81a0-4782-b311-35b710217d9f"
+			}
+		},
+		"puppeteer": {
+			"type": "stdio",
+			"command": "npx",
+			"args": [
+				"-y",
+				"@modelcontextprotocol/server-puppeteer"
+			],
+			"env": {}
+		},
+		"playwright": {
+			"type": "stdio",
+			"command": "npx",
+			"args": [
+				"-y",
+				"@playwright/mcp@latest"
+			],
+			"env": {}
+		}
+	}
+}

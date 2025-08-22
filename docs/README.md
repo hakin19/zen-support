@@ -33,7 +33,7 @@ Our subscription-based service delivers:
 - **Security First**: MFA authentication, data sanitization, and approval workflows
 
 ### User Experience
-- Multi-modal interaction via phone and web portal
+- Multi-modal interaction via phone and cloud-hosted web portal
 - Step-by-step guided troubleshooting
 - Real-time status updates and audit trails
 - Secure credential management
