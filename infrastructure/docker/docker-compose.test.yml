@@ -1,0 +1,94 @@
+version: "3.8"
+
+# Test environment overrides
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.test.yml up
+
+services:
+  # Redis for test environment (isolated from dev)
+  redis:
+    container_name: aizen-redis-test
+    ports:
+      - "6380:6379" # Different port to avoid conflicts
+    volumes:
+      - redis-test-data:/data
+    environment:
+      # Test-specific Redis configuration
+      REDIS_MAXMEMORY: 100mb
+      REDIS_MAXMEMORY_POLICY: allkeys-lru
+
+  # API Gateway Test Configuration
+  api-gateway:
+    container_name: aizen-api-gateway-test
+    ports:
+      - "3100:3000" # Different port for test
+    environment:
+      NODE_ENV: test
+      PORT: 3000
+      # Use separate Supabase test project
+      SUPABASE_URL: ${TEST_SUPABASE_URL}
+      SUPABASE_ANON_KEY: ${TEST_SUPABASE_ANON_KEY}
+      SUPABASE_SERVICE_KEY: ${TEST_SUPABASE_SERVICE_KEY}
+      DATABASE_URL: ${TEST_DATABASE_URL}
+      # Test-specific settings
+      LOG_LEVEL: error
+      ENABLE_TEST_ENDPOINTS: true
+      DISABLE_RATE_LIMITING: true
+    command: npm run test:integration
+
+  # Web Portal Test Configuration
+  web-portal:
+    container_name: aizen-web-portal-test
+    ports:
+      - "3101:3001" # Different port for test
+    environment:
+      NODE_ENV: test
+      PORT: 3001
+      NEXT_PUBLIC_API_URL: http://localhost:3100
+      NEXT_PUBLIC_SUPABASE_URL: ${TEST_SUPABASE_URL}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${TEST_SUPABASE_ANON_KEY}
+      # Disable analytics in test
+      NEXT_PUBLIC_DISABLE_ANALYTICS: true
+    command: npm run test:e2e
+
+  # Device Agent Test Configuration
+  device-agent:
+    container_name: aizen-device-agent-test
+    ports:
+      - "3102:3002" # Different port for test
+    environment:
+      NODE_ENV: test
+      PORT: 3002
+      API_GATEWAY_URL: http://api-gateway:3000
+      DEVICE_ID: TEST-DEVICE-001
+      # Faster intervals for testing
+      HEARTBEAT_INTERVAL: 5000
+      DIAGNOSTIC_INTERVAL: 10000
+    command: npm run test
+
+  # AI Orchestrator Test Configuration
+  ai-orchestrator:
+    container_name: aizen-ai-orchestrator-test
+    ports:
+      - "3103:3003" # Different port for test
+    environment:
+      NODE_ENV: test
+      PORT: 3003
+      # Use mock AI responses in test
+      ENABLE_AI_MOCK_MODE: true
+      MOCK_RESPONSE_DELAY: 100
+      # Disable external API calls
+      CLAUDE_API_KEY: test-key-not-used
+    command: npm run test
+
+  # Disable Redis Commander in test environment
+  redis-commander:
+    profiles:
+      - never # Never run in test environment
+
+networks:
+  aizen-network:
+    name: aizen-test-network
+
+volumes:
+  redis-test-data:
+    name: aizen-redis-test-data

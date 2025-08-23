@@ -1,0 +1,174 @@
+version: "3.8"
+
+services:
+  # Redis Cache Service
+  redis:
+    image: redis:7.4-alpine
+    container_name: aizen-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - aizen-network
+    restart: unless-stopped
+
+  # API Gateway Service (Placeholder - will be built from packages/api-gateway)
+  api-gateway:
+    build:
+      context: ../../packages/api-gateway
+      dockerfile: Dockerfile
+    image: aizen/api-gateway:dev
+    container_name: aizen-api-gateway
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      # Supabase connection
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY}
+      DATABASE_URL: ${DATABASE_URL}
+      # Redis connection
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - aizen-network
+    restart: unless-stopped
+    volumes:
+      - ../../packages/api-gateway:/app
+      - /app/node_modules
+
+  # Web Portal Service (Placeholder - will be built from packages/web-portal)
+  web-portal:
+    build:
+      context: ../../packages/web-portal
+      dockerfile: Dockerfile
+    image: aizen/web-portal:dev
+    container_name: aizen-web-portal
+    ports:
+      - "3001:3001"
+    environment:
+      NODE_ENV: development
+      PORT: 3001
+      NEXT_PUBLIC_API_URL: http://localhost:3000
+      NEXT_PUBLIC_SUPABASE_URL: ${SUPABASE_URL}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+    depends_on:
+      - api-gateway
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - aizen-network
+    restart: unless-stopped
+    volumes:
+      - ../../packages/web-portal:/app
+      - /app/node_modules
+      - /app/.next
+
+  # Device Agent Simulator (Placeholder - will be built from packages/device-agent)
+  device-agent:
+    build:
+      context: ../../packages/device-agent
+      dockerfile: Dockerfile
+    image: aizen/device-agent:dev
+    container_name: aizen-device-agent
+    ports:
+      - "3002:3002"
+    environment:
+      NODE_ENV: development
+      PORT: 3002
+      API_GATEWAY_URL: http://api-gateway:3000
+      DEVICE_ID: ${DEVICE_ID:-DEV-001}
+      DEVICE_SECRET: ${DEVICE_SECRET}
+    depends_on:
+      api-gateway:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3002/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - aizen-network
+    restart: unless-stopped
+    volumes:
+      - ../../packages/device-agent:/app
+      - /app/node_modules
+
+  # AI Orchestrator Service (Placeholder - will be built from packages/ai-orchestrator)
+  ai-orchestrator:
+    build:
+      context: ../../packages/ai-orchestrator
+      dockerfile: Dockerfile
+    image: aizen/ai-orchestrator:dev
+    container_name: aizen-ai-orchestrator
+    ports:
+      - "3003:3003"
+    environment:
+      NODE_ENV: development
+      PORT: 3003
+      CLAUDE_API_KEY: ${CLAUDE_API_KEY}
+      API_GATEWAY_URL: http://api-gateway:3000
+      # Redis for caching AI responses
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    depends_on:
+      redis:
+        condition: service_healthy
+      api-gateway:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3003/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - aizen-network
+    restart: unless-stopped
+    volumes:
+      - ../../packages/ai-orchestrator:/app
+      - /app/node_modules
+
+  # Redis Commander (Development Tool - Optional)
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: aizen-redis-commander
+    ports:
+      - "8081:8081"
+    environment:
+      REDIS_HOSTS: local:redis:6379
+    depends_on:
+      - redis
+    networks:
+      - aizen-network
+    restart: unless-stopped
+    profiles:
+      - dev-tools
+
+networks:
+  aizen-network:
+    driver: bridge
+    name: aizen-network
+
+volumes:
+  redis-data:
+    name: aizen-redis-data

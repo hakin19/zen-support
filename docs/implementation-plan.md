@@ -23,18 +23,20 @@ The plan follows the "hands on-prem, brains in-the-cloud" architecture and focus
 # Phase 100: Foundation & Local Setup
 
 ## Phase 100: Foundation & Local Development Setup
- 
+
 **Goal**: Establish local development environment with Docker Compose and basic CI/CD  
-**Dependencies**: None  
+**Dependencies**: None
 
 ### 100.1: Monorepo & Development Environment Setup
 
 **Deliverables**:
+
 - Monorepo structure with TypeScript 5.9.2 configuration
 - Docker Compose development environment
 - Local development scripts and tooling
 
 **Tasks**:
+
 - 100.1.1: Initialize monorepo with nx workspace
 - 100.1.2: Configure TypeScript 5.9.2 with shared tsconfig and ES2022 target
 - 100.1.3: Set up ESLint, Prettier, and Husky pre-commit hooks
@@ -46,40 +48,46 @@ The plan follows the "hands on-prem, brains in-the-cloud" architecture and focus
   - Verify compatibility: TypeScript 5.9.2 requires Node.js 14.17+ (Node.js 20 LTS exceeds requirements)
 
 **Success Criteria**:
+
 - Developers can run `npm run dev` and have full stack running locally
 - Code formatting and linting are enforced automatically
 - TypeScript 5.9.2 compilation errors are caught before commits
 
 **Risk Mitigation**:
+
 - Use proven monorepo tools (nx) to avoid custom tooling issues
 - Document setup process thoroughly for team onboarding
 - Local-first testing approach ensures environment parity and faster feedback loops
 
-### 100.2: Local Database & Services Setup
+### 100.2: Hosted Supabase & Local Services Setup
 
 **Deliverables**:
-- Local PostgreSQL database with Docker
+
+- Hosted Supabase project configuration
 - Local Redis cache with Docker
-- Local development Supabase instance or equivalent
-- Development API keys and configuration
+- Supabase connection configuration
+- Development API keys and environment setup
 
 **Tasks**:
-- 100.2.1: Configure PostgreSQL container in docker-compose
+
+- 100.2.1: Create and configure hosted Supabase project
 - 100.2.2: Set up Redis container for session management
-- 100.2.3: Create local Supabase project or PostgreSQL equivalent for auth
-- 100.2.4: Configure development environment variables
-- 100.2.5: Set up database migration scripts
+- 100.2.3: Configure Supabase authentication and database schema
+- 100.2.4: Configure development environment variables for Supabase
+- 100.2.5: Set up Supabase migrations and RLS policies
 
 **Success Criteria**:
-- Complete local development stack runs with `docker-compose up`
-- Database is accessible and migrations run successfully
-- Local authentication system is operational
+
+- Application connects successfully to hosted Supabase
+- Redis cache runs locally with `docker-compose up`
+- Authentication via Supabase is operational
 
 **Dependencies**: 100.1 (Development Environment)
 
 ### 100.3: Local Testing & Quality Framework
 
 **Deliverables**:
+
 - Docker Compose testing stack (docker-compose.test.yml)
 - Local test runners (Jest/Vitest) within Docker containers
 - Pre-commit hooks for local code quality enforcement (husky + lint-staged)
@@ -88,14 +96,16 @@ The plan follows the "hands on-prem, brains in-the-cloud" architecture and focus
 - Local test database seeding and cleanup scripts
 
 **Tasks**:
+
 - 100.3.1: Set up Jest/Vitest testing framework within Docker containers
 - 100.3.2: Configure ESLint, Prettier, and TypeScript checking in pre-commit hooks
-- 100.3.3: Create Docker Compose testing environment with test databases
+- 100.3.3: Create Docker Compose testing environment with separate Supabase test project
 - 100.3.4: Set up local test coverage reporting and quality gates
 - 100.3.5: Create development workflow scripts for local testing
-- 100.3.6: Configure local test database seeding and cleanup
+- 100.3.6: Configure Supabase test data seeding and cleanup
 
 **Success Criteria**:
+
 - All tests run consistently within Docker environment
 - Pre-commit hooks prevent broken code from being committed
 - Developers can run full test suite locally with `npm run test:local`
@@ -107,12 +117,14 @@ The plan follows the "hands on-prem, brains in-the-cloud" architecture and focus
 ### 100.4: Local Security Foundation
 
 **Deliverables**:
+
 - Local SSL/HTTPS setup for development
 - Secure environment variable and secrets management
 - Local security scanning and validation tools
 - Development security best practices implementation
 
 **Tasks**:
+
 - 100.4.1: Configure local SSL certificates for HTTPS development using mkcert or similar
 - 100.4.2: Implement secure environment variable management with .env files and validation
 - 100.4.3: Set up pre-commit security hooks (secretlint, safety, snyk local scanning)
@@ -122,6 +134,7 @@ The plan follows the "hands on-prem, brains in-the-cloud" architecture and focus
 - 100.4.7: Create security validation scripts for local development workflow
 
 **Success Criteria**:
+
 - Local development runs over HTTPS with valid certificates
 - No secrets are stored in code repositories or committed accidentally
 - Pre-commit hooks prevent security issues from being committed
@@ -140,47 +153,53 @@ The plan follows the "hands on-prem, brains in-the-cloud" architecture and focus
 **Goal**: Build fundamental services for device communication, user authentication, and web portal in local environment  
 **Dependencies**: Phase 100 complete
 
-### 200.1: Database Schema Implementation
+### 200.1: Supabase Database Schema Implementation
 
 **Deliverables**:
-- PostgreSQL database schema with all required tables
-- Database migrations and seeding scripts
-- Basic multi-tenant security policies
+
+- Supabase database schema with all required tables
+- Supabase migrations and seeding scripts
+- Row-level security (RLS) policies for multi-tenancy
 
 **Tasks**:
-- 200.1.1: Implement customers, devices, and diagnostic_sessions tables
+
+- 200.1.1: Implement customers, devices, and diagnostic_sessions tables in Supabase
 - 200.1.2: Create audit_log table with proper indexing
-- 200.1.3: Set up basic row-level security for multi-tenant data separation
-- 200.1.4: Create database migration scripts and version control
-- 200.1.5: Implement data validation constraints and triggers
-- 200.1.6: Create test data seeding scripts for local development
+- 200.1.3: Set up RLS policies for multi-tenant data separation
+- 200.1.4: Create Supabase migration scripts and version control
+- 200.1.5: Implement data validation using Supabase database functions
+- 200.1.6: Create test data seeding scripts via Supabase
 
 **Success Criteria**:
-- All tables created with proper relationships and constraints
-- Multi-tenant data separation works in local environment
-- Database performance is optimized with proper indexing
-- Test data can be easily seeded for development
 
-**Dependencies**: 100.2 (Local Database Setup)
+- All tables created with proper relationships in Supabase
+- RLS policies enforce multi-tenant data separation
+- Database performance is optimized with proper indexing
+- Test data can be easily seeded via Supabase
+
+**Dependencies**: 100.2 (Hosted Supabase Setup)
 
 ### 200.2: API Backend Core Service
 
 **Deliverables**:
+
 - Node.js/Express API service with TypeScript 5.9.2
 - Device registration and communication endpoints
 - Local authentication and session management
 - Real-time WebSocket connections
 
 **Tasks**:
+
 - 200.2.1: Initialize Express.js server with TypeScript 5.9.2 configuration
 - 200.2.2: Implement device registration endpoint (/api/device/register)
 - 200.2.3: Create diagnostic data submission endpoint (/api/device/diagnostic)
-- 200.2.4: Build authentication system with mock email OTP for local testing
+- 200.2.4: Integrate Supabase authentication with email OTP
 - 200.2.5: Implement WebSocket server for real-time updates
 - 200.2.6: Add Redis integration for session management
 - 200.2.7: Create comprehensive API testing suite
 
 **Success Criteria**:
+
 - API endpoints respond correctly according to architecture spec
 - WebSocket connections maintain stable real-time communication
 - Authentication flow works end-to-end with mock email OTP in local environment
@@ -191,14 +210,16 @@ The plan follows the "hands on-prem, brains in-the-cloud" architecture and focus
 ### 200.3: Web Portal Frontend
 
 **Deliverables**:
+
 - Next.js 14 web application with TypeScript 5.9.2
 - Customer dashboard with real-time updates
 - HITL approval interface for remediation actions
 - Responsive design for mobile and desktop
 
 **Tasks**:
+
 - 200.3.1: Initialize Next.js project with TypeScript 5.9.2 and Tailwind CSS
-- 200.3.2: Implement authentication pages (login, mock email OTP verification)
+- 200.3.2: Implement authentication pages using Supabase Auth
 - 200.3.3: Create customer dashboard with network status display
 - 200.3.4: Build remediation approval interface with audit trail
 - 200.3.5: Add real-time updates via WebSocket integration
@@ -206,6 +227,7 @@ The plan follows the "hands on-prem, brains in-the-cloud" architecture and focus
 - 200.3.7: Create frontend component testing suite
 
 **Success Criteria**:
+
 - Users can authenticate and access their dashboard locally
 - Real-time diagnostic updates display correctly
 - Remediation approvals are processed with proper audit logging
@@ -217,12 +239,14 @@ The plan follows the "hands on-prem, brains in-the-cloud" architecture and focus
 ### 200.4: Device Agent Simulator
 
 **Deliverables**:
+
 - Raspberry Pi agent simulation for development
 - Network diagnostic command execution
 - Basic diagnostic data collection
 - Device status simulation
 
 **Tasks**:
+
 - 200.4.1: Create device agent simulator for local development
 - 200.4.2: Implement network diagnostic command execution (ping, traceroute, etc.)
 - 200.4.3: Build basic diagnostic data collection and formatting
@@ -232,6 +256,7 @@ The plan follows the "hands on-prem, brains in-the-cloud" architecture and focus
 - 200.4.7: Create multiple device simulation capability
 
 **Success Criteria**:
+
 - Simulator registers successfully with local API
 - Network diagnostics execute and return properly formatted results
 - Device status is communicated effectively to local services
@@ -251,12 +276,14 @@ The plan follows the "hands on-prem, brains in-the-cloud" architecture and focus
 ### 300.1: Claude Code SDK Integration
 
 **Deliverables**:
+
 - AI orchestration service integrated with Claude Code SDK
 - Network diagnostic analysis and script generation
 - Intelligent remediation planning
 - Local AI response caching
 
 **Tasks**:
+
 - 300.1.1: Set up Claude Code SDK with API credentials
 - 300.1.2: Implement diagnostic data analysis using Claude
 - 300.1.3: Create remediation script generation system
@@ -266,6 +293,7 @@ The plan follows the "hands on-prem, brains in-the-cloud" architecture and focus
 - 300.1.7: Create mock AI responses for offline development
 
 **Success Criteria**:
+
 - Claude accurately analyzes network diagnostic data
 - Generated remediation scripts are safe and effective
 - AI responses are cached locally to optimize development performance
@@ -276,11 +304,13 @@ The plan follows the "hands on-prem, brains in-the-cloud" architecture and focus
 ### 300.2: Voice Service Foundation
 
 **Deliverables**:
+
 - Voice service simulation for local development
 - Mock caller ID verification system
 - Voice-web portal coordination framework
 
 **Tasks**:
+
 - 300.2.1: Create voice service simulator for local development
 - 300.2.2: Implement mock Caller ID verification against local database
 - 300.2.3: Create basic voice command simulation system
@@ -289,6 +319,7 @@ The plan follows the "hands on-prem, brains in-the-cloud" architecture and focus
 - 300.2.6: Create voice service API interface for future integration
 
 **Success Criteria**:
+
 - Voice service simulator works with local development stack
 - Mock email authentication flows work end-to-end
 - Voice-web portal coordination framework is operational
@@ -299,11 +330,13 @@ The plan follows the "hands on-prem, brains in-the-cloud" architecture and focus
 ### 300.3: End-to-End Integration Testing
 
 **Deliverables**:
+
 - Comprehensive local test suite covering full user journeys
 - Local performance testing and optimization
 - Security testing for local environment
 
 **Tasks**:
+
 - 300.3.1: Create end-to-end test scenarios for complete user workflows
 - 300.3.2: Implement automated testing for device-to-API communication
 - 300.3.3: Perform local load testing on API endpoints and WebSocket connections
@@ -313,6 +346,7 @@ The plan follows the "hands on-prem, brains in-the-cloud" architecture and focus
 - 300.3.7: Create comprehensive test data and scenario library
 
 **Success Criteria**:
+
 - All end-to-end user scenarios pass automated testing locally
 - Local system handles expected load with <30-minute MTTR simulation
 - Security testing reveals no critical vulnerabilities
@@ -323,11 +357,13 @@ The plan follows the "hands on-prem, brains in-the-cloud" architecture and focus
 ### 300.4: Local Monitoring & Observability
 
 **Deliverables**:
+
 - Local monitoring dashboard
 - Development alerting system
 - Performance metrics collection
 
 **Tasks**:
+
 - 300.4.1: Implement local metrics collection for business KPIs
 - 300.4.2: Set up local alerting for system health and performance issues
 - 300.4.3: Create local monitoring dashboard for development
@@ -336,6 +372,7 @@ The plan follows the "hands on-prem, brains in-the-cloud" architecture and focus
 - 300.4.6: Create development troubleshooting playbooks
 
 **Success Criteria**:
+
 - All critical system metrics are monitored locally
 - Business KPIs (MTTR, system health) are tracked in development
 - Development team has clear visibility into local system health
@@ -355,11 +392,13 @@ The plan follows the "hands on-prem, brains in-the-cloud" architecture and focus
 ### 400.1: POC Validation & Demo Preparation
 
 **Deliverables**:
+
 - Complete POC running in local environment
 - Customer demo scenarios and scripts
 - Performance validation documentation
 
 **Tasks**:
+
 - 400.1.1: Validate all user stories and acceptance criteria
 - 400.1.2: Create comprehensive customer demo scenarios
 - 400.1.3: Prepare sales demonstration environment
@@ -368,6 +407,7 @@ The plan follows the "hands on-prem, brains in-the-cloud" architecture and focus
 - 400.1.6: Validate MTTR achievement with realistic scenarios
 
 **Success Criteria**:
+
 - POC demonstrates <30-minute MTTR for common network issues
 - Customer demo environment runs reliably
 - All core user stories are complete and tested
@@ -378,11 +418,13 @@ The plan follows the "hands on-prem, brains in-the-cloud" architecture and focus
 ### 400.2: Security Review & Documentation
 
 **Deliverables**:
+
 - Security review of local implementation
 - Security documentation for customer due diligence
 - Preparation for production security audit
 
 **Tasks**:
+
 - 400.2.1: Conduct internal security review of POC
 - 400.2.2: Document security architecture and data flows
 - 400.2.3: Review basic diagnostic data handling and transmission security
@@ -391,13 +433,13 @@ The plan follows the "hands on-prem, brains in-the-cloud" architecture and focus
 - 400.2.6: Create security audit preparation checklist
 
 **Success Criteria**:
+
 - Internal security review reveals no critical vulnerabilities
 - Security documentation is complete for customer presentations
 - System is ready for third-party security audit
 - All security requirements are documented and implemented
 
 **Dependencies**: 300.3 (End-to-End Integration Testing)
-
 
 ---
 
@@ -413,12 +455,14 @@ The plan follows the "hands on-prem, brains in-the-cloud" architecture and focus
 ### 500.1: Core AWS Infrastructure Provisioning
 
 **Deliverables**:
+
 - AWS VPC with proper network segmentation
 - Application Load Balancer with SSL termination
 - ECS Fargate cluster configuration
 - Auto-scaling and high availability setup
 
 **Tasks**:
+
 - 500.1.1: Provision AWS VPC, subnets, and security groups
 - 500.1.2: Set up Application Load Balancer with SSL certificates
 - 500.1.3: Configure ECS Fargate cluster and task definitions
@@ -427,6 +471,7 @@ The plan follows the "hands on-prem, brains in-the-cloud" architecture and focus
 - 500.1.6: Configure NAT Gateways and routing tables
 
 **Success Criteria**:
+
 - All infrastructure components are provisioned via Terraform/IaC
 - High availability is achieved across multiple AZs
 - Network security follows AWS best practices
@@ -434,25 +479,28 @@ The plan follows the "hands on-prem, brains in-the-cloud" architecture and focus
 
 **Dependencies**: Phase 400 complete
 
-### 500.2: Database & Cache Infrastructure
+### 500.2: Production Database & Cache Infrastructure
 
 **Deliverables**:
-- Production Supabase instance or AWS RDS PostgreSQL
+
+- Production Supabase project configuration
 - ElastiCache Redis cluster
-- Database backup and recovery procedures
+- Database backup strategy (managed by Supabase)
 
 **Tasks**:
-- 500.2.1: Set up production Supabase instance with proper security
+
+- 500.2.1: Configure production Supabase project with proper security
 - 500.2.2: Configure ElastiCache Redis cluster with encryption
-- 500.2.3: Implement automated database backups and point-in-time recovery
-- 500.2.4: Set up database monitoring and performance tuning
-- 500.2.5: Configure database connection pooling
-- 500.2.6: Implement database migration procedures
+- 500.2.3: Verify Supabase automated backups and recovery procedures
+- 500.2.4: Set up database monitoring via Supabase dashboard
+- 500.2.5: Configure connection pooling via Supabase
+- 500.2.6: Implement Supabase migration procedures
 
 **Success Criteria**:
+
 - Database handles production load with proper performance
-- Backup and recovery procedures are tested and documented
-- Database security and encryption are properly configured
+- Supabase backup and recovery procedures are verified
+- Database security managed by Supabase with proper RLS policies
 - Connection pooling optimizes database connections
 
 **Dependencies**: 500.1 (Core AWS Infrastructure)
@@ -460,6 +508,7 @@ The plan follows the "hands on-prem, brains in-the-cloud" architecture and focus
 ### 500.3: GitHub Actions CI/CD Pipeline & Security
 
 **Deliverables**:
+
 - AWS ECR container registry integration
 - GitHub Actions workflows for production deployment
 - Production-grade CI/CD pipeline that mirrors local testing
@@ -468,6 +517,7 @@ The plan follows the "hands on-prem, brains in-the-cloud" architecture and focus
 - CI/CD security scanning and vulnerability detection
 
 **Tasks**:
+
 - 500.3.1: Configure AWS ECR for container images
 - 500.3.2: Set up GitHub Actions workflows for production CI/CD pipeline
 - 500.3.3: Create GitHub Actions workflows that mirror local Docker testing
@@ -482,6 +532,7 @@ The plan follows the "hands on-prem, brains in-the-cloud" architecture and focus
 - 500.3.12: Set up CI/CD security compliance validation
 
 **Success Criteria**:
+
 - GitHub Actions pipeline mirrors local testing environment exactly
 - Container images are built and deployed automatically
 - Security vulnerabilities are detected and block deployments automatically
@@ -496,11 +547,13 @@ The plan follows the "hands on-prem, brains in-the-cloud" architecture and focus
 ### 500.4: Monitoring & Logging Infrastructure
 
 **Deliverables**:
+
 - CloudWatch monitoring and alerting
 - Log aggregation and analysis
 - Performance monitoring setup
 
 **Tasks**:
+
 - 500.4.1: Configure CloudWatch metrics and custom dashboards
 - 500.4.2: Set up CloudWatch alarms and SNS notifications
 - 500.4.3: Implement centralized logging with CloudWatch Logs
@@ -509,6 +562,7 @@ The plan follows the "hands on-prem, brains in-the-cloud" architecture and focus
 - 500.4.6: Create operational dashboards and alerting
 
 **Success Criteria**:
+
 - All services emit proper metrics and logs
 - Alerting covers critical system health indicators
 - Logs are searchable and properly retained
@@ -528,11 +582,13 @@ The plan follows the "hands on-prem, brains in-the-cloud" architecture and focus
 ### 600.1: Service Deployment to Production
 
 **Deliverables**:
+
 - All services deployed to AWS production environment
 - Production configuration and environment variables
 - Service health checks and readiness probes
 
 **Tasks**:
+
 - 600.1.1: Deploy API backend services to ECS Fargate
 - 600.1.2: Deploy web portal to production environment
 - 600.1.3: Configure production environment variables and secrets
@@ -541,6 +597,7 @@ The plan follows the "hands on-prem, brains in-the-cloud" architecture and focus
 - 600.1.6: Validate all services are operational in production
 
 **Success Criteria**:
+
 - All services deploy successfully to production
 - Health checks confirm service availability
 - Inter-service communication works properly
@@ -551,11 +608,13 @@ The plan follows the "hands on-prem, brains in-the-cloud" architecture and focus
 ### 600.2: Production Security Implementation
 
 **Deliverables**:
+
 - Production security hardening
 - SSL/TLS configuration
 - Network security implementation
 
 **Tasks**:
+
 - 600.2.1: Configure WAF and DDoS protection
 - 600.2.2: Implement proper SSL/TLS configuration
 - 600.2.3: Set up VPC security groups and NACLs
@@ -565,6 +624,7 @@ The plan follows the "hands on-prem, brains in-the-cloud" architecture and focus
 - 600.2.7: Set up security monitoring and alerting
 
 **Success Criteria**:
+
 - Security hardening follows AWS best practices
 - All communications are encrypted in transit and at rest
 - Network security prevents unauthorized access
@@ -576,11 +636,13 @@ The plan follows the "hands on-prem, brains in-the-cloud" architecture and focus
 ### 600.3: Production Performance Testing
 
 **Deliverables**:
+
 - Load testing of production environment
 - Performance optimization and tuning
 - Scalability validation
 
 **Tasks**:
+
 - 600.3.1: Conduct load testing of production APIs
 - 600.3.2: Test WebSocket connections under production load
 - 600.3.3: Validate auto-scaling behavior under load
@@ -589,6 +651,7 @@ The plan follows the "hands on-prem, brains in-the-cloud" architecture and focus
 - 600.3.6: Validate MTTR achievement in production environment
 
 **Success Criteria**:
+
 - System handles expected production load
 - Auto-scaling responds appropriately to demand
 - Database performance meets production requirements
@@ -599,11 +662,13 @@ The plan follows the "hands on-prem, brains in-the-cloud" architecture and focus
 ### 600.4: Production Integration Testing
 
 **Deliverables**:
+
 - End-to-end testing in production environment
 - External service integration validation
 - Customer scenario testing
 
 **Tasks**:
+
 - 600.4.1: Run comprehensive end-to-end tests in production
 - 600.4.2: Validate Claude Code SDK integration in production
 - 600.4.3: Test voice service integration (if implemented)
@@ -612,6 +677,7 @@ The plan follows the "hands on-prem, brains in-the-cloud" architecture and focus
 - 600.4.6: Validate monitoring and alerting in production
 
 **Success Criteria**:
+
 - All end-to-end scenarios pass in production
 - External integrations work reliably
 - Customer flows are validated and functional
@@ -631,11 +697,13 @@ The plan follows the "hands on-prem, brains in-the-cloud" architecture and focus
 ### 700.1: Beta Customer Production Onboarding
 
 **Deliverables**:
+
 - Beta customer onboarding to production
 - Customer support documentation
 - Feedback collection system
 
 **Tasks**:
+
 - 700.1.1: Onboard validated beta customers to production
 - 700.1.2: Create comprehensive customer support documentation
 - 700.1.3: Implement customer feedback collection system
@@ -644,6 +712,7 @@ The plan follows the "hands on-prem, brains in-the-cloud" architecture and focus
 - 700.1.6: Create escalation procedures for production issues
 
 **Success Criteria**:
+
 - Beta customers successfully use production system
 - Customer support processes are operational
 - Feedback collection provides actionable insights
