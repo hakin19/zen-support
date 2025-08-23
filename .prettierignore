@@ -1,0 +1,45 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Build outputs
+dist/
+build/
+**/dist/
+**/build/
+.next/
+**/.next/
+out/
+**/out/
+
+# Generated files
+*.d.ts
+**/*.d.ts
+
+# Coverage reports
+coverage/
+**/coverage/
+
+# Cache directories
+.nx/
+**/.nx/
+.cache/
+**/.cache/
+
+# Environment files
+.env*
+
+# Package manager files
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Generated documentation
+docs/generated/
+
+# Build info files
+*.tsbuildinfo
+**/*.tsbuildinfo
+
+# Logs
+*.log

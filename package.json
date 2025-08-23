@@ -1,0 +1,48 @@
+{
+  "name": "@aizen/workspace",
+  "version": "0.0.1",
+  "type": "module",
+  "private": true,
+  "description": "Zen & Zen Network Support (Aizen vNE) - AI-powered Virtual Network Engineer",
+  "keywords": [
+    "network",
+    "diagnostics",
+    "ai",
+    "support"
+  ],
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  },
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "nx run-many --target=dev --all --parallel",
+    "build": "nx run-many --target=build --all",
+    "test": "nx run-many --target=test --all",
+    "lint": "nx run-many --target=lint --all",
+    "lint:fix": "nx run-many --target=lint:fix --all",
+    "type-check": "nx run-many --target=type-check --all",
+    "format": "nx format:write",
+    "format:check": "nx format:check",
+    "graph": "nx graph",
+    "clean": "nx reset && rm -rf node_modules packages/*/node_modules",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "@typescript-eslint/eslint-plugin": "^8.40.0",
+    "@typescript-eslint/parser": "^8.40.0",
+    "eslint": "^9.34.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-prettier": "^5.5.4",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.1.5",
+    "nx": "^21.4.1",
+    "prettier": "^3.6.2",
+    "tsx": "^4.20.4",
+    "typescript": "^5.9.2"
+  }
+}
