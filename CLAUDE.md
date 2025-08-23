@@ -104,8 +104,4 @@ The project is in the initial planning and architecture phase. The PRD and archi
 
 @docs/development-guidelines.md
 
-## Task Master AI Instructions
-**Import Task Master's development workflow commands and guidelines, treat as if import is in the main CLAUDE.md file.**
-@./.taskmaster/CLAUDE.md
-
 - Remember to search for appropriate subagents to use before starting a task and run subagents in the background and also in parallel if that makes sense.

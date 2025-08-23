@@ -27,7 +27,7 @@ The architecture prioritizes security (MFA + HITL approval), simplicity (minimal
 
 **API Backend** (Single Node.js Service)
 - REST endpoints for device communication
-- Authentication via Supabase (Caller ID + SMS OTP)
+- Authentication via Supabase (Caller ID + Email OTP)
 - Real-time WebSocket connections for portal updates
 - AI orchestration with Claude Code SDK
 - Voice service integration
@@ -255,7 +255,7 @@ The architecture handles 10x growth through:
 Primary threat vectors and mitigations:
 - **Device Compromise**: Secure data transmission, outbound-only connections, immutable OS
 - **Man-in-the-Middle**: Certificate pinning, TLS 1.3, VPN-like security model
-- **Unauthorized Access**: Multi-factor auth (Caller ID + SMS), short-lived JWT tokens
+- **Unauthorized Access**: Multi-factor auth (Caller ID + Email), short-lived JWT tokens
 - **Data Breach**: Minimal PII storage, encryption at rest, audit logging
 - **Social Engineering**: HITL approval for all state changes, clear approval interfaces
 
@@ -297,7 +297,7 @@ graph TB
         end
         
         subgraph "Data & AI"
-            SUPA[Supabase<br/>- PostgreSQL<br/>- Real-time auth<br/>- SMS OTP]
+            SUPA[Supabase<br/>- PostgreSQL<br/>- Real-time auth<br/>- Email OTP]
             REDIS[Redis<br/>- Session cache<br/>- Real-time data]
             CLAUDE[Claude Code SDK<br/>- Network analysis<br/>- Script generation]
         end
