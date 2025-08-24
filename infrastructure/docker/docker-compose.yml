@@ -1,4 +1,5 @@
-version: "3.8"
+# Docker Compose configuration for Aizen vNE Development
+name: aizen-vne
 
 # Environment variables are loaded from ../../.env (project root)
 services:
@@ -10,7 +11,8 @@ services:
       - "6379:6379"
     volumes:
       - redis-data:/data
-    command: redis-server --appendonly yes
+      - ./redis.conf:/usr/local/etc/redis/redis.conf:ro
+    command: redis-server /usr/local/etc/redis/redis.conf
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s

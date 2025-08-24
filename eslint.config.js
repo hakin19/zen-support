@@ -239,6 +239,35 @@ export default [
     },
   },
 
+  // Test scripts in scripts directory
+  {
+    files: ['scripts/test-*.ts'],
+    languageOptions: {
+      globals: {
+        console: 'readonly',
+        process: 'readonly',
+        Buffer: 'readonly',
+        __dirname: 'readonly',
+        __filename: 'readonly',
+        global: 'readonly',
+        setTimeout: 'readonly',
+        setInterval: 'readonly',
+        clearTimeout: 'readonly',
+        clearInterval: 'readonly',
+      },
+    },
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-unused-vars': 'off',
+      '@typescript-eslint/explicit-function-return-type': 'off',
+      '@typescript-eslint/explicit-module-boundary-types': 'off',
+      'no-console': 'off',
+      'no-process-exit': 'off',
+      'import/no-extraneous-dependencies': 'off',
+      'no-undef': 'off',
+    },
+  },
+
   // Prettier configuration (must be last)
   prettierConfig,
 ];
