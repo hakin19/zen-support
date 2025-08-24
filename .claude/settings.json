@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": ".claude/hooks/format_and_lint.sh"
+            "command": "bash /Users/jayakin/zen-support/.claude/hooks/format_and_lint.sh"
           }
         ]
       }
@@ -16,7 +16,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 .claude/hooks/inject_standards.py"
+            "command": "python3 /Users/jayakin/zen-support/.claude/hooks/inject_standards.py"
           }
         ]
       }

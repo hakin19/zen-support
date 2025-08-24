@@ -1,3 +1,5 @@
+export { supabase, supabaseAdmin, createSupabaseClient, auth, db, realtime, storage, } from './lib/supabase';
+export * from './types/database.types';
 export interface NetworkDiagnostic {
     id: string;
     timestamp: Date;

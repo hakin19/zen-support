@@ -104,5 +104,38 @@ The project is in the initial planning and architecture phase. The PRD and archi
 
 @docs/development-guidelines.md
 
+## Code Search Strategy
+
+When searching the codebase, prioritize the Gemini MCP tool for comprehensive analysis:
+
+### Use Gemini MCP (`mcp__gemini-cli__ask-gemini`) for:
+
+- **Large file analysis**: Files exceeding 2000 lines or complex modules
+- **Cross-file understanding**: Analyzing relationships between multiple files
+- **Architecture exploration**: Understanding module dependencies and patterns
+- **Refactoring preparation**: Analyzing code before making significant changes
+- **Complex searches**: Pattern matching across multiple directories
+
+### Example usage:
+
+```
+# Analyze entire packages
+mcp__gemini-cli__ask-gemini prompt="@packages/api/**/*.ts explain the API structure"
+
+# Find patterns
+mcp__gemini-cli__ask-gemini prompt="@packages/**/*.ts find all authentication implementations"
+
+# Understand complex logic
+mcp__gemini-cli__ask-gemini prompt="@packages/device-agent/src analyze the diagnostic flow and dependencies"
+```
+
+### Fallback to built-in tools (Grep, Glob, Read) for:
+
+- Quick file existence checks
+- Simple string searches
+- Reading small, specific files
+- Listing directory contents
+
+- Remember to use the supabase MCP tools to apply migrations
 - Remember to search for appropriate subagents to use before starting a task and run subagents in the background and also in parallel if that makes sense.
 - Remember we are in year 2025.

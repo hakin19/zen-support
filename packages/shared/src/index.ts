@@ -3,6 +3,20 @@
  * Common types and utilities used across packages
  */
 
+// Export Supabase client and utilities
+export {
+  supabase,
+  supabaseAdmin,
+  createSupabaseClient,
+  auth,
+  db,
+  realtime,
+  storage,
+} from './lib/supabase';
+
+// Export database types
+export * from './types/database.types';
+
 // Common types
 export interface NetworkDiagnostic {
   id: string;

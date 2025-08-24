@@ -1,5 +1,6 @@
 version: "3.8"
 
+# Environment variables are loaded from ../../.env (project root)
 services:
   # Redis Cache Service
   redis:
