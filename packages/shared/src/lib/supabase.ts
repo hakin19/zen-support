@@ -207,14 +207,30 @@ export const auth = {
  * Database query helpers with proper typing
  */
 export const db = {
-  customers: supabase.from('customers'),
-  users: supabase.from('users'),
-  devices: supabase.from('devices'),
-  diagnosticSessions: supabase.from('diagnostic_sessions'),
-  remediationActions: supabase.from('remediation_actions'),
-  auditLogs: supabase.from('audit_logs'),
-  networkDiagnostics: supabase.from('network_diagnostics'),
-  alerts: supabase.from('alerts'),
+  get customers() {
+    return getSupabase().from('customers');
+  },
+  get users() {
+    return getSupabase().from('users');
+  },
+  get devices() {
+    return getSupabase().from('devices');
+  },
+  get diagnosticSessions() {
+    return getSupabase().from('diagnostic_sessions');
+  },
+  get remediationActions() {
+    return getSupabase().from('remediation_actions');
+  },
+  get auditLogs() {
+    return getSupabase().from('audit_logs');
+  },
+  get networkDiagnostics() {
+    return getSupabase().from('network_diagnostics');
+  },
+  get alerts() {
+    return getSupabase().from('alerts');
+  },
 };
 
 /**

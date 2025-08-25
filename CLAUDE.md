@@ -102,6 +102,7 @@ The project is in the initial planning and architecture phase. The PRD and archi
 
 ## Development Guidelines
 
+You MUST obey the following guidelines:
 @docs/development-guidelines.md
 
 ## Code Search Strategy
@@ -136,6 +137,8 @@ mcp__gemini-cli__ask-gemini prompt="@packages/device-agent/src analyze the diagn
 - Reading small, specific files
 - Listing directory contents
 
-- Remember to use the supabase MCP tools to apply migrations
+- Remember to use the supabase MCP tools to apply migrations, or any other Supabase related tasks if you can't accomplish them directly.
 - Remember to search for appropriate subagents to use before starting a task and run subagents in the background and also in parallel if that makes sense.
 - Remember we are in year 2025.
+
+- you should NEVER skip pre-commit hooks, unless I asked you to.

@@ -26,6 +26,7 @@ export default [
       '**/generated/**',
       '**/*.d.ts',
       '**/tsconfig*.json',
+      '**/test/setup.ts',
     ],
   },
 
