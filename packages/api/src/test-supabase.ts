@@ -123,7 +123,7 @@ async function testConnection(): Promise<void> {
     console.log('\n5. Testing real-time configuration...');
     const channel = supabase.channel('test-channel');
     const subscribeResult = await new Promise<string>(resolve => {
-      channel.subscribe(status => {
+      channel.subscribe((status: string) => {
         resolve(status);
       });
     });
