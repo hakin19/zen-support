@@ -1,0 +1,68 @@
+# Traefik dynamic configuration for SSL certificates
+tls:
+  certificates:
+    - certFile: /etc/traefik/certs/cert.pem
+      keyFile: /etc/traefik/certs/key.pem
+      stores:
+        - default
+
+  stores:
+    default:
+      defaultCertificate:
+        certFile: /etc/traefik/certs/cert.pem
+        keyFile: /etc/traefik/certs/key.pem
+
+http:
+  routers:
+    # API Gateway Router
+    api-router:
+      rule: "Host(`api.aizen.local`)"
+      service: api-service
+      tls: {}
+      entryPoints:
+        - websecure
+
+    # Web Portal Router
+    web-router:
+      rule: "Host(`app.aizen.local`)"
+      service: web-service
+      tls: {}
+      entryPoints:
+        - websecure
+
+    # Device Agent Router
+    device-router:
+      rule: "Host(`device.aizen.local`)"
+      service: device-service
+      tls: {}
+      entryPoints:
+        - websecure
+
+    # AI Orchestrator Router
+    ai-router:
+      rule: "Host(`ai.aizen.local`)"
+      service: ai-service
+      tls: {}
+      entryPoints:
+        - websecure
+
+  services:
+    api-service:
+      loadBalancer:
+        servers:
+          - url: "https://api-gateway:3443"
+
+    web-service:
+      loadBalancer:
+        servers:
+          - url: "https://web-portal:3444"
+
+    device-service:
+      loadBalancer:
+        servers:
+          - url: "https://device-agent:3445"
+
+    ai-service:
+      loadBalancer:
+        servers:
+          - url: "https://ai-orchestrator:3446"

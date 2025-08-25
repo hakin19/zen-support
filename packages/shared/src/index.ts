@@ -68,3 +68,14 @@ export function isDiagnosticType(value: unknown): value is DiagnosticType {
 // Constants
 export const API_VERSION = 'v1' as const;
 export const DEFAULT_TIMEOUT = 30_000; // ES2022: numeric separators
+
+// Export HTTPS server utilities
+export {
+  createServers,
+  startServers,
+  shutdownServers,
+  httpsRedirectMiddleware,
+  getServerConfig,
+  type HttpsServerConfig,
+  type ServerInstances,
+} from './utils/https-server';

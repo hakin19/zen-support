@@ -1,0 +1,126 @@
+# Docker Compose override configuration for SSL/HTTPS development
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.ssl.yml up
+name: aizen-vne
+
+services:
+  # API Gateway Service with HTTPS
+  api-gateway:
+    ports:
+      - "3000:3000"  # HTTP
+      - "3443:3443"  # HTTPS
+    environment:
+      HTTPS_ENABLED: "true"
+      HTTPS_PORT: 3443
+      SSL_CERT_PATH: /app/ssl/cert.pem
+      SSL_KEY_PATH: /app/ssl/key.pem
+      NODE_TLS_REJECT_UNAUTHORIZED: "0"  # For development only
+    volumes:
+      - ../ssl/cert.pem:/app/ssl/cert.pem:ro
+      - ../ssl/key.pem:/app/ssl/key.pem:ro
+      - ../../packages/api-gateway:/app
+      - /app/node_modules
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.api.rule=Host(`api.aizen.local`)"
+      - "traefik.http.routers.api.tls=true"
+      - "traefik.http.services.api.loadbalancer.server.port=3443"
+
+  # Web Portal Service with HTTPS
+  web-portal:
+    ports:
+      - "3001:3001"  # HTTP
+      - "3444:3444"  # HTTPS
+    environment:
+      HTTPS_ENABLED: "true"
+      HTTPS_PORT: 3444
+      SSL_CERT_PATH: /app/ssl/cert.pem
+      SSL_KEY_PATH: /app/ssl/key.pem
+      NODE_TLS_REJECT_UNAUTHORIZED: "0"  # For development only
+      NEXT_PUBLIC_API_URL: https://api.aizen.local:3443
+    volumes:
+      - ../ssl/cert.pem:/app/ssl/cert.pem:ro
+      - ../ssl/key.pem:/app/ssl/key.pem:ro
+      - ../../packages/web-portal:/app
+      - /app/node_modules
+      - /app/.next
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.web.rule=Host(`app.aizen.local`)"
+      - "traefik.http.routers.web.tls=true"
+      - "traefik.http.services.web.loadbalancer.server.port=3444"
+
+  # Device Agent Service with HTTPS
+  device-agent:
+    ports:
+      - "3002:3002"  # HTTP
+      - "3445:3445"  # HTTPS
+    environment:
+      HTTPS_ENABLED: "true"
+      HTTPS_PORT: 3445
+      SSL_CERT_PATH: /app/ssl/cert.pem
+      SSL_KEY_PATH: /app/ssl/key.pem
+      NODE_TLS_REJECT_UNAUTHORIZED: "0"  # For development only
+      API_GATEWAY_URL: https://api-gateway:3443
+    volumes:
+      - ../ssl/cert.pem:/app/ssl/cert.pem:ro
+      - ../ssl/key.pem:/app/ssl/key.pem:ro
+      - ../../packages/device-agent:/app
+      - /app/node_modules
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.device.rule=Host(`device.aizen.local`)"
+      - "traefik.http.routers.device.tls=true"
+      - "traefik.http.services.device.loadbalancer.server.port=3445"
+
+  # AI Orchestrator Service with HTTPS
+  ai-orchestrator:
+    ports:
+      - "3003:3003"  # HTTP
+      - "3446:3446"  # HTTPS
+    environment:
+      HTTPS_ENABLED: "true"
+      HTTPS_PORT: 3446
+      SSL_CERT_PATH: /app/ssl/cert.pem
+      SSL_KEY_PATH: /app/ssl/key.pem
+      NODE_TLS_REJECT_UNAUTHORIZED: "0"  # For development only
+      API_GATEWAY_URL: https://api-gateway:3443
+    volumes:
+      - ../ssl/cert.pem:/app/ssl/cert.pem:ro
+      - ../ssl/key.pem:/app/ssl/key.pem:ro
+      - ../../packages/ai-orchestrator:/app
+      - /app/node_modules
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.ai.rule=Host(`ai.aizen.local`)"
+      - "traefik.http.routers.ai.tls=true"
+      - "traefik.http.services.ai.loadbalancer.server.port=3446"
+
+  # Optional: Traefik reverse proxy for easier SSL management
+  traefik:
+    image: traefik:3.0
+    container_name: aizen-traefik
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--providers.file.directory=/etc/traefik/dynamic"
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"  # Traefik dashboard
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ../ssl:/etc/traefik/certs:ro
+      - ./traefik-dynamic.yml:/etc/traefik/dynamic/config.yml:ro
+    networks:
+      - aizen-network
+    profiles:
+      - ssl
+    restart: unless-stopped
+
+networks:
+  aizen-network:
+    driver: bridge
+    name: aizen-network

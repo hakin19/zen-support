@@ -163,7 +163,7 @@ The plan follows the "hands on-prem, brains in-the-cloud" architecture and focus
 
 **Tasks**:
 
-- [ ] 100.4.1: Configure local SSL certificates for HTTPS development using mkcert or similar
+- [x] 100.4.1: Configure local SSL certificates for HTTPS development using mkcert or similar
 - [ ] 100.4.2: Implement secure environment variable management with .env files and validation
 - [ ] 100.4.3: Set up pre-commit security hooks (secretlint, safety, snyk local scanning)
 - [ ] 100.4.4: Configure local dependency vulnerability scanning (npm audit, snyk test)
