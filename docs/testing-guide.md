@@ -4,6 +4,12 @@
 
 This project uses **Vitest** as the primary testing framework, providing fast, ESM-native testing with excellent TypeScript support. Tests can run both locally and within Docker containers to ensure environment consistency.
 
+> **Related Documentation:**
+>
+> - [Development Workflows](./development-workflows.md) - Automated workflow scripts and orchestration
+> - [Testing Troubleshooting](./testing-troubleshooting.md) - Solutions for common test issues
+> - [Testing Coverage](./testing-coverage.md) - Coverage requirements and quality gates
+
 ## Quick Start
 
 ### Prerequisites
@@ -39,25 +45,17 @@ npm run test:docker
 # Open Vitest UI for interactive testing
 npm run test:ui
 
-# New Advanced Testing Options (Phase 100.3)
-# Intelligent test runner with multiple modes
-npm run test:runner -- --mode affected --coverage
-npm run test:runner -- --mode package --package shared
+# Advanced Testing Commands
+npm run test:runner    # Intelligent test runner with multiple modes
+npm run test:watch:tdd # TDD workflow with real-time file watching
+npm run dev:test       # Development validation pipeline
+npm run dev:validate   # With auto-fix and coverage
+npm run quality:check  # Quality gates enforcement
 
-# TDD workflow with real-time file watching
-npm run test:watch:tdd
-
-# Integrated development validation pipeline
-npm run dev:test
-npm run dev:validate  # With auto-fix and coverage
-
-# Quality gates with coverage enforcement and trend tracking
-npm run quality:check
-
-# Test data lifecycle management
-npm run seed:test      # Generate test data with multiple strategies
-npm run cleanup:test   # Clean up test data with safety features
-npm run reset:test-db  # Complete database reset with snapshots
+# Test Data Management
+npm run seed:test      # Generate test data
+npm run cleanup:test   # Clean up test data
+npm run reset:test-db  # Database reset with snapshots
 ```
 
 ### Test Environment Management
@@ -270,6 +268,63 @@ Each package has its own `test/setup.ts` for specific configurations:
 - **device-agent**: Mocks network utilities and child processes
 - **web**: Mocks Next.js router and React components
 
+## Advanced Test Commands
+
+### Development Test Runner (`dev:test`, `dev:validate`)
+
+Combines linting, type-checking, and testing in a single workflow:
+
+```bash
+npm run dev:test              # Run all checks
+npm run dev:validate          # Run with auto-fix and coverage
+npm run dev:test -- --bail    # Stop on first failure
+npm run dev:test -- --package=api  # Test specific package
+```
+
+**Options:**
+
+- `--fix`: Auto-fix linting issues
+- `--affected`: Only check changed files
+- `--coverage`: Include coverage report
+- `--bail`: Stop on first failure
+- `--skip-lint`: Skip linting
+- `--skip-types`: Skip type checking
+- `--skip-tests`: Skip tests
+
+### Test Runner (`test:runner`)
+
+Intelligent test execution with various strategies:
+
+```bash
+npm run test:runner           # Interactive mode
+npm run test:runner -- --mode affected --coverage
+npm run test:runner -- --mode package --package shared
+```
+
+**Modes:**
+
+- **all**: Run all tests
+- **affected**: Test only changed files
+- **package**: Test specific package
+- **file**: Test specific file
+- **watch**: Continuous testing
+
+### TDD Watch Mode (`test:watch:tdd`)
+
+Optimized for Test-Driven Development workflow:
+
+```bash
+npm run test:watch:tdd
+```
+
+**Features:**
+
+- Watches source files and runs tests automatically
+- Debounced file changes (300ms)
+- Instant feedback for red-green-refactor cycle
+- Coverage integration
+- Intelligent test selection
+
 ## Running Tests in Docker
 
 ### Docker Compose Test Environment
@@ -315,45 +370,26 @@ Test results and coverage reports are saved to:
 
 ## Quality Gates and Coverage
 
-### Coverage Requirements & Enforcement
+For detailed information about coverage requirements, thresholds, and quality gates, see:
 
-Current minimum thresholds (configured in `vitest.config.ts`):
+- [Testing Coverage Documentation](./testing-coverage.md) - Complete coverage guide
+- [Development Workflows](./development-workflows.md#7-pre-release-validation-pre-release) - Pre-release validation
 
-**Global thresholds:**
-- **Branches**: 60%
-- **Functions**: 60%
-- **Lines**: 60%
-- **Statements**: 60%
+### Quick Reference
 
-**Package-specific thresholds:**
-- **shared package**: 70% (all metrics)
-- **api package**: 65% (all metrics)
+**Current thresholds:**
 
-### Quality Gate Enforcement
+- Global: 60% (branches, functions, lines, statements)
+- Shared package: 70% (all metrics)
+- API package: 65% (all metrics)
 
-Automated quality gates prevent commits that reduce code quality:
+**Key commands:**
 
 ```bash
-# Check quality gates (runs automatically on pre-push)
-npm run quality:check
-
-# View coverage report in browser
-npm run coverage:view
-
-# Clean coverage artifacts
-npm run coverage:clean
+npm run quality:check    # Check quality gates
+npm run coverage:view    # View coverage report
+npm run coverage:badge   # Generate coverage badges
 ```
-
-**Quality gates check:**
-- Coverage thresholds compliance
-- Coverage trend analysis (prevents regression)
-- Historical data tracking
-- Markdown reports generation
-
-**Enforcement points:**
-- Pre-push hook (automatic)
-- CI/CD pipeline
-- Manual validation
 
 ## Test Data Management
 
@@ -367,7 +403,7 @@ npm run seed:test
 
 # Available strategies:
 # --strategy minimal     # Basic required data only
-# --strategy standard    # Typical development dataset  
+# --strategy standard    # Typical development dataset
 # --strategy comprehensive # Full feature testing dataset
 # --strategy scenarios   # Specific testing scenarios
 
@@ -423,6 +459,7 @@ npm run reset:test-db -- --mode snapshot --action list
 ```
 
 **Snapshot features:**
+
 - pg_dump/pg_restore for reliable state management
 - Named snapshots for different test scenarios
 - Automatic validation after restore
@@ -494,41 +531,26 @@ Install the [Vitest extension](https://marketplace.visualstudio.com/items?itemNa
 
 ## Common Issues and Solutions
 
-### Issue: Environment Variables Not Loading
+For comprehensive troubleshooting, see [Testing Troubleshooting Guide](./testing-troubleshooting.md).
 
-**Solution**: Ensure `.env` and `.env.test` exist in project root
+### Quick Fixes
+
+**Environment variables not loading:**
 
 ```bash
 cp .env.example .env
 cp .env.example .env.test
 ```
 
-### Issue: Tests Failing in Docker but Passing Locally
-
-**Solution**: Check Docker-specific environment variables and ensure services are healthy:
-
-```bash
-docker-compose ps
-docker-compose logs redis
-```
-
-### Issue: Mock Not Working
-
-**Solution**: Ensure mock is defined before importing the module:
+**Mock not working:**
 
 ```typescript
 // ✅ Correct - mock before import
 vi.mock('redis');
 import { redisClient } from './redis-client';
-
-// ❌ Wrong - mock after import
-import { redisClient } from './redis-client';
-vi.mock('redis');
 ```
 
-### Issue: Timeout Errors
-
-**Solution**: Increase timeout for slow operations:
+**Timeout errors:**
 
 ```typescript
 it('slow test', async () => {

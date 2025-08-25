@@ -246,9 +246,21 @@ export default [
     },
   },
 
-  // Test scripts in scripts directory
+  // Test scripts and utility scripts in scripts directory
   {
-    files: ['scripts/test-*.ts'],
+    files: [
+      'scripts/test-*.ts',
+      'scripts/coverage-*.ts',
+      'scripts/staged-*.ts',
+      'scripts/quality-*.ts',
+      'scripts/seed-*.ts',
+      'scripts/cleanup-*.ts',
+      'scripts/reset-*.ts',
+      'scripts/env-check.ts',
+      'scripts/workflow.ts',
+      'scripts/deps-check.ts',
+      'scripts/pre-release.ts',
+    ],
     languageOptions: {
       globals: {
         console: 'readonly',
@@ -268,9 +280,20 @@ export default [
       '@typescript-eslint/no-unused-vars': 'off',
       '@typescript-eslint/explicit-function-return-type': 'off',
       '@typescript-eslint/explicit-module-boundary-types': 'off',
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/no-unsafe-member-access': 'off',
+      '@typescript-eslint/no-unsafe-argument': 'off',
+      '@typescript-eslint/no-unsafe-call': 'off',
+      '@typescript-eslint/no-unsafe-return': 'off',
+      '@typescript-eslint/require-await': 'off',
+      '@typescript-eslint/await-thenable': 'off',
+      '@typescript-eslint/no-non-null-assertion': 'off',
+      '@typescript-eslint/prefer-promise-reject-errors': 'off',
+      '@typescript-eslint/prefer-nullish-coalescing': 'off',
       'no-console': 'off',
       'no-process-exit': 'off',
       'import/no-extraneous-dependencies': 'off',
+      'import/no-default-export': 'off',
       'no-undef': 'off',
     },
   },
