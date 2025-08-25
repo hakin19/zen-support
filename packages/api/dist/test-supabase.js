@@ -18,8 +18,7 @@ async function testConnection() {
         process.exit(1);
     }
     const sharedModule = await import('@aizen/shared');
-    const supabase = sharedModule.supabase;
-    const supabaseAdmin = sharedModule.supabaseAdmin;
+    const { supabase, supabaseAdmin } = sharedModule;
     try {
         console.log('1. Testing anonymous connection...');
         const { error: anonError } = await supabase
@@ -70,7 +69,8 @@ async function testConnection() {
             }
             else {
                 console.log('   ✅ Database functions accessible');
-                console.log('   Tables in database:', Array.isArray(health) ? health.length : 0);
+                const healthData = health;
+                console.log('   Tables in database:', Array.isArray(healthData) ? healthData.length : 0);
             }
         }
         console.log('\n5. Testing real-time configuration...');
@@ -94,5 +94,5 @@ async function testConnection() {
     }
     process.exit(0);
 }
-testConnection();
+void testConnection();
 //# sourceMappingURL=test-supabase.js.map

@@ -1,7 +1,10 @@
 import { config } from 'dotenv';
 import path from 'path';
 
-// Load test environment variables from project root
+// Load main environment variables first
+config({ path: path.resolve(__dirname, '../../../.env') });
+
+// Then override with test-specific variables
 config({ path: path.resolve(__dirname, '../../../.env.test') });
 
 // Set test environment

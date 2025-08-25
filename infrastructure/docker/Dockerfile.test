@@ -1,0 +1,35 @@
+# Test runner Dockerfile for Aizen vNE
+FROM node:20-alpine AS test-runner
+
+# Install system dependencies
+RUN apk add --no-cache \
+    python3 \
+    make \
+    g++ \
+    git
+
+# Set working directory
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+COPY packages/*/package*.json ./packages/
+
+# Install dependencies
+RUN npm ci
+
+# Copy source code
+COPY . .
+
+# Build the project
+RUN npm run build
+
+# Create directories for test outputs
+RUN mkdir -p test-results coverage
+
+# Set test environment
+ENV NODE_ENV=test
+ENV CI=true
+
+# Default command runs all tests with coverage
+CMD ["npm", "run", "test:coverage"]

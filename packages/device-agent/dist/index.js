@@ -1,6 +1,3 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.DeviceAgent = void 0;
 console.log('🔧 Starting Aizen vNE Device Agent...');
 class DeviceAgent {
     #config;
@@ -18,11 +15,11 @@ class DeviceAgent {
         return this.#isConnected;
     }
 }
-exports.DeviceAgent = DeviceAgent;
 const agent = new DeviceAgent({
     deviceId: 'dev-agent-001',
     apiEndpoint: 'http://localhost:3000',
     heartbeatInterval: 30000,
 });
 agent.connect().catch(console.error);
+export { DeviceAgent };
 //# sourceMappingURL=index.js.map

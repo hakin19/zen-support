@@ -31,6 +31,12 @@ pids
 node_modules/
 jspm_packages/
 
+# Build outputs
+dist/
+*.tsbuildinfo
+.next/
+out/
+
 # Optional npm cache directory
 .npm
 

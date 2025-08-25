@@ -1,9 +1,36 @@
-version: "3.8"
-
-# Test environment overrides
+# Docker Compose Test Environment Configuration
 # Usage: docker-compose -f docker-compose.yml -f docker-compose.test.yml up
 
 services:
+  # Test Runner Service - Runs all tests in containers
+  test-runner:
+    build:
+      context: ../../
+      dockerfile: infrastructure/docker/Dockerfile.test
+    container_name: aizen-test-runner
+    environment:
+      NODE_ENV: test
+      CI: true
+      # Use test Supabase project
+      SUPABASE_URL: ${TEST_SUPABASE_URL:-${SUPABASE_URL}}
+      SUPABASE_ANON_KEY: ${TEST_SUPABASE_ANON_KEY:-${SUPABASE_ANON_KEY}}
+      SUPABASE_SERVICE_KEY: ${TEST_SUPABASE_SERVICE_KEY:-${SUPABASE_SERVICE_KEY}}
+      DATABASE_URL: ${TEST_DATABASE_URL:-${DATABASE_URL}}
+      # Redis test connection
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - ../../:/app
+      - /app/node_modules
+      - test-results:/app/test-results
+      - coverage:/app/coverage
+    command: npm run test:coverage
+    networks:
+      - aizen-network
+
   # Redis for test environment (isolated from dev)
   redis:
     container_name: aizen-redis-test
@@ -25,15 +52,15 @@ services:
       NODE_ENV: test
       PORT: 3000
       # Use separate Supabase test project
-      SUPABASE_URL: ${TEST_SUPABASE_URL}
-      SUPABASE_ANON_KEY: ${TEST_SUPABASE_ANON_KEY}
-      SUPABASE_SERVICE_KEY: ${TEST_SUPABASE_SERVICE_KEY}
-      DATABASE_URL: ${TEST_DATABASE_URL}
+      SUPABASE_URL: ${TEST_SUPABASE_URL:-${SUPABASE_URL}}
+      SUPABASE_ANON_KEY: ${TEST_SUPABASE_ANON_KEY:-${SUPABASE_ANON_KEY}}
+      SUPABASE_SERVICE_KEY: ${TEST_SUPABASE_SERVICE_KEY:-${SUPABASE_SERVICE_KEY}}
+      DATABASE_URL: ${TEST_DATABASE_URL:-${DATABASE_URL}}
       # Test-specific settings
       LOG_LEVEL: error
       ENABLE_TEST_ENDPOINTS: true
       DISABLE_RATE_LIMITING: true
-    command: npm run test:integration
+    command: npm run test
 
   # Web Portal Test Configuration
   web-portal:
@@ -44,11 +71,11 @@ services:
       NODE_ENV: test
       PORT: 3001
       NEXT_PUBLIC_API_URL: http://localhost:3100
-      NEXT_PUBLIC_SUPABASE_URL: ${TEST_SUPABASE_URL}
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${TEST_SUPABASE_ANON_KEY}
+      NEXT_PUBLIC_SUPABASE_URL: ${TEST_SUPABASE_URL:-${SUPABASE_URL}}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${TEST_SUPABASE_ANON_KEY:-${SUPABASE_ANON_KEY}}
       # Disable analytics in test
       NEXT_PUBLIC_DISABLE_ANALYTICS: true
-    command: npm run test:e2e
+    command: npm run test
 
   # Device Agent Test Configuration
   device-agent:
@@ -92,3 +119,7 @@ networks:
 volumes:
   redis-test-data:
     name: aizen-redis-test-data
+  test-results:
+    name: aizen-test-results
+  coverage:
+    name: aizen-test-coverage

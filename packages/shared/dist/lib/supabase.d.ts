@@ -35,28 +35,28 @@ export declare const auth: {
     }>;
 };
 export declare const db: {
-    customers: import("@supabase/postgrest-js").PostgrestQueryBuilder<{
+    readonly customers: import("@supabase/postgrest-js").PostgrestQueryBuilder<{
         PostgrestVersion: "12";
     }, never, never, "customers", never>;
-    users: import("@supabase/postgrest-js").PostgrestQueryBuilder<{
+    readonly users: import("@supabase/postgrest-js").PostgrestQueryBuilder<{
         PostgrestVersion: "12";
     }, never, never, "users", never>;
-    devices: import("@supabase/postgrest-js").PostgrestQueryBuilder<{
+    readonly devices: import("@supabase/postgrest-js").PostgrestQueryBuilder<{
         PostgrestVersion: "12";
     }, never, never, "devices", never>;
-    diagnosticSessions: import("@supabase/postgrest-js").PostgrestQueryBuilder<{
+    readonly diagnosticSessions: import("@supabase/postgrest-js").PostgrestQueryBuilder<{
         PostgrestVersion: "12";
     }, never, never, "diagnostic_sessions", never>;
-    remediationActions: import("@supabase/postgrest-js").PostgrestQueryBuilder<{
+    readonly remediationActions: import("@supabase/postgrest-js").PostgrestQueryBuilder<{
         PostgrestVersion: "12";
     }, never, never, "remediation_actions", never>;
-    auditLogs: import("@supabase/postgrest-js").PostgrestQueryBuilder<{
+    readonly auditLogs: import("@supabase/postgrest-js").PostgrestQueryBuilder<{
         PostgrestVersion: "12";
     }, never, never, "audit_logs", never>;
-    networkDiagnostics: import("@supabase/postgrest-js").PostgrestQueryBuilder<{
+    readonly networkDiagnostics: import("@supabase/postgrest-js").PostgrestQueryBuilder<{
         PostgrestVersion: "12";
     }, never, never, "network_diagnostics", never>;
-    alerts: import("@supabase/postgrest-js").PostgrestQueryBuilder<{
+    readonly alerts: import("@supabase/postgrest-js").PostgrestQueryBuilder<{
         PostgrestVersion: "12";
     }, never, never, "alerts", never>;
 };
