@@ -75,6 +75,8 @@
     "quality:check": "tsx scripts/quality-gates.ts",
     "coverage:view": "open coverage/index.html",
     "coverage:clean": "rm -rf coverage/",
+    "coverage:badge": "tsx scripts/coverage-badge.ts",
+    "coverage:aggregate": "tsx scripts/coverage-aggregator.ts",
     "// Dependency Management": "Scripts for managing dependencies",
     "deps:check": "nx run-many --target=deps:check --all",
     "deps:update": "npm update && nx migrate latest",
