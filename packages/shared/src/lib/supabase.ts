@@ -207,27 +207,35 @@ export const auth = {
  * Database query helpers with proper typing
  */
 export const db = {
+  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type, @typescript-eslint/explicit-module-boundary-types
   get customers() {
     return getSupabase().from('customers');
   },
+  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type, @typescript-eslint/explicit-module-boundary-types
   get users() {
     return getSupabase().from('users');
   },
+  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type, @typescript-eslint/explicit-module-boundary-types
   get devices() {
     return getSupabase().from('devices');
   },
+  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type, @typescript-eslint/explicit-module-boundary-types
   get diagnosticSessions() {
     return getSupabase().from('diagnostic_sessions');
   },
+  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type, @typescript-eslint/explicit-module-boundary-types
   get remediationActions() {
     return getSupabase().from('remediation_actions');
   },
+  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type, @typescript-eslint/explicit-module-boundary-types
   get auditLogs() {
     return getSupabase().from('audit_logs');
   },
+  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type, @typescript-eslint/explicit-module-boundary-types
   get networkDiagnostics() {
     return getSupabase().from('network_diagnostics');
   },
+  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type, @typescript-eslint/explicit-module-boundary-types
   get alerts() {
     return getSupabase().from('alerts');
   },
