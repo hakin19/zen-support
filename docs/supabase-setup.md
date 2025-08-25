@@ -12,7 +12,7 @@ This document describes the Supabase setup for the Zen & Zen Network Support (Ai
 ## Project Details
 
 - **Project Name**: zen-support
-- **Project URL**: https://cgesudxbpqocqwixecdx.supabase.co
+- **Project URL**: https://your-project-id.supabase.co
 - **Database**: PostgreSQL 15
 - **Authentication**: Email OTP (Magic Links)
 
@@ -22,10 +22,10 @@ The following environment variables are required in your `.env` file at the proj
 
 ```bash
 # Supabase Configuration
-SUPABASE_URL=https://cgesudxbpqocqwixecdx.supabase.co
+SUPABASE_URL=https://your-project-id.supabase.co
 SUPABASE_ANON_KEY=your_anon_key_here
 SUPABASE_SERVICE_KEY=your_service_key_here  # Backend only - DO NOT expose to client
-DATABASE_URL=postgresql://postgres:password@db.cgesudxbpqocqwixecdx.supabase.co:5432/postgres
+DATABASE_URL=postgresql://postgres:your-password@db.your-project-id.supabase.co:5432/postgres
 ```
 
 ## Database Schema
@@ -296,4 +296,4 @@ const supabase = createClient(url, key, {
 - [Supabase Documentation](https://supabase.com/docs)
 - [PostgreSQL RLS Guide](https://www.postgresql.org/docs/current/ddl-rowsecurity.html)
 - [Supabase JavaScript Client](https://supabase.com/docs/reference/javascript/introduction)
-- Project Dashboard: https://app.supabase.com/project/cgesudxbpqocqwixecdx
+- Project Dashboard: https://app.supabase.com/project/your-project-id

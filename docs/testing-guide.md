@@ -6,8 +6,22 @@ This project uses **Vitest** as the primary testing framework, providing fast, E
 
 ## Quick Start
 
+### Prerequisites
+
+Before running tests, ensure you have Supabase running locally:
+
 ```bash
-# Run all tests
+# Start local Supabase (required for tests)
+npm run test:supabase:start
+
+# Or initialize with migrations and seed data
+npm run test:supabase:init
+```
+
+### Running Tests
+
+```bash
+# Run all tests (Supabase must be running)
 npm test
 
 # Run tests in watch mode (great for TDD)
@@ -16,11 +30,30 @@ npm run test:watch
 # Run tests with coverage
 npm run test:coverage
 
+# Run tests with automatic Supabase setup
+npm run test:env
+
 # Run tests in Docker containers
 npm run test:docker
 
 # Open Vitest UI for interactive testing
 npm run test:ui
+```
+
+### Test Environment Management
+
+```bash
+# Start local Supabase
+npm run test:supabase:start
+
+# Stop local Supabase
+npm run test:supabase:stop
+
+# Reset test database
+npm run test:supabase:reset
+
+# Check Supabase status
+npm run test:supabase:status
 ```
 
 ## Testing Architecture
@@ -168,17 +201,44 @@ const scenario = createTestScenario();
 
 ## Environment Configuration
 
+### Local Supabase Setup
+
+The test environment uses Supabase CLI to run a full local Supabase stack that matches production:
+
+1. **PostgreSQL 15** - Same version as hosted Supabase
+2. **PostgREST** - REST API layer
+3. **GoTrue** - Authentication service
+4. **Realtime** - WebSocket subscriptions
+5. **Storage** - S3-compatible storage
+6. **Kong** - API gateway
+7. **Edge Functions** - Deno runtime
+
 ### Test Environment Variables
 
 Tests use `.env.test` for configuration. Key variables:
 
 ```bash
 NODE_ENV=test
-TEST_SUPABASE_URL=...         # Test Supabase instance
+
+# Local Supabase (standard values for local development)
+SUPABASE_URL=http://localhost:54321
+SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+SUPABASE_SERVICE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+DATABASE_URL=postgresql://postgres:postgres@localhost:54322/postgres
+
+# Redis test instance
 REDIS_HOST=localhost
 REDIS_PORT=6380               # Different port for test Redis
+
+# Test-specific settings
 ENABLE_AI_MOCK_MODE=true      # Mock AI responses
 DISABLE_RATE_LIMITING=true    # Disable rate limits in tests
+```
+
+Copy `.env.test.example` to `.env.test` to get started:
+
+```bash
+cp .env.test.example .env.test
 ```
 
 ### Package-Specific Setup
@@ -192,25 +252,38 @@ Each package has its own `test/setup.ts` for specific configurations:
 
 ## Running Tests in Docker
 
+### Docker Compose Test Environment
+
+The project includes a complete Docker Compose test environment that runs Supabase and all services:
+
+```bash
+# Build test containers
+npm run test:docker:build
+
+# Run all tests in Docker
+npm run test:docker
+
+# Clean up test containers and volumes
+npm run test:docker:down
+```
+
+### What's Included
+
+The Docker test environment (`docker-compose.test.yml`) includes:
+
+- **Local Supabase** - Full stack running in containers
+- **Test Runner** - Dedicated container for running tests
+- **Redis Test Instance** - Isolated Redis on port 6380
+- **All Services** - API Gateway, Web Portal, Device Agent, etc.
+- **Volume Mounts** - For test results and coverage reports
+
 ### Single Package Testing
 
 ```bash
 # Test specific package in Docker
-docker-compose -f infrastructure/docker/docker-compose.yml \
+docker-compose --env-file .env.test \
                -f infrastructure/docker/docker-compose.test.yml \
                run api-gateway npm test
-```
-
-### Full Test Suite
-
-```bash
-# Run all tests in Docker
-npm run test:docker
-
-# This runs tests in isolated containers with:
-# - Separate Redis instance
-# - Test environment variables
-# - Volume mounts for results/coverage
 ```
 
 ### Test Results

@@ -9,11 +9,7 @@ import { resolve } from 'path';
 
 import { config } from 'dotenv';
 
-import {
-  getSupabase,
-  getSupabaseAdmin,
-  auth,
-} from '../packages/shared/src/lib/supabase';
+import { getSupabaseAdmin, auth } from '../packages/shared/src/lib/supabase';
 import {
   getRedisClient,
   initializeRedis,
@@ -82,7 +78,9 @@ async function setupTestUser() {
     const {
       data: { users },
     } = await adminClient.auth.admin.listUsers();
-    let authUser = users?.find(u => u.email === TEST_EMAIL);
+    let authUser = users?.find(
+      (u: any) => (u as { email: string }).email === TEST_EMAIL
+    );
 
     if (!authUser) {
       log('Creating test user in Supabase Auth...', 'info');
@@ -104,32 +102,31 @@ async function setupTestUser() {
       log(`Test user already exists: ${authUser.id}`, 'info');
     }
 
-    // Check if user exists in database
-    const { data: dbUser, error: dbError } = await adminClient
-      .from('users')
-      .select('*')
-      .eq('auth_id', authUser.id)
-      .single();
+    // Note: User database record creation will be handled by the handle_new_user trigger
+    // when the auth user is created. For testing, we'll just ensure the auth user exists.
+    log(
+      '✓ User will be automatically created in database via trigger',
+      'success'
+    );
 
-    if (dbError && dbError.code === 'PGRST116') {
-      // User doesn't exist in database, create it
-      log('Creating user record in database...', 'info');
-      const { error: insertError } = await adminClient.from('users').insert({
-        auth_id: authUser.id,
-        customer_id: TEST_CUSTOMER_ID,
-        email: TEST_EMAIL,
-        name: 'Test User',
-        role: 'admin',
-        phone: '+14155551234',
-        is_active: true,
-      });
-
-      if (insertError) {
-        throw insertError;
+    // Update user metadata to include customer_id
+    const { error: updateError } = await adminClient.auth.admin.updateUserById(
+      authUser.id,
+      {
+        user_metadata: {
+          name: 'Test User',
+          customer_id: TEST_CUSTOMER_ID,
+        },
       }
-      log('✓ User record created in database', 'success');
-    } else if (dbUser) {
-      log('✓ User record exists in database', 'success');
+    );
+
+    if (updateError) {
+      log(
+        `Warning: Could not update user metadata: ${updateError.message}`,
+        'warning'
+      );
+    } else {
+      log('✓ User metadata updated', 'success');
     }
 
     return authUser.id;
@@ -147,7 +144,7 @@ async function testRequestOTP(): Promise<boolean> {
 
   try {
     log(`Requesting OTP for ${TEST_EMAIL}...`, 'info');
-    const { data, error } = await auth.signInWithOTP(TEST_EMAIL);
+    const { error } = await auth.signInWithOTP(TEST_EMAIL);
 
     if (error) {
       log(`OTP request failed: ${JSON.stringify(error, null, 2)}`, 'error');
@@ -160,7 +157,7 @@ async function testRequestOTP(): Promise<boolean> {
       'warning'
     );
     log(
-      '   Dashboard: https://app.supabase.com/project/cgesudxbpqocqwixecdx/auth/logs',
+      `   Dashboard: https://app.supabase.com/project/${process.env.SUPABASE_PROJECT_ID}/auth/logs`,
       'info'
     );
 
@@ -247,8 +244,8 @@ async function testAuthFlow(): Promise<TestResults> {
     // Test getting current session (should be null without OTP verification)
     section('Testing Session State');
 
-    const { data: sessionData, error: sessionError } = await auth.getSession();
-    if (!sessionData?.session) {
+    const { data: sessionData } = await auth.getSession();
+    if (!(sessionData as { session?: any })?.session) {
       log('✓ No active session before OTP verification (expected)', 'success');
     } else {
       log('⚠ Unexpected active session found', 'warning');
