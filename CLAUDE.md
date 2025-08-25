@@ -100,6 +100,29 @@ npm run deploy:production
 
 The project is in the initial planning and architecture phase. The PRD and architecture documents have been created. The next step is to set up the monorepo structure and begin implementing the foundation components.
 
+## Critical Rules
+
+**NEVER DELETE FILES WITHOUT EXPLICIT DOUBLE CONFIRMATION**: Test files and any other files in the codebase are critical components. Never suggest or attempt to delete any files without first getting explicit confirmation from the user, and then double-confirming the action. This applies to all files, especially test files which are essential for code quality.
+
+**ESLINTIGNORE FILES ARE DEPRECATED**: .eslintignore files are no longer supported by ESLint and will not work. Use the "ignores" property in eslint.config.js files instead.
+
+**HOW TO PROPERLY IGNORE TEST FILES IN ESLINT**: To ignore test files, add them to the global ignores section in eslint.config.js:
+
+```javascript
+{
+  ignores: [
+    '**/*.test.ts',
+    '**/*.test.tsx',
+    '**/*.spec.ts',
+    '**/*.spec.tsx',
+    '**/test-*.ts',
+    '**/test-*.tsx',
+  ],
+}
+```
+
+This method successfully ignores test files from ESLint checking while preserving them in the codebase. This is the ONLY working method - .eslintignore files are deprecated and don't work. .eslintignore files are deprecated and will not work.
+
 ## Development Guidelines
 
 You MUST obey the following guidelines:
@@ -140,5 +163,4 @@ mcp__gemini-cli__ask-gemini prompt="@packages/device-agent/src analyze the diagn
 - Remember to use the supabase MCP tools to apply migrations, or any other Supabase related tasks if you can't accomplish them directly.
 - Remember to search for appropriate subagents to use before starting a task and run subagents in the background and also in parallel if that makes sense.
 - Remember we are in year 2025.
-
 - you should NEVER skip pre-commit hooks, unless I asked you to.

@@ -11,7 +11,7 @@
   "parserOptions": {
     "ecmaVersion": 2022,
     "sourceType": "module",
-    "project": ["./tsconfig.json", "./packages/*/tsconfig.json"]
+    "project": ["./tsconfig.json", "./packages/*/tsconfig.eslint.json", "./packages/*/tsconfig.json"]
   },
   "env": {
     "node": true,
@@ -54,11 +54,11 @@
     ".next/**",
     "vitest.config.ts",
     "vite.config.ts",
+    "**/test-*.ts",
+    "**/test-*.tsx",
     "**/*.test.ts",
     "**/*.test.tsx",
     "**/*.spec.ts",
-    "**/*.spec.tsx",
-    "**/test/**",
-    "test/**"
+    "**/*.spec.tsx"
   ]
 }

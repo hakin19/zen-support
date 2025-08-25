@@ -7,10 +7,10 @@ import * as fs from 'fs';
 import * as http from 'http';
 import * as https from 'https';
 
-import type { Express } from 'express';
+import type { Request, Response, NextFunction, Application } from 'express';
 
 export interface HttpsServerConfig {
-  app: Express;
+  app: Application;
   port: number;
   httpsPort?: number;
   certPath?: string;
@@ -30,14 +30,14 @@ export function createServers(config: HttpsServerConfig): ServerInstances {
   const {
     app,
     port,
-    httpsPort = port + 443,
+    httpsPort: _httpsPort = port + 443,
     certPath = process.env.SSL_CERT_PATH,
     keyPath = process.env.SSL_KEY_PATH,
     httpsEnabled = process.env.HTTPS_ENABLED === 'true',
   } = config;
 
   // Always create HTTP server
-  const httpServer = http.createServer(app);
+  const httpServer = http.createServer(app as http.RequestListener);
 
   // Create HTTPS server if enabled and certificates exist
   let httpsServer: https.Server | undefined;
@@ -51,7 +51,10 @@ export function createServers(config: HttpsServerConfig): ServerInstances {
           key: fs.readFileSync(keyPath),
         };
 
-        httpsServer = https.createServer(httpsOptions, app);
+        httpsServer = https.createServer(
+          httpsOptions,
+          app as http.RequestListener
+        );
         console.log('✅ HTTPS server configured with SSL certificates');
       } else {
         console.warn('⚠️  SSL certificates not found, HTTPS disabled');
@@ -82,7 +85,7 @@ export async function startServers(
     let serversStarted = 0;
     const totalServers = httpsServer ? 2 : 1;
 
-    const checkAllStarted = () => {
+    const checkAllStarted = (): void => {
       serversStarted++;
       if (serversStarted === totalServers) {
         resolve();
@@ -154,11 +157,16 @@ export async function shutdownServers(servers: ServerInstances): Promise<void> {
 /**
  * Creates HTTPS redirect middleware
  */
-export function httpsRedirectMiddleware(httpsPort: number) {
-  return (req: any, res: any, next: any) => {
-    if (!req.secure && req.get('X-Forwarded-Proto') !== 'https') {
-      const host = req.get('Host')?.split(':')[0] || 'localhost';
-      return res.redirect(`https://${host}:${httpsPort}${req.url}`);
+export function httpsRedirectMiddleware(
+  httpsPort: number
+): (req: Request, res: Response, next: NextFunction) => void {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    // Check if request is secure (HTTPS)
+    const isSecure = (req as Request & { secure?: boolean }).secure;
+    if (!isSecure && req.get('X-Forwarded-Proto') !== 'https') {
+      const host = req.get('Host')?.split(':')[0] ?? 'localhost';
+      res.redirect(`https://${host}:${httpsPort}${req.url}`);
+      return;
     }
     next();
   };
@@ -167,14 +175,22 @@ export function httpsRedirectMiddleware(httpsPort: number) {
 /**
  * Gets environment-based server configuration
  */
-export function getServerConfig() {
+export function getServerConfig(): {
+  httpsEnabled: boolean;
+  httpPort: number;
+  httpsPort: number;
+  certPath: string | undefined;
+  keyPath: string | undefined;
+  trustProxy: boolean;
+  forceHttps: boolean;
+} {
   const isProduction = process.env.NODE_ENV === 'production';
   const httpsEnabled = process.env.HTTPS_ENABLED === 'true';
 
   return {
     httpsEnabled,
-    httpPort: parseInt(process.env.PORT || '3000', 10),
-    httpsPort: parseInt(process.env.HTTPS_PORT || '3443', 10),
+    httpPort: parseInt(process.env.PORT ?? '3000', 10),
+    httpsPort: parseInt(process.env.HTTPS_PORT ?? '3443', 10),
     certPath: process.env.SSL_CERT_PATH,
     keyPath: process.env.SSL_KEY_PATH,
     trustProxy: isProduction,

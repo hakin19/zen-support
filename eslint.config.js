@@ -27,6 +27,12 @@ export default [
       '**/*.d.ts',
       '**/tsconfig*.json',
       '**/test/setup.ts',
+      '**/*.test.ts',
+      '**/*.test.tsx',
+      '**/*.spec.ts',
+      '**/*.spec.tsx',
+      '**/test-*.ts',
+      '**/test-*.tsx',
     ],
   },
 
