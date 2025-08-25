@@ -246,6 +246,40 @@ export default [
     },
   },
 
+  // Test utilities and fixtures
+  {
+    files: [
+      '**/test/fixtures/**/*.ts',
+      '**/test/factories/**/*.ts',
+      '**/test/utils/**/*.ts',
+    ],
+    languageOptions: {
+      globals: {
+        console: 'readonly',
+        process: 'readonly',
+        Buffer: 'readonly',
+        __dirname: 'readonly',
+        __filename: 'readonly',
+        global: 'readonly',
+      },
+    },
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-unused-vars': 'off',
+      '@typescript-eslint/explicit-function-return-type': 'off',
+      '@typescript-eslint/explicit-module-boundary-types': 'off',
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/no-unsafe-member-access': 'off',
+      '@typescript-eslint/no-unsafe-argument': 'off',
+      '@typescript-eslint/no-unsafe-call': 'off',
+      '@typescript-eslint/no-unsafe-return': 'off',
+      '@typescript-eslint/prefer-nullish-coalescing': 'off',
+      'no-console': 'off',
+      'import/no-extraneous-dependencies': 'off',
+      'import/no-default-export': 'off',
+    },
+  },
+
   // Test scripts and utility scripts in scripts directory
   {
     files: [

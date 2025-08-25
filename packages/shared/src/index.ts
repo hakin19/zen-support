@@ -15,7 +15,7 @@ export {
 } from './lib/supabase';
 
 // Export database types
-export * from './types/database.types';
+export * from './types/supabase.types';
 
 // Common types
 export interface NetworkDiagnostic {
