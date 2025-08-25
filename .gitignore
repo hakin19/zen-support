@@ -37,6 +37,10 @@ dist/
 .next/
 out/
 
+# Test coverage
+coverage/
+*.lcov
+
 # Optional npm cache directory
 .npm
 
