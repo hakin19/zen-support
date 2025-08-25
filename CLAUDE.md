@@ -15,118 +15,174 @@ The system follows a "hands on-prem, brains in-the-cloud" architecture:
 - **Security Layer**: MFA authentication, cloud-based data sanitization, human-in-the-loop approval for all state changes
 - **User Interface**: Multi-modal experience via phone (voice) and web portal
 
-## Planned Monorepo Structure
+## Monorepo Structure
 
-The project will be organized as a monorepo with the following structure:
+This is an Nx-based monorepo with the following packages:
 
+- `packages/api/` - Backend API service (Node.js/Express)
+- `packages/web/` - Customer web portal (Next.js 14, TypeScript, Tailwind)
 - `packages/device-agent/` - Raspberry Pi agent (Node.js/TypeScript)
-- `packages/pii-sanitizer/` - Cloud-based PII sanitization service
-- `packages/web-portal/` - Customer portal (Next.js 14, TypeScript, Tailwind)
-- `packages/api-gateway/` - Main API service (Node.js, Express/Fastify)
-- `packages/ai-orchestrator/` - Claude Code SDK integration
-- `packages/voice-service/` - Voice processing (Pipecat, Daily.co)
-- `packages/diagnostic-engine/` - Script generation service
 - `packages/shared/` - Shared types and utilities
-- `infrastructure/` - Docker, Terraform, Kubernetes configs
-- `tools/pi-emulator/` - Raspberry Pi emulation for development
 
-## Technology Stack
+## Development Commands
 
-- **Runtime**: Node.js 20 LTS
-- **Language**: TypeScript 5.x
-- **Frontend**: Next.js 14, React 18, Tailwind CSS
-- **API**: Express or Fastify
-- **Database**: PostgreSQL via Supabase (auth, real-time, RLS)
-- **Cache**: Redis 7
-- **AI**: Claude Code SDK, cloud-based PII sanitization service
-- **Voice**: Pipecat (self-hosted), Daily.co
-- **Container**: Docker
-- **Cloud**: AWS (ECS Fargate, ALB, CloudFront, S3, ElastiCache)
-- **CI/CD**: GitHub Actions
-
-## Development Commands (Future Implementation)
-
-Once the monorepo is set up, these will be the primary commands:
+### Core Development
 
 ```bash
 # Install dependencies
 npm install
 
-# Run development environment
-docker-compose up
+# Start all services in development mode
+npm run dev
 
-# Run specific service
-npm run dev:api-gateway
-npm run dev:web-portal
-npm run dev:voice-service
-
-# Testing
-npm test
-npm run test:unit
-npm run test:integration
-npm run test:e2e
-
-# Linting and formatting
-npm run lint
-npm run lint:fix
-npm run format
-
-# Build for production
-npm run build
-npm run build:docker
-
-# Deploy
-npm run deploy:staging
-npm run deploy:production
+# Start specific services
+npm run dev:api        # API service only
+npm run dev:web        # Web portal only
+npm run dev:device     # Device agent simulator
 ```
 
-## Key Implementation Phases
+### Testing
 
-1. **Foundation** (Weeks 1-2): Monorepo setup, Docker environment, CI/CD
-2. **Core Services** (Weeks 3-6): API Gateway, device simulator, web portal, Supabase
-3. **AI Integration** (Weeks 7-10): Claude Code SDK, diagnostic engine, voice service, cloud PII sanitizer
-4. **Testing & Deployment** (Weeks 11-12): E2E testing, security audit, AWS deployment
+```bash
+# Run all tests
+npm test
 
-## Security Considerations
+# Run tests with coverage
+npm run test:coverage
 
-- All device-to-cloud communication is outbound-only via LTE
-- Raw diagnostic data is transmitted securely to cloud where PII sanitization occurs before AI processing
-- Multi-factor authentication: Caller ID + SMS OTP
-- All remediation actions require explicit user approval via secure web portal
-- Service-to-service communication uses mTLS
-- Secrets managed via AWS Secrets Manager
+# Run tests in watch mode
+npm run test:watch
 
-## Current Status
+# Run tests for specific package
+npm test -- packages/api/**/*.test.ts
 
-The project is in the initial planning and architecture phase. The PRD and architecture documents have been created. The next step is to set up the monorepo structure and begin implementing the foundation components.
+# Test environment management (Supabase)
+npm run test:supabase:start   # Start local Supabase
+npm run test:supabase:stop    # Stop local Supabase
+npm run test:supabase:reset   # Reset test database
+npm run test:supabase:init    # Full initialization with migrations
+```
+
+### Code Quality
+
+```bash
+# Lint all packages
+npm run lint
+
+# Auto-fix linting issues
+npm run lint:fix
+
+# Type checking
+npm run type-check
+
+# Format code
+npm run format
+
+# Development validation pipeline (lint + type-check + test)
+npm run dev:validate           # Full validation with coverage
+npm run dev:test -- --fix      # Auto-fix and validate
+npm run dev:test -- --affected # Only validate changed code
+```
+
+### Nx Commands
+
+```bash
+# Visualize project dependencies
+npm run graph
+
+# Run command for specific package
+npx nx run @aizen/api:build
+npx nx run @aizen/web:dev
+
+# Run command for affected packages only
+npx nx affected --target=test
+npx nx affected --target=build
+```
+
+### Build & Deploy
+
+```bash
+# Build all packages
+npm run build
+
+# Build specific package
+npx nx run @aizen/api:build
+
+# Docker development
+npm run dev:docker       # Start all services in Docker
+npm run dev:docker:build # Build Docker images
+npm run dev:docker:down  # Stop Docker services
+```
+
+## High-Level Architecture
+
+### Service Communication Flow
+
+1. **Device → API**: Raspberry Pi agents connect via outbound LTE/4G, sending sanitized diagnostic data
+2. **API → Supabase**: PostgreSQL for persistence, real-time subscriptions, and authentication
+3. **API → Redis**: Session management and real-time data caching
+4. **API → Claude SDK**: AI orchestration for diagnostic analysis and script generation
+5. **Web Portal ↔ API**: Real-time WebSocket connections for live updates and HITL approvals
+
+### Database Schema
+
+The system uses PostgreSQL via Supabase with these core tables:
+
+- `customers`: Business accounts with subscription management
+- `devices`: Registered Raspberry Pi devices per customer
+- `diagnostic_sessions`: Active and historical support sessions
+- `audit_log`: Complete audit trail for compliance
+
+### Authentication & Security
+
+- Multi-factor authentication: Caller ID verification + Email OTP
+- All device communication is outbound-only via cellular
+- PII sanitization occurs in cloud before AI processing
+- Human-in-the-loop approval required for all remediation actions
+
+## Testing Strategy
+
+### Test Database
+
+Tests use a local Supabase instance with fixed credentials:
+
+- URL: `http://localhost:54321`
+- Database: `postgresql://postgres:postgres@localhost:54322/postgres`
+
+### Test Execution
+
+Tests are run using Vitest with coverage thresholds:
+
+- Global: 60% coverage required
+- Shared package: 70% coverage required
+- API package: 65% coverage required
+
+### Pre-commit Hooks
+
+Husky runs lint-staged on commit, which:
+
+- Formats all code with Prettier
+- Runs ESLint with auto-fix on TypeScript files
+- Runs Next.js linting for web package
+- Excludes test files from linting but formats them
 
 ## Critical Rules
 
-**NEVER DELETE FILES WITHOUT EXPLICIT DOUBLE CONFIRMATION**: Test files and any other files in the codebase are critical components. Never suggest or attempt to delete any files without first getting explicit confirmation from the user, and then double-confirming the action. This applies to all files, especially test files which are essential for code quality.
+**NEVER DELETE FILES WITHOUT EXPLICIT DOUBLE CONFIRMATION**: Test files and any other files in the codebase are critical components. Never suggest or attempt to delete any files without first getting explicit confirmation from the user, and then double-confirming the action.
 
-**ESLINTIGNORE FILES ARE DEPRECATED**: .eslintignore files are no longer supported by ESLint and will not work. Use the "ignores" property in eslint.config.js files instead.
+**ESLINTIGNORE FILES ARE DEPRECATED**: .eslintignore files are no longer supported by ESLint. Use the "ignores" property in eslint.config.js files instead.
 
-**HOW TO PROPERLY IGNORE TEST FILES IN ESLINT**: To ignore test files, add them to the global ignores section in eslint.config.js:
-
-```javascript
-{
-  ignores: [
-    '**/*.test.ts',
-    '**/*.test.tsx',
-    '**/*.spec.ts',
-    '**/*.spec.tsx',
-    '**/test-*.ts',
-    '**/test-*.tsx',
-  ],
-}
-```
-
-This method successfully ignores test files from ESLint checking while preserving them in the codebase. This is the ONLY working method - .eslintignore files are deprecated and don't work. .eslintignore files are deprecated and will not work.
+**HOW TO PROPERLY IGNORE TEST FILES IN ESLINT**: Test files are ignored via the global ignores section in eslint.config.js.
 
 ## Development Guidelines
 
-You MUST obey the following guidelines:
-@docs/development-guidelines.md
+Follow the guidelines in `docs/development-guidelines.md`:
+
+- Iterative delivery over massive releases
+- Understand existing patterns before coding
+- Test-first development approach
+- Maintain 60%+ test coverage for changed areas
+- Ship vertical slices of functionality
 
 ## Code Search Strategy
 
@@ -134,33 +190,30 @@ When searching the codebase, prioritize the Gemini MCP tool for comprehensive an
 
 ### Use Gemini MCP (`mcp__gemini-cli__ask-gemini`) for:
 
-- **Large file analysis**: Files exceeding 2000 lines or complex modules
-- **Cross-file understanding**: Analyzing relationships between multiple files
-- **Architecture exploration**: Understanding module dependencies and patterns
-- **Refactoring preparation**: Analyzing code before making significant changes
-- **Complex searches**: Pattern matching across multiple directories
+- Large file analysis exceeding 2000 lines
+- Cross-file understanding and relationships
+- Architecture exploration and patterns
+- Refactoring preparation
+- Complex pattern matching
 
-### Example usage:
-
-```
-# Analyze entire packages
-mcp__gemini-cli__ask-gemini prompt="@packages/api/**/*.ts explain the API structure"
-
-# Find patterns
-mcp__gemini-cli__ask-gemini prompt="@packages/**/*.ts find all authentication implementations"
-
-# Understand complex logic
-mcp__gemini-cli__ask-gemini prompt="@packages/device-agent/src analyze the diagnostic flow and dependencies"
-```
-
-### Fallback to built-in tools (Grep, Glob, Read) for:
+### Use built-in tools (Grep, Glob, Read) for:
 
 - Quick file existence checks
 - Simple string searches
 - Reading small, specific files
 - Listing directory contents
 
-- Remember to use the supabase MCP tools to apply migrations, or any other Supabase related tasks if you can't accomplish them directly.
-- Remember to search for appropriate subagents to use before starting a task and run subagents in the background and also in parallel if that makes sense.
-- Remember we are in year 2025.
-- you should NEVER skip pre-commit hooks, unless I asked you to.
+## Environment Configuration
+
+Copy `.env.example` to `.env` and configure:
+
+- Supabase credentials (project ID, URLs, keys)
+- Claude API key for AI integration
+- Feature flags for voice service, device simulator, etc.
+
+## Additional Notes
+
+- Use Supabase MCP tools for database migrations and management
+- Run appropriate subagents in parallel when beneficial
+- Never skip pre-commit hooks unless explicitly requested
+- Current year context: 2025
