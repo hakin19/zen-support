@@ -100,10 +100,34 @@ beforeEach(() => {
   clearAllMocks();
 });
 
-afterEach(() => {
+afterEach(async () => {
   // Clean up after each test
   clearAllMocks();
+
+  // Clean up test data if in isolated mode
+  const isIsolatedTest = process.env.TEST_ISOLATION === 'true';
+  if (isIsolatedTest) {
+    // Clean up any test data created during this test
+    // This is optional and can be enabled per test
+    await cleanupTestData();
+  }
 });
+
+// Global cleanup function for test isolation
+async function cleanupTestData() {
+  try {
+    // Clean recent test data (created in last 5 minutes)
+    const cutoffTime = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+
+    const tables = ['devices', 'users', 'customers'];
+    for (const table of tables) {
+      await supabaseAdmin.from(table).delete().gte('created_at', cutoffTime);
+    }
+  } catch (error) {
+    // Ignore cleanup errors in tests
+    console.debug('Test cleanup warning:', error);
+  }
+}
 
 // Export test utilities (only when using React components)
 // export * from '@testing-library/react';

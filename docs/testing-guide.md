@@ -38,6 +38,26 @@ npm run test:docker
 
 # Open Vitest UI for interactive testing
 npm run test:ui
+
+# New Advanced Testing Options (Phase 100.3)
+# Intelligent test runner with multiple modes
+npm run test:runner -- --mode affected --coverage
+npm run test:runner -- --mode package --package shared
+
+# TDD workflow with real-time file watching
+npm run test:watch:tdd
+
+# Integrated development validation pipeline
+npm run dev:test
+npm run dev:validate  # With auto-fix and coverage
+
+# Quality gates with coverage enforcement and trend tracking
+npm run quality:check
+
+# Test data lifecycle management
+npm run seed:test      # Generate test data with multiple strategies
+npm run cleanup:test   # Clean up test data with safety features
+npm run reset:test-db  # Complete database reset with snapshots
 ```
 
 ### Test Environment Management
@@ -293,21 +313,120 @@ Test results and coverage reports are saved to:
 - `test-results/` - JUnit XML and JSON reports
 - `coverage/` - HTML, LCOV coverage reports
 
-## Coverage Requirements
+## Quality Gates and Coverage
+
+### Coverage Requirements & Enforcement
 
 Current minimum thresholds (configured in `vitest.config.ts`):
 
+**Global thresholds:**
 - **Branches**: 60%
 - **Functions**: 60%
 - **Lines**: 60%
 - **Statements**: 60%
 
-View coverage report:
+**Package-specific thresholds:**
+- **shared package**: 70% (all metrics)
+- **api package**: 65% (all metrics)
+
+### Quality Gate Enforcement
+
+Automated quality gates prevent commits that reduce code quality:
 
 ```bash
-npm run test:coverage
-# Then open coverage/index.html in browser
+# Check quality gates (runs automatically on pre-push)
+npm run quality:check
+
+# View coverage report in browser
+npm run coverage:view
+
+# Clean coverage artifacts
+npm run coverage:clean
 ```
+
+**Quality gates check:**
+- Coverage thresholds compliance
+- Coverage trend analysis (prevents regression)
+- Historical data tracking
+- Markdown reports generation
+
+**Enforcement points:**
+- Pre-push hook (automatic)
+- CI/CD pipeline
+- Manual validation
+
+## Test Data Management
+
+### Seeding Test Data
+
+Generate realistic test data using multiple strategies:
+
+```bash
+# Generate test data with different strategies
+npm run seed:test
+
+# Available strategies:
+# --strategy minimal     # Basic required data only
+# --strategy standard    # Typical development dataset  
+# --strategy comprehensive # Full feature testing dataset
+# --strategy scenarios   # Specific testing scenarios
+
+# Examples:
+npm run seed:test -- --strategy minimal
+npm run seed:test -- --strategy comprehensive --customers 10
+```
+
+**Seeding strategies:**
+
+- **minimal**: Core entities for basic functionality
+- **standard**: Balanced dataset for typical development
+- **comprehensive**: Full-featured data for extensive testing
+- **scenarios**: Specialized scenarios (auth flows, diagnostics, edge cases)
+
+### Database Cleanup
+
+Clean test data safely with multiple cleanup modes:
+
+```bash
+# Clean up test data (requires --force for safety)
+npm run cleanup:test -- --force
+
+# Available modes:
+# --mode full        # Clean all test data
+# --mode selective   # Clean recent test data only
+# --mode transaction # Clean with transaction rollback support
+# --mode verify      # Dry-run to see what would be cleaned
+
+# Examples:
+npm run cleanup:test -- --mode selective --days 1 --force
+npm run cleanup:test -- --mode verify  # See what would be deleted
+```
+
+### Database Reset & Snapshots
+
+Complete database management with snapshot support:
+
+```bash
+# Reset database completely
+npm run reset:test-db -- --mode full
+
+# Available modes:
+# --mode full        # Complete reset with migrations
+# --mode migrations  # Reset to specific migration
+# --mode data        # Reset data only, keep schema
+# --mode snapshot    # Create/restore snapshots
+
+# Snapshot management:
+npm run reset:test-db -- --mode snapshot --action create --name clean-state
+npm run reset:test-db -- --mode snapshot --action restore --name clean-state
+npm run reset:test-db -- --mode snapshot --action list
+```
+
+**Snapshot features:**
+- pg_dump/pg_restore for reliable state management
+- Named snapshots for different test scenarios
+- Automatic validation after restore
+- Migration state tracking
 
 ## Best Practices
 
@@ -436,11 +555,26 @@ The CI pipeline:
 
 When adding new features:
 
-1. Write tests FIRST (TDD approach)
-2. Ensure all tests pass locally
-3. Check coverage doesn't decrease
-4. Run `npm run test:docker` before committing
-5. Update this guide if adding new testing patterns
+1. **Write tests FIRST** (TDD approach with `npm run test:watch:tdd`)
+2. **Ensure all tests pass locally** (`npm test`)
+3. **Run integrated validation** (`npm run dev:validate`)
+4. **Check quality gates pass** (`npm run quality:check`)
+5. **Coverage requirements met** (automatic pre-push validation)
+6. **Run Docker tests** (`npm run test:docker`) for final verification
+7. **Update documentation** if adding new testing patterns
+
+### Development Workflow
+
+```bash
+# Start TDD workflow
+npm run test:watch:tdd
+
+# Run comprehensive validation before commit
+npm run dev:validate
+
+# Quality gates run automatically on git push
+# Or run manually: npm run quality:check
+```
 
 ## Resources
 
