@@ -228,8 +228,8 @@ The plan follows the "hands on-prem, brains in-the-cloud" architecture and focus
 **Tasks**:
 
 - [ ] 200.2.1: Initialize Express.js server with TypeScript 5.9.2 configuration
-- [ ] 200.2.2: Implement device registration endpoint (/api/device/register)
-- [ ] 200.2.3: Create diagnostic data submission endpoint (/api/device/diagnostic)
+- [ ] 200.2.2: Implement device registration endpoint (/api/v1/devices/register)
+- [ ] 200.2.3: Create diagnostic data submission endpoint (/api/v1/devices/:deviceId/diagnostic-results)
 - [ ] 200.2.4: Integrate Supabase authentication with email OTP
 - [ ] 200.2.5: Implement WebSocket server for real-time updates
 - [ ] 200.2.6: Add Redis integration for session management

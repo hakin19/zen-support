@@ -31,6 +31,7 @@
     "// Building": "Scripts for building the project",
     "build": "nx run-many --target=build --all",
     "build:affected": "nx affected --target=build",
+    "build:device-agent": "nx run device-agent:build",
     "build:docker": "docker-compose --env-file .env -f infrastructure/docker/docker-compose.yml build --no-cache",
     "// Testing": "Scripts for testing",
     "test": "vitest run",

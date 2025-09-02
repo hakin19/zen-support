@@ -47,7 +47,7 @@ The architecture prioritizes security (MFA + HITL approval), simplicity (minimal
 
 ### Device Communication
 
-**POST /api/device/register**
+**POST /api/v1/devices/register**
 ```json
 Request:
 {
@@ -67,7 +67,7 @@ Response: 200 OK
 }
 ```
 
-**POST /api/device/diagnostic**
+**POST /api/v1/devices/:deviceId/diagnostic-results**
 ```json
 Request:
 {

@@ -1,0 +1,3 @@
+# Spec Summary (Lite)
+
+Implement a containerized Raspberry Pi device agent emulator that simulates the on-premise hardware agent, enabling development and testing of network diagnostic capabilities without physical devices. The agent will run in Docker, execute network diagnostic commands (ping, traceroute, DNS), maintain secure outbound-only communication with the cloud API, and support multi-tenant scenarios through Docker Compose orchestration.

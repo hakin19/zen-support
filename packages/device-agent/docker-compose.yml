@@ -1,0 +1,63 @@
+version: '3.8'
+
+services:
+  device-agent:
+    build:
+      context: ../../
+      dockerfile: packages/device-agent/Dockerfile
+    image: aizen/device-agent:latest
+    container_name: aizen-device-agent-001
+    restart: unless-stopped
+    environment:
+      # Device identification
+      DEVICE_ID: ${DEVICE_ID:-dev-agent-001}
+      DEVICE_SECRET: ${DEVICE_SECRET:-dev-secret-key}
+      CUSTOMER_ID: ${CUSTOMER_ID:-customer-001}
+      
+      # API configuration
+      API_URL: ${API_URL:-http://host.docker.internal:3000}
+      
+      # Agent configuration
+      HEARTBEAT_INTERVAL: ${HEARTBEAT_INTERVAL:-60000}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      NODE_ENV: ${NODE_ENV:-development}
+      
+      # Health check port
+      PORT: 3000
+    ports:
+      - "3000:3000" # Health check endpoint
+    networks:
+      - agent-network
+    volumes:
+      - agent-logs:/app/logs
+      - agent-config:/app/config
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_RAW # Required for ping
+      - NET_ADMIN # Required for network diagnostics
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /app/tmp
+
+networks:
+  agent-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+
+volumes:
+  agent-logs:
+    driver: local
+  agent-config:
+    driver: local
