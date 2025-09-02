@@ -38,12 +38,12 @@
   - [ ] 4.5 Add command status tracking and error handling
   - [ ] 4.6 Verify command execution tests pass with various scenarios
 
-- [ ] 5. Enable multi-agent orchestration
-  - [ ] 5.1 Write tests for multi-agent Docker Compose setup
-  - [ ] 5.2 Update Docker Compose for multiple agent instances
+- [ ] 5. Enable multi-device-agent orchestration
+  - [ ] 5.1 Write tests for multi-device-agent Docker Compose setup
+  - [ ] 5.2 Update Docker Compose for multiple device agent instances
   - [ ] 5.3 Add unique device ID generation for each container
-  - [ ] 5.4 Implement network isolation between agents
+  - [ ] 5.4 Implement network isolation between device agents
   - [ ] 5.5 Add centralized logging and monitoring
-  - [ ] 5.6 Create development scripts for agent management
-  - [ ] 5.7 Verify multi-agent setup works with concurrent diagnostics
+  - [ ] 5.6 Create development scripts for device agent management
+  - [ ] 5.7 Verify multi-device-agent setup works with concurrent diagnostics
   - [ ] 5.8 Run integration tests with all components

@@ -21,11 +21,11 @@ As a network engineer, I want to execute diagnostic commands through the emulate
 
 The agent will accept diagnostic requests from the cloud API, execute network diagnostic tools (ping, traceroute, DNS lookups), collect and format results, and return diagnostic data to the cloud API. This validates the core diagnostic workflow end-to-end.
 
-### Multi-Agent Development
+### Multi-Device-Agent Development
 
-As a system architect, I want to run multiple containerized agents simultaneously, so that I can test multi-tenant scenarios and concurrent diagnostic sessions.
+As a system architect, I want to run multiple containerized device agents simultaneously, so that I can test multi-tenant scenarios and concurrent diagnostic sessions.
 
-Docker Compose will orchestrate multiple agent instances, each with unique device IDs and customer associations, simulating different network conditions and configurations. This ensures the system can handle multiple customers and devices at scale.
+Docker Compose will orchestrate multiple device agent instances (simulating multiple Raspberry Pi devices), each with unique device IDs and customer associations, simulating different network conditions and configurations. This ensures the system can handle multiple customers and physical devices at scale.
 
 ## Spec Scope
 

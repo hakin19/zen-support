@@ -9,10 +9,10 @@ This is the technical specification for the spec detailed in @.agent-os/specs/20
 - **Base Image**: Node.js 20-alpine for minimal footprint
 - **Working Directory**: `/app` with proper permissions for command execution
 - **Network Mode**: Bridge network with simulated cellular interface
-- **Volume Mounts**: 
+- **Volume Mounts**:
   - Configuration directory for device credentials
   - Logs directory for diagnostic output persistence
-  - Shared directory for inter-container communication in multi-agent setups
+  - Shared directory for inter-container communication in multi-device-agent setups
 
 ### Device Agent Core Implementation
 
@@ -27,7 +27,7 @@ This is the technical specification for the spec detailed in @.agent-os/specs/20
 
 ### Network Diagnostic Tools Integration
 
-- **Ping Implementation**: 
+- **Ping Implementation**:
   - Use Node.js `child_process` to execute system ping
   - Parse output for packet loss, RTT statistics
   - Support both IPv4 and IPv6 targets
@@ -55,7 +55,7 @@ This is the technical specification for the spec detailed in @.agent-os/specs/20
 
 - **Transport**: HTTPS with TLS 1.3
 - **Direction**: Outbound-only connections from agent to API
-- **Authentication**: 
+- **Authentication**:
   - Device ID and secret key from environment variables
   - JWT tokens for session management
   - Automatic token refresh before expiration
@@ -73,7 +73,7 @@ This is the technical specification for the spec detailed in @.agent-os/specs/20
 
 ### Command Execution Safety
 
-- **Timeout Handling**: 
+- **Timeout Handling**:
   - Default 30-second timeout for diagnostic commands
   - Configurable per-command timeout overrides
   - Graceful process termination on timeout
@@ -134,17 +134,21 @@ This is the technical specification for the spec detailed in @.agent-os/specs/20
 ## External Dependencies
 
 **net-ping** - ICMP ping implementation for Node.js
+
 - **Version**: ^1.2.3
 - **Justification**: Native Node.js ping support for cross-platform compatibility without system command dependencies
 
-**node-traceroute** - Traceroute implementation for Node.js  
+**node-traceroute** - Traceroute implementation for Node.js
+
 - **Version**: ^2.0.0
 - **Justification**: Pure JavaScript traceroute implementation avoiding platform-specific command parsing
 
 **p-queue** - Promise queue with concurrency control
+
 - **Version**: ^8.0.1
 - **Justification**: Managing concurrent diagnostic command execution with resource limits
 
 **systeminformation** - System and network information library
+
 - **Version**: ^5.21.0
 - **Justification**: Gathering network interface details and system metrics for comprehensive diagnostics
