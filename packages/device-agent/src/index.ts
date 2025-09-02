@@ -57,7 +57,7 @@ async function handleShutdown(signal: string): Promise<void> {
     if (healthServer) {
       console.log('🛑 Closing health check server...');
       await new Promise<void>((resolve, reject) => {
-        healthServer.close(err => {
+        healthServer?.close(err => {
           if (err) reject(err);
           else resolve();
         });
