@@ -257,6 +257,58 @@ Trace complete.`;
         summary: 'www.google.com points to forcesafesearch.google.com',
       });
     });
+
+    it('should format NS record results', () => {
+      const dnsResult = {
+        recordType: 'NS',
+        domain: 'google.com',
+        servers: ['ns1.google.com', 'ns2.google.com', 'ns3.google.com'],
+        resolutionTime: 20,
+      };
+
+      const formatted = formatter.formatDns(dnsResult);
+
+      expect(formatted).toMatchObject({
+        recordType: 'NS',
+        domain: 'google.com',
+        servers: ['ns1.google.com', 'ns2.google.com', 'ns3.google.com'],
+        summary: 'Found 3 name servers for google.com',
+      });
+    });
+
+    it('should format NS record with single server', () => {
+      const dnsResult = {
+        recordType: 'NS',
+        domain: 'example.com',
+        servers: ['ns1.example.com'],
+        resolutionTime: 18,
+      };
+
+      const formatted = formatter.formatDns(dnsResult);
+
+      expect(formatted).toMatchObject({
+        recordType: 'NS',
+        domain: 'example.com',
+        servers: ['ns1.example.com'],
+        summary: 'Found 1 name server for example.com',
+      });
+    });
+
+    it('should format unknown DNS record type', () => {
+      const dnsResult = {
+        recordType: 'SOA',
+        domain: 'example.com',
+        resolutionTime: 25,
+      };
+
+      const formatted = formatter.formatDns(dnsResult);
+
+      expect(formatted).toMatchObject({
+        recordType: 'SOA',
+        domain: 'example.com',
+        summary: 'DNS lookup completed for example.com',
+      });
+    });
   });
 
   describe('connectivity result formatting', () => {
@@ -355,6 +407,40 @@ Trace complete.`;
           error: 'Certificate has expired',
         },
         summary: 'HTTPS connection succeeded but certificate is invalid',
+      });
+    });
+
+    it('should format failed HTTP connection results', () => {
+      const connResult = {
+        url: 'http://unreachable.example.com',
+        reachable: false,
+        error: 'ENOTFOUND',
+      };
+
+      const formatted = formatter.formatConnectivity(connResult);
+
+      expect(formatted).toMatchObject({
+        url: 'http://unreachable.example.com',
+        reachable: false,
+        error: 'ENOTFOUND',
+        summary: 'Failed to connect to http://unreachable.example.com',
+      });
+    });
+
+    it('should format failed HTTPS connection results', () => {
+      const connResult = {
+        url: 'https://timeout.example.com',
+        reachable: false,
+        error: 'ETIMEDOUT',
+      };
+
+      const formatted = formatter.formatConnectivity(connResult);
+
+      expect(formatted).toMatchObject({
+        url: 'https://timeout.example.com',
+        reachable: false,
+        error: 'ETIMEDOUT',
+        summary: 'Failed to connect to https://timeout.example.com',
       });
     });
   });
