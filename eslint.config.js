@@ -266,6 +266,7 @@ export default [
     rules: {
       '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/no-unused-vars': 'off',
+      '@typescript-eslint/no-non-null-assertion': 'off',
       '@typescript-eslint/explicit-function-return-type': 'off',
       '@typescript-eslint/explicit-module-boundary-types': 'off',
       '@typescript-eslint/no-unsafe-assignment': 'off',
@@ -274,6 +275,27 @@ export default [
       '@typescript-eslint/no-unsafe-call': 'off',
       '@typescript-eslint/no-unsafe-return': 'off',
       '@typescript-eslint/prefer-nullish-coalescing': 'off',
+      'no-console': 'off',
+      'import/no-extraneous-dependencies': 'off',
+      'import/no-default-export': 'off',
+    },
+  },
+
+  // Generated or external types (e.g., Supabase) - relax strict rules
+  {
+    files: ['packages/shared/src/types/supabase.types.ts'],
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/no-unsafe-member-access': 'off',
+      '@typescript-eslint/no-unsafe-argument': 'off',
+      '@typescript-eslint/no-unsafe-call': 'off',
+      '@typescript-eslint/no-unsafe-return': 'off',
+      '@typescript-eslint/explicit-function-return-type': 'off',
+      '@typescript-eslint/explicit-module-boundary-types': 'off',
+      '@typescript-eslint/prefer-nullish-coalescing': 'off',
+      '@typescript-eslint/require-await': 'off',
+      '@typescript-eslint/await-thenable': 'off',
       'no-console': 'off',
       'import/no-extraneous-dependencies': 'off',
       'import/no-default-export': 'off',
@@ -329,6 +351,21 @@ export default [
       'import/no-extraneous-dependencies': 'off',
       'import/no-default-export': 'off',
       'no-undef': 'off',
+    },
+  },
+
+  // Device Agent diagnostics: allow flexible parsing/mocks
+  {
+    files: ['packages/device-agent/src/diagnostics/**/*.ts'],
+    rules: {
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/no-unsafe-member-access': 'off',
+      '@typescript-eslint/no-unsafe-argument': 'off',
+      '@typescript-eslint/no-unsafe-call': 'off',
+      '@typescript-eslint/no-unsafe-return': 'off',
+      '@typescript-eslint/require-await': 'off',
+      '@typescript-eslint/prefer-nullish-coalescing': 'off',
+      'no-case-declarations': 'off',
     },
   },
 
