@@ -21,14 +21,14 @@
   - [x] 2.7 Add ResultFormatter for structuring raw diagnostic output
   - [x] 2.8 Verify all diagnostic tests pass with mock data
 
-- [ ] 3. Build API communication layer
-  - [ ] 3.1 Write tests for API client and authentication flow
-  - [ ] 3.2 Create API client service with JWT token management
-  - [ ] 3.3 Implement device registration endpoint integration
-  - [ ] 3.4 Implement heartbeat mechanism with command queue polling
-  - [ ] 3.5 Implement diagnostic result submission with retry logic
-  - [ ] 3.6 Add connection resilience and automatic reconnection
-  - [ ] 3.7 Verify all API integration tests pass
+- [x] 3. Build API communication layer
+  - [x] 3.1 Write tests for API client and authentication flow
+  - [x] 3.2 Create API client service with JWT token management
+  - [x] 3.3 Implement device registration endpoint integration
+  - [x] 3.4 Implement heartbeat mechanism with command queue polling
+  - [x] 3.5 Implement diagnostic result submission with retry logic
+  - [x] 3.6 Add connection resilience and automatic reconnection
+  - [x] 3.7 Verify all API integration tests pass
 
 - [ ] 4. Create command execution framework
   - [ ] 4.1 Write tests for CommandQueue and command processing
