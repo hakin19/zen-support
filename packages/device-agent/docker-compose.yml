@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   device-agent:
@@ -6,6 +6,7 @@ services:
       context: ../../
       dockerfile: packages/device-agent/Dockerfile
     image: aizen/device-agent:latest
+    platform: linux/arm64 # Emulate Raspberry Pi architecture (comment out for auto-detect)
     container_name: aizen-device-agent-001
     restart: unless-stopped
     environment:
@@ -13,15 +14,15 @@ services:
       DEVICE_ID: ${DEVICE_ID:-dev-agent-001}
       DEVICE_SECRET: ${DEVICE_SECRET:-dev-secret-key}
       CUSTOMER_ID: ${CUSTOMER_ID:-customer-001}
-      
+
       # API configuration
       API_URL: ${API_URL:-http://host.docker.internal:3000}
-      
+
       # Agent configuration
       HEARTBEAT_INTERVAL: ${HEARTBEAT_INTERVAL:-60000}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       NODE_ENV: ${NODE_ENV:-development}
-      
+
       # Health check port
       PORT: 3000
     ports:

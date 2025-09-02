@@ -1,7 +1,9 @@
 # Multi-stage Dockerfile for Aizen vNE Device Agent
+# Supports multi-architecture: linux/amd64 and linux/arm64
+# Uses Debian Bookworm base for better Raspberry Pi compatibility
+
 # Stage 1: Dependencies
-FROM node:20-alpine AS deps
-RUN apk add --no-cache libc6-compat
+FROM node:20-bookworm-slim AS deps
 WORKDIR /app
 
 # Copy root package files
@@ -17,8 +19,7 @@ COPY packages/shared/package*.json ./packages/shared/
 RUN npm ci --include=dev
 
 # Stage 2: Builder
-FROM node:20-alpine AS builder
-RUN apk add --no-cache libc6-compat
+FROM node:20-bookworm-slim AS builder
 WORKDIR /app
 
 # Copy dependencies from deps stage
@@ -35,18 +36,20 @@ COPY packages/shared ./packages/shared
 RUN cd packages/device-agent && npm run build
 
 # Stage 3: Runner
-FROM node:20-alpine AS runner
+FROM node:20-bookworm-slim AS runner
 WORKDIR /app
 
-# Install runtime dependencies
-RUN apk add --no-cache \
-    iputils \
-    bind-tools \
+# Install runtime dependencies (Debian packages)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    iputils-ping \
+    dnsutils \
     curl \
     net-tools \
     traceroute \
-    && addgroup -g 1001 -S nodejs \
-    && adduser -S nodejs -u 1001
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd -g 1001 nodejs \
+    && useradd -u 1001 -g nodejs -m -s /bin/bash nodejs
 
 # Copy built application
 COPY --from=builder /app/packages/device-agent/dist ./dist
