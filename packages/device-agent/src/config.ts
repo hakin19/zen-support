@@ -42,7 +42,7 @@ export class ConfigLoader {
   }
 
   private static getLogLevel(): 'debug' | 'info' | 'warn' | 'error' {
-    const level = process.env.LOG_LEVEL?.toLowerCase() || 'info';
+    const level = process.env.LOG_LEVEL?.toLowerCase() ?? 'info';
     const validLevels = ['debug', 'info', 'warn', 'error'];
 
     if (!validLevels.includes(level)) {
@@ -56,7 +56,7 @@ export class ConfigLoader {
   private static validateConfig(config: DeviceConfig): void {
     // Validate API URL format
     try {
-      new URL(config.apiUrl);
+      new globalThis.URL(config.apiUrl);
     } catch {
       throw new Error(`Invalid API_URL: ${config.apiUrl}`);
     }

@@ -31,7 +31,7 @@ export class DeviceAgent extends EventEmitter {
     super();
     this.validateConfig(config);
     this.#config = config;
-    this.#heartbeatInterval = config.heartbeatInterval || 60000;
+    this.#heartbeatInterval = config.heartbeatInterval ?? 60000;
   }
 
   private validateConfig(config: DeviceConfig): void {
@@ -57,7 +57,7 @@ export class DeviceAgent extends EventEmitter {
 
   private isValidUrl(url: string): boolean {
     try {
-      new URL(url);
+      new globalThis.URL(url);
       return true;
     } catch {
       return false;
@@ -88,7 +88,7 @@ export class DeviceAgent extends EventEmitter {
     }
   }
 
-  async stop(): Promise<void> {
+  stop(): void {
     if (this.#status !== 'running') {
       throw new Error('Agent is not running');
     }
@@ -101,9 +101,9 @@ export class DeviceAgent extends EventEmitter {
     this.emit('stopped');
   }
 
-  async shutdown(): Promise<void> {
+  shutdown(): void {
     if (this.#status === 'running') {
-      await this.stop();
+      this.stop();
     }
   }
 
@@ -176,13 +176,13 @@ export class DeviceAgent extends EventEmitter {
       }
     }
 
-    throw lastError || new Error('Registration failed');
+    throw lastError ?? new Error('Registration failed');
   }
 
   private startHeartbeat(): void {
     this.stopHeartbeat(); // Clear any existing timer
 
-    const sendHeartbeatCycle = async () => {
+    const sendHeartbeatCycle = async (): Promise<void> => {
       try {
         await this.sendHeartbeat();
       } catch (error) {
@@ -192,7 +192,7 @@ export class DeviceAgent extends EventEmitter {
         // Retry after a short delay
         setTimeout(() => {
           if (this.#status === 'running') {
-            sendHeartbeatCycle();
+            void sendHeartbeatCycle();
           }
         }, 5000);
         return;
@@ -201,14 +201,14 @@ export class DeviceAgent extends EventEmitter {
       // Schedule next heartbeat
       if (this.#status === 'running') {
         this.#heartbeatTimer = setTimeout(
-          sendHeartbeatCycle,
+          () => void sendHeartbeatCycle(),
           this.#heartbeatInterval
         );
       }
     };
 
     // Send first heartbeat immediately, then schedule regular intervals
-    sendHeartbeatCycle();
+    void sendHeartbeatCycle();
   }
 
   private stopHeartbeat(): void {
@@ -262,7 +262,7 @@ export class DeviceAgent extends EventEmitter {
     // Process any commands received
     if (response.commands && response.commands.length > 0) {
       for (const command of response.commands) {
-        this.processCommand(command).catch(error => {
+        void this.processCommand(command).catch((error: unknown) => {
           this.emit('command:error', { command, error });
         });
       }
@@ -320,7 +320,7 @@ export class DeviceAgent extends EventEmitter {
     token?: string,
     timeoutMs = 30000 // Default 30 second timeout
   ): Promise<T> {
-    const url = new URL(endpoint, this.#config.apiUrl);
+    const url = new globalThis.URL(endpoint, this.#config.apiUrl);
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
@@ -330,7 +330,7 @@ export class DeviceAgent extends EventEmitter {
     }
 
     // Create AbortController for timeout
-    const controller = new AbortController();
+    const controller = new globalThis.AbortController();
     const timeoutId = setTimeout(() => {
       controller.abort();
     }, timeoutMs);

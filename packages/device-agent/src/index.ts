@@ -20,7 +20,7 @@ let healthServer: http.Server | null = null;
 function startHealthServer(port: number): void {
   healthServer = http.createServer((req, res) => {
     if (req.url === '/health') {
-      const health = agent?.getHealthStatus() || {
+      const health = agent?.getHealthStatus() ?? {
         status: 'unhealthy',
         error: 'Agent not initialized',
       };
@@ -49,7 +49,7 @@ async function handleShutdown(signal: string): Promise<void> {
     // Stop the agent
     if (agent) {
       console.log('🛑 Stopping device agent...');
-      await agent.shutdown();
+      agent.shutdown();
       console.log('✅ Device agent stopped');
     }
 
@@ -57,7 +57,7 @@ async function handleShutdown(signal: string): Promise<void> {
     if (healthServer) {
       console.log('🛑 Closing health check server...');
       await new Promise<void>((resolve, reject) => {
-        healthServer!.close(err => {
+        healthServer.close(err => {
           if (err) reject(err);
           else resolve();
         });
@@ -100,8 +100,9 @@ async function main(): Promise<void> {
       console.log('💓 Heartbeat sent');
     });
 
-    agent.on('command:received', command => {
-      console.log(`📋 Command received: ${command.type} (${command.id})`);
+    agent.on('command:received', (command: unknown) => {
+      const cmd = command as { type: string; id: string };
+      console.log(`📋 Command received: ${cmd.type} (${cmd.id})`);
     });
 
     agent.on('error', error => {
@@ -113,23 +114,23 @@ async function main(): Promise<void> {
     });
 
     // Start health check server
-    const healthPort = parseInt(process.env.PORT || '3000', 10);
+    const healthPort = parseInt(process.env.PORT ?? '3000', 10);
     startHealthServer(healthPort);
 
     // Register shutdown handlers
-    process.on('SIGTERM', () => handleShutdown('SIGTERM'));
-    process.on('SIGINT', () => handleShutdown('SIGINT'));
-    process.on('SIGHUP', () => handleShutdown('SIGHUP'));
+    process.on('SIGTERM', () => void handleShutdown('SIGTERM'));
+    process.on('SIGINT', () => void handleShutdown('SIGINT'));
+    process.on('SIGHUP', () => void handleShutdown('SIGHUP'));
 
     // Handle uncaught errors
     process.on('uncaughtException', error => {
       console.error('❌ Uncaught exception:', error);
-      handleShutdown('uncaughtException');
+      void handleShutdown('uncaughtException');
     });
 
     process.on('unhandledRejection', (reason, promise) => {
       console.error('❌ Unhandled rejection at:', promise, 'reason:', reason);
-      handleShutdown('unhandledRejection');
+      void handleShutdown('unhandledRejection');
     });
 
     // Start the agent
@@ -144,7 +145,7 @@ async function main(): Promise<void> {
 }
 
 // Start the application
-main().catch(error => {
+void main().catch((error: unknown) => {
   console.error('❌ Fatal error:', error);
   process.exit(1);
 });
