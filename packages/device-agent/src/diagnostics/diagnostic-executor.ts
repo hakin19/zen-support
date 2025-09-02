@@ -443,20 +443,21 @@ export class DiagnosticExecutor {
         /Packets: Sent = (\d+), Received = (\d+), Lost = (\d+)/
       );
       if (statsMatch) {
-        metrics.packetsTransmitted = parseInt(statsMatch[1]);
-        metrics.packetsReceived = parseInt(statsMatch[2]);
-        metrics.packetLoss = Math.round(
-          (parseInt(statsMatch[3]) / parseInt(statsMatch[1])) * 100
-        );
+        metrics.packetsTransmitted = parseInt(statsMatch[1] || '0');
+        metrics.packetsReceived = parseInt(statsMatch[2] || '0');
+        const lost = parseInt(statsMatch[3] || '0');
+        const transmitted = parseInt(statsMatch[1] || '0');
+        metrics.packetLoss =
+          transmitted > 0 ? Math.round((lost / transmitted) * 100) : 0;
       }
 
       const timesMatch = output.match(
         /Minimum = (\d+)ms, Maximum = (\d+)ms, Average = (\d+)ms/
       );
       if (timesMatch) {
-        metrics.minRtt = parseInt(timesMatch[1]);
-        metrics.maxRtt = parseInt(timesMatch[2]);
-        metrics.avgRtt = parseInt(timesMatch[3]);
+        metrics.minRtt = parseInt(timesMatch[1] || '0');
+        metrics.maxRtt = parseInt(timesMatch[2] || '0');
+        metrics.avgRtt = parseInt(timesMatch[3] || '0');
       }
     } else {
       // Unix/Linux ping format
@@ -464,19 +465,19 @@ export class DiagnosticExecutor {
         /(\d+) packets transmitted, (\d+) (?:packets )?received, ([\d.]+)% packet loss/
       );
       if (statsMatch) {
-        metrics.packetsTransmitted = parseInt(statsMatch[1]);
-        metrics.packetsReceived = parseInt(statsMatch[2]);
-        metrics.packetLoss = parseFloat(statsMatch[3]);
+        metrics.packetsTransmitted = parseInt(statsMatch[1] || '0');
+        metrics.packetsReceived = parseInt(statsMatch[2] || '0');
+        metrics.packetLoss = parseFloat(statsMatch[3] || '0');
       }
 
       const timesMatch = output.match(
         /min\/avg\/max\/(?:mdev|stddev) = ([\d.]+)\/([\d.]+)\/([\d.]+)\/([\d.]+)/
       );
       if (timesMatch) {
-        metrics.minRtt = parseFloat(timesMatch[1]);
-        metrics.avgRtt = parseFloat(timesMatch[2]);
-        metrics.maxRtt = parseFloat(timesMatch[3]);
-        metrics.stddev = parseFloat(timesMatch[4]);
+        metrics.minRtt = parseFloat(timesMatch[1] || '0');
+        metrics.avgRtt = parseFloat(timesMatch[2] || '0');
+        metrics.maxRtt = parseFloat(timesMatch[3] || '0');
+        metrics.stddev = parseFloat(timesMatch[4] || '0');
       }
     }
 
@@ -505,7 +506,7 @@ export class DiagnosticExecutor {
         /Tracing route to ([\d.]+|[\da-f:]+|\S+)/
       );
       if (targetMatch) {
-        target = targetMatch[1];
+        target = targetMatch[1] || '';
       }
 
       const hopRegex =
@@ -514,8 +515,8 @@ export class DiagnosticExecutor {
       for (const line of lines) {
         const match = line.match(hopRegex);
         if (match) {
-          const hopNum = parseInt(match[1]);
-          const times = match[2]
+          const hopNum = parseInt(match[1] || '0');
+          const times = (match[2] || '')
             .trim()
             .split(/\s+/)
             .map(t => {
@@ -523,7 +524,7 @@ export class DiagnosticExecutor {
               return parseInt(t.replace('ms', ''));
             })
             .filter(t => t !== null);
-          const host = match[3].trim();
+          const host = (match[3] || '').trim();
 
           hops.push({
             hop: hopNum,
@@ -545,7 +546,7 @@ export class DiagnosticExecutor {
       // Unix/Linux traceroute format
       const targetMatch = output.match(/traceroute to (.+?) \(/);
       if (targetMatch) {
-        target = targetMatch[1];
+        target = targetMatch[1] || '';
       }
 
       const hopRegex = /^\s*(\d+)\s+(.+)$/;
@@ -553,8 +554,8 @@ export class DiagnosticExecutor {
       for (const line of lines) {
         const match = line.match(hopRegex);
         if (match) {
-          const hopNum = parseInt(match[1]);
-          const rest = match[2].trim();
+          const hopNum = parseInt(match[1] || '0');
+          const rest = (match[2] || '').trim();
 
           if (rest === '* * *') {
             hops.push({
