@@ -13,7 +13,7 @@ describe('DeviceAgent', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.useFakeTimers({ shouldAdvanceTime: true });
-    
+
     // Default successful fetch response for registration
     mockFetch.mockResolvedValue({
       ok: true,
@@ -23,7 +23,7 @@ describe('DeviceAgent', () => {
         heartbeatInterval: 30000,
       }),
     });
-    
+
     config = {
       deviceId: 'test-device-001',
       deviceSecret: 'test-secret',
@@ -56,7 +56,9 @@ describe('DeviceAgent', () => {
 
     it('should throw error when required config fields are missing', () => {
       const invalidConfig = { ...config, deviceId: '' };
-      expect(() => new DeviceAgent(invalidConfig)).toThrow('Device ID is required');
+      expect(() => new DeviceAgent(invalidConfig)).toThrow(
+        'Device ID is required'
+      );
     });
 
     it('should validate API URL format', () => {
@@ -72,7 +74,9 @@ describe('DeviceAgent', () => {
 
     it('should validate heartbeat interval is positive', () => {
       const invalidConfig = { ...config, heartbeatInterval: -1000 };
-      expect(() => new DeviceAgent(invalidConfig)).toThrow('Heartbeat interval must be positive');
+      expect(() => new DeviceAgent(invalidConfig)).toThrow(
+        'Heartbeat interval must be positive'
+      );
     });
   });
 
@@ -80,7 +84,7 @@ describe('DeviceAgent', () => {
     it('should start and transition to running state', async () => {
       agent = new DeviceAgent(config);
       expect(agent.getStatus()).toBe('initialized');
-      
+
       await agent.start();
       expect(agent.getStatus()).toBe('running');
       expect(agent.isConnected()).toBe(true);
@@ -90,8 +94,8 @@ describe('DeviceAgent', () => {
       agent = new DeviceAgent(config);
       await agent.start();
       expect(agent.getStatus()).toBe('running');
-      
-      await agent.stop();
+
+      agent.stop();
       expect(agent.getStatus()).toBe('stopped');
       expect(agent.isConnected()).toBe(false);
     });
@@ -99,31 +103,30 @@ describe('DeviceAgent', () => {
     it('should handle graceful shutdown', async () => {
       agent = new DeviceAgent(config);
       await agent.start();
-      
-      const shutdownPromise = agent.shutdown();
-      await expect(shutdownPromise).resolves.toBeUndefined();
+
+      agent.shutdown();
       expect(agent.getStatus()).toBe('stopped');
     });
 
     it('should not start if already running', async () => {
       agent = new DeviceAgent(config);
       await agent.start();
-      
+
       await expect(agent.start()).rejects.toThrow('Agent is already running');
     });
 
-    it('should not stop if not running', async () => {
+    it('should not stop if not running', () => {
       agent = new DeviceAgent(config);
-      
-      await expect(agent.stop()).rejects.toThrow('Agent is not running');
+
+      expect(() => agent.stop()).toThrow('Agent is not running');
     });
 
     it('should handle start failures gracefully', async () => {
       agent = new DeviceAgent(config);
-      
+
       // Mock all registration attempts to fail
       mockFetch.mockRejectedValue(new Error('Registration failed'));
-      
+
       await expect(agent.start()).rejects.toThrow('Registration failed');
       expect(agent.getStatus()).toBe('error');
     });
@@ -132,9 +135,9 @@ describe('DeviceAgent', () => {
   describe('registration', () => {
     it('should register with API on start', async () => {
       agent = new DeviceAgent(config);
-      
+
       await agent.start();
-      
+
       expect(mockFetch).toHaveBeenCalledWith(
         'https://api.test.com/api/v1/devices/register',
         expect.objectContaining({
@@ -158,9 +161,9 @@ describe('DeviceAgent', () => {
           heartbeatInterval: 30000,
         }),
       });
-      
+
       await agent.start();
-      
+
       expect(agent.getAuthToken()).toBe(token);
     });
 
@@ -171,16 +174,18 @@ describe('DeviceAgent', () => {
         status: 401,
         text: async () => 'Unauthorized',
       });
-      
-      await expect(agent.start()).rejects.toThrow('API call failed: 401 Unauthorized');
+
+      await expect(agent.start()).rejects.toThrow(
+        'API call failed: 401 Unauthorized'
+      );
       expect(agent.isRegistered()).toBe(false);
     });
 
     it('should retry registration on failure', async () => {
       agent = new DeviceAgent(config);
-      
+
       let registrationCalls = 0;
-      mockFetch.mockImplementation((url) => {
+      mockFetch.mockImplementation(url => {
         // Only count registration calls
         if (url.toString().includes('/register')) {
           registrationCalls++;
@@ -188,7 +193,7 @@ describe('DeviceAgent', () => {
             return Promise.reject(new Error('Network error'));
           }
         }
-        
+
         // Return success for all other calls (registration retry + heartbeat)
         return Promise.resolve({
           ok: true,
@@ -202,9 +207,9 @@ describe('DeviceAgent', () => {
           }),
         });
       });
-      
+
       await agent.start();
-      
+
       expect(registrationCalls).toBe(2); // Failed once, then succeeded
       expect(agent.isRegistered()).toBe(true);
     });
@@ -221,9 +226,9 @@ describe('DeviceAgent', () => {
           heartbeatInterval: 15000, // Server wants 15 second intervals
         }),
       });
-      
+
       await agent.start();
-      
+
       expect(agent.getHeartbeatInterval()).toBe(15000);
     });
   });
@@ -233,34 +238,34 @@ describe('DeviceAgent', () => {
       agent = new DeviceAgent(config);
       const errorHandler = vi.fn();
       agent.on('error', errorHandler);
-      
+
       const error = new Error('Test error');
       agent.emit('error', error);
-      
+
       expect(errorHandler).toHaveBeenCalledWith(error);
     });
 
     it('should transition to error state on critical failures', async () => {
       agent = new DeviceAgent(config);
-      
+
       // Mock all attempts to fail
       mockFetch.mockRejectedValue(new Error('Critical failure'));
-      
+
       await expect(agent.start()).rejects.toThrow('Critical failure');
       expect(agent.getStatus()).toBe('error');
     });
 
     it('should attempt recovery from error state', async () => {
       agent = new DeviceAgent(config);
-      
+
       // First attempt fails
       mockFetch.mockRejectedValueOnce(new Error('Temporary failure'));
       mockFetch.mockRejectedValueOnce(new Error('Temporary failure'));
       mockFetch.mockRejectedValueOnce(new Error('Temporary failure'));
-      
+
       await expect(agent.start()).rejects.toThrow('Temporary failure');
       expect(agent.getStatus()).toBe('error');
-      
+
       // Recovery succeeds
       mockFetch.mockResolvedValue({
         ok: true,
@@ -270,7 +275,7 @@ describe('DeviceAgent', () => {
           heartbeatInterval: 30000,
         }),
       });
-      
+
       await agent.recover();
       expect(agent.getStatus()).toBe('running');
     });
@@ -279,9 +284,9 @@ describe('DeviceAgent', () => {
   describe('health check', () => {
     it('should report healthy status when running', async () => {
       agent = new DeviceAgent(config);
-      
+
       await agent.start();
-      
+
       const health = agent.getHealthStatus();
       expect(health.status).toBe('healthy');
       expect(health.uptime).toBeGreaterThanOrEqual(0);
@@ -290,12 +295,12 @@ describe('DeviceAgent', () => {
 
     it('should report unhealthy status when in error state', async () => {
       agent = new DeviceAgent(config);
-      
+
       // Make registration fail
       mockFetch.mockRejectedValue(new Error('Connection failed'));
-      
+
       await expect(agent.start()).rejects.toThrow('Connection failed');
-      
+
       const health = agent.getHealthStatus();
       expect(health.status).toBe('unhealthy');
       expect(health.error).toBe('Connection failed');
@@ -303,9 +308,9 @@ describe('DeviceAgent', () => {
 
     it('should track heartbeat statistics', async () => {
       agent = new DeviceAgent(config);
-      
+
       await agent.start();
-      
+
       const health = agent.getHealthStatus();
       expect(health.heartbeatCount).toBe(0);
       expect(health.heartbeatErrors).toBe(0);
@@ -313,12 +318,14 @@ describe('DeviceAgent', () => {
 
     it('should preserve specific error context in health status', async () => {
       agent = new DeviceAgent(config);
-      
+
       // Make registration fail with a specific error
-      mockFetch.mockRejectedValue(new Error('API call timed out after 30000ms: /api/v1/devices/register'));
-      
+      mockFetch.mockRejectedValue(
+        new Error('API call timed out after 30000ms: /api/v1/devices/register')
+      );
+
       await expect(agent.start()).rejects.toThrow('API call timed out');
-      
+
       const health = agent.getHealthStatus();
       expect(health.status).toBe('unhealthy');
       expect(health.error).toContain('API call timed out after 30000ms');
