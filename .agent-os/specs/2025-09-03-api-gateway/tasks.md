@@ -2,14 +2,14 @@
 
 ## Tasks
 
-- [ ] 1. Set up Fastify server foundation and health endpoints
-  - [ ] 1.1 Write tests for health check endpoints (/healthz, /readyz, /version)
-  - [ ] 1.2 Install and configure Fastify with TypeScript types
-  - [ ] 1.3 Implement basic server with timeout configurations for ALB
-  - [ ] 1.4 Implement health endpoints with proper status codes
-  - [ ] 1.5 Add graceful shutdown handler with connection draining
-  - [ ] 1.6 Implement readiness checks for Supabase and Redis dependencies
-  - [ ] 1.7 Verify all health endpoint tests pass
+- [x] 1. Set up Fastify server foundation and health endpoints
+  - [x] 1.1 Write tests for health check endpoints (/healthz, /readyz, /version)
+  - [x] 1.2 Install and configure Fastify with TypeScript types
+  - [x] 1.3 Implement basic server with timeout configurations for ALB
+  - [x] 1.4 Implement health endpoints with proper status codes
+  - [x] 1.5 Add graceful shutdown handler with connection draining
+  - [x] 1.6 Implement readiness checks for Supabase and Redis dependencies
+  - [x] 1.7 Verify all health endpoint tests pass
 
 - [ ] 2. Implement device authentication system
   - [ ] 2.1 Write tests for device auth endpoints (auth, register)
