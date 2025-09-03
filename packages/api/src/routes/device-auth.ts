@@ -19,7 +19,7 @@ export function registerDeviceAuthRoutes(app: FastifyInstance): void {
         },
       },
     },
-    async (request, reply) => {
+    async (_request, reply) => {
       // TODO: Implement device authentication logic
       return reply.status(501).send({
         error: {
@@ -46,7 +46,7 @@ export function registerDeviceAuthRoutes(app: FastifyInstance): void {
         },
       },
     },
-    async (request, reply) => {
+    async (_request, reply) => {
       // TODO: Implement device registration logic
       return reply.status(501).send({
         error: {
@@ -89,7 +89,7 @@ export function registerDeviceAuthRoutes(app: FastifyInstance): void {
         },
       },
     },
-    async (request, reply) => {
+    async (_request, reply) => {
       // TODO: Implement heartbeat logic
       return reply.status(501).send({
         error: {
