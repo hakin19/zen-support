@@ -6,22 +6,37 @@ This is the API specification for the spec detailed in @.agent-os/specs/2025-09-
 
 All authenticated endpoints require appropriate headers:
 
-- **Device endpoints**: `X-Device-ID` and `X-Device-Secret`
+- **Device endpoints**: `X-Device-Token: <session-token>` (obtained from /api/v1/device/auth)
 - **Customer endpoints**: `Authorization: Bearer <supabase-jwt-token>`
 
 ## Endpoints
 
-### POST /api/v1/device/register
+### POST /api/v1/device/auth
 
-**Purpose:** Register a new device with the system
+**Purpose:** Authenticate device and obtain session token
 **Parameters:**
 
-- Body: `{ deviceId: string, deviceSecret: string, customerId: string, metadata?: { location?: string, model?: string } }`
-  **Response:** `{ success: boolean, device: { id: string, status: string, registeredAt: string } }`
+- Body: `{ deviceId: string, deviceSecret: string }`
+  **Response:** `{ token: string, expiresIn: number (seconds), deviceId: string }`
+  **Errors:**
+- 401: Invalid device credentials
+- 403: Device suspended or inactive
+- 429: Too many auth attempts
+
+### POST /api/v1/device/register
+
+**Purpose:** Register a pre-provisioned device with the system
+**Parameters:**
+
+- Body: `{ deviceId: string, activationCode: string, metadata?: { location?: string, model?: string } }`
+  **Response:** `{ success: boolean, device: { id: string, status: string, customerId: string, registeredAt: string } }`
   **Errors:**
 - 400: Invalid request body
-- 401: Invalid device credentials
+- 401: Invalid activation code
+- 404: Device not pre-provisioned
 - 409: Device already registered
+
+**Note:** Device must be pre-provisioned in database with customer association. Activation code is a one-time use token generated during device provisioning by customer.
 
 ### POST /api/v1/device/heartbeat
 
@@ -35,29 +50,45 @@ All authenticated endpoints require appropriate headers:
 - 404: Device not found
 - 503: Service temporarily unavailable
 
-### GET /api/v1/device/commands
+### POST /api/v1/device/commands/claim
 
-**Purpose:** Poll for pending diagnostic commands
+**Purpose:** Claim pending commands for exclusive processing (SQS-like semantics)
 **Parameters:**
 
-- Query: `?limit=10&timeout=30000` (long polling support)
-  **Response:** `{ commands: [{ id: string, type: string, parameters: any, priority: number, expiresAt: string }] }`
+- Body: `{ limit: number (default: 1, max: 10), visibilityTimeout?: number (default: 300000ms = 5min) }`
+  **Response:** `{ commands: [{ id: string, type: string, parameters: any, priority: number, claimToken: string, visibleUntil: string }] }`
   **Errors:**
 - 401: Invalid device authentication
 - 404: Device not found
 
-### POST /api/v1/device/commands/:id/result
+**Note:** Commands are reserved exclusively for this device until visibilityTimeout expires. Use claimToken in result submission.
 
-**Purpose:** Submit command execution results
+### POST /api/v1/device/commands/:id/extend
+
+**Purpose:** Extend visibility timeout for long-running command
 **Parameters:**
 
 - Path: `id` - Command ID
-- Body: `{ status: 'success' | 'failure' | 'timeout', output?: string, error?: string, executedAt: string, duration: number }`
+- Body: `{ claimToken: string, extensionMs: number (max: 300000) }`
+  **Response:** `{ success: boolean, visibleUntil: string }`
+  **Errors:**
+- 401: Invalid device authentication
+- 403: Invalid claim token or command expired
+- 404: Command not found
+
+### POST /api/v1/device/commands/:id/result
+
+**Purpose:** Submit command execution results and release claim
+**Parameters:**
+
+- Path: `id` - Command ID
+- Body: `{ claimToken: string, status: 'success' | 'failure' | 'timeout', output?: string, error?: string, executedAt: string, duration: number }`
   **Response:** `{ success: boolean, nextCommand?: { id: string } }`
   **Errors:**
 - 401: Invalid device authentication
+- 403: Invalid claim token or visibility expired
 - 404: Command not found
-- 409: Command already processed
+- 409: Command already completed by another claim
 
 ### GET /api/v1/customer/devices
 
@@ -81,6 +112,19 @@ All authenticated endpoints require appropriate headers:
 - 401: Invalid customer authentication
 - 403: Device not owned by customer
 - 404: Device not found
+
+### POST /api/v1/customer/devices/provision
+
+**Purpose:** Pre-provision a new device for the customer
+**Parameters:**
+
+- Body: `{ deviceId: string, name?: string, location?: string }`
+  **Response:** `{ device: { id: string, activationCode: string, expiresAt: string }, instructions: string }`
+  **Errors:**
+- 401: Invalid customer authentication
+- 409: Device ID already exists
+
+**Note:** Generates a one-time activation code valid for 24 hours. Customer provides this code to device during physical setup.
 
 ### POST /api/v1/customer/sessions
 
@@ -121,6 +165,17 @@ All authenticated endpoints require appropriate headers:
 - 404: Session or command not found
 - 409: Command already processed
 
+### GET /api/v1/customer/system/info
+
+**Purpose:** Get detailed system information (authenticated)
+**Parameters:** None
+**Response:** `{ version: string, build: string, environment: string, uptime: number, services: object }`
+**Errors:**
+
+- 401: Invalid customer authentication
+
+**Note:** Available only to authenticated customers for debugging and support purposes.
+
 ### GET /healthz
 
 **Purpose:** Basic health check for load balancer/monitoring
@@ -130,19 +185,30 @@ All authenticated endpoints require appropriate headers:
 
 ### GET /readyz
 
-**Purpose:** Readiness check including dependency validation
+**Purpose:** Readiness check for ECS target group health validation
 **Parameters:** None
-**Response:** `{ ready: boolean, checks: { database: boolean, redis: boolean, services: boolean } }`
-**Errors:**
+**Response (200 OK):** `{ ready: true, checks: { database: true, redis: true } }`
+**Response (503 Service Unavailable):** `{ ready: false, checks: { database: boolean, redis: boolean }, errors: string[] }`
 
-- 503: Service not ready (one or more dependencies failing)
+**Behavior:**
+
+- Returns 200 ONLY when ALL dependencies are healthy
+- Returns 503 if ANY dependency check fails
+- ECS uses this endpoint for task health checks
+- Checks performed:
+  - Database: Supabase connection and simple query
+  - Redis: PING command response
+
+**Note:** ECS will not route traffic to instances returning 503. New deployments won't complete until readiness passes.
 
 ### GET /version
 
-**Purpose:** API version and build information
+**Purpose:** API version information (public endpoint)
 **Parameters:** None
-**Response:** `{ version: string, build: string, environment: string }`
+**Response:** `{ version: string }`
 **Errors:** None
+
+**Note:** Returns only version number for security. Detailed build info available via authenticated endpoints only.
 
 ## WebSocket Endpoints
 
