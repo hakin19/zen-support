@@ -29,6 +29,16 @@ export interface RegisterDeviceResult {
   customerId: string;
 }
 
+class DeviceError extends Error {
+  public readonly code: string;
+
+  constructor(message: string, code: string) {
+    super(message);
+    this.code = code;
+    this.name = 'DeviceError';
+  }
+}
+
 interface HeartbeatData {
   status: string;
   metrics?: {
@@ -111,7 +121,7 @@ export const deviceAuthService = {
     const key = `${ACTIVATION_CODE_PREFIX}${activationCode}`;
 
     // Check if activation code exists
-    const data = await redis.get(key);
+    const data = await redis.getClient().get(key);
 
     if (!data) {
       return {
@@ -120,10 +130,11 @@ export const deviceAuthService = {
       };
     }
 
-    const { customerId, deviceId } = JSON.parse(data) as {
+    const parsedData = JSON.parse(data) as {
       customerId: string;
       deviceId?: string;
     };
+    const { customerId, deviceId } = parsedData;
 
     // Check if this device is already registered
     if (deviceId) {
@@ -169,10 +180,7 @@ export const deviceAuthService = {
         .single();
 
       if (existingDevice) {
-        throw {
-          code: 'DEVICE_EXISTS',
-          message: 'Device ID already registered',
-        };
+        throw new DeviceError('Device ID already registered', 'DEVICE_EXISTS');
       }
 
       // Generate device secret
@@ -201,12 +209,7 @@ export const deviceAuthService = {
       };
     } catch (error) {
       // Re-throw known errors
-      if (
-        error &&
-        typeof error === 'object' &&
-        'code' in error &&
-        error.code === 'DEVICE_EXISTS'
-      ) {
+      if (error instanceof DeviceError) {
         throw error;
       }
 
@@ -241,7 +244,7 @@ export const deviceAuthService = {
       if (data.metrics) {
         const redis = getRedisClient();
         const metricsKey = `device:metrics:${deviceId}`;
-        await redis.setex(
+        await redis.getClient().setEx(
           metricsKey,
           300, // 5 minute TTL for metrics
           JSON.stringify({
@@ -266,7 +269,9 @@ export const deviceAuthService = {
     const key = `${ACTIVATION_CODE_PREFIX}${activationCode}`;
 
     // Store in Redis with TTL
-    await redis.setex(key, ACTIVATION_CODE_TTL, JSON.stringify({ customerId }));
+    await redis
+      .getClient()
+      .setEx(key, ACTIVATION_CODE_TTL, JSON.stringify({ customerId }));
 
     return activationCode;
   },

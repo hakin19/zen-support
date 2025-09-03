@@ -37,7 +37,7 @@ export const sessionService = {
     };
 
     // Store session in Redis with TTL
-    await redis.setex(key, ttl, JSON.stringify(sessionData));
+    await redis.getClient().setEx(key, ttl, JSON.stringify(sessionData));
 
     return {
       token,
@@ -53,7 +53,7 @@ export const sessionService = {
     const redis = getRedisClient();
     const key = `${SESSION_PREFIX}${token}`;
 
-    const data = await redis.get(key);
+    const data = await redis.getClient().get(key);
 
     if (!data) {
       return { valid: false };
@@ -76,13 +76,13 @@ export const sessionService = {
     const key = `${SESSION_PREFIX}${token}`;
 
     // Check if session exists
-    const exists = await redis.exists(key);
+    const exists = await redis.getClient().exists(key);
     if (!exists) {
       return false;
     }
 
     // Refresh TTL
-    const result = await redis.expire(key, ttl);
+    const result = await redis.getClient().expire(key, ttl);
     return result === 1;
   },
 
@@ -90,7 +90,7 @@ export const sessionService = {
     const redis = getRedisClient();
     const key = `${SESSION_PREFIX}${token}`;
 
-    const result = await redis.del(key);
+    const result = await redis.getClient().del(key);
     return result === 1;
   },
 
@@ -99,16 +99,16 @@ export const sessionService = {
 
     // This would need to scan all sessions and delete matching ones
     // In production, we might maintain a secondary index for this
-    const keys = await redis.keys(`${SESSION_PREFIX}*`);
+    const keys = await redis.getClient().keys(`${SESSION_PREFIX}*`);
     let revokedCount = 0;
 
     for (const key of keys) {
-      const data = await redis.get(key);
+      const data = await redis.getClient().get(key);
       if (data) {
         try {
           const session = JSON.parse(data) as StoredSession;
           if (session.deviceId === deviceId) {
-            await redis.del(key);
+            await redis.getClient().del(key);
             revokedCount++;
           }
         } catch {
