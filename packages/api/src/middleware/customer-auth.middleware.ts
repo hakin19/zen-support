@@ -1,4 +1,4 @@
-import { getSupabaseClient } from '@aizen/shared/utils/supabase-client';
+import { getSupabaseAdminClient } from '@aizen/shared/utils/supabase-client';
 
 import type { FastifyRequest, FastifyReply } from 'fastify';
 
@@ -47,7 +47,7 @@ export async function customerAuthMiddleware(
     const token = parts[1];
 
     // Verify JWT with Supabase
-    const supabase = getSupabaseClient();
+    const supabase = getSupabaseAdminClient();
     const {
       data: { user },
       error,

@@ -1,7 +1,7 @@
 import { randomBytes, createHash } from 'crypto';
 
 import { getRedisClient } from '@aizen/shared/utils/redis-client';
-import { getSupabaseClient } from '@aizen/shared/utils/supabase-client';
+import { getSupabaseAdminClient } from '@aizen/shared/utils/supabase-client';
 
 export interface Device {
   id: string;
@@ -57,7 +57,7 @@ export const deviceAuthService = {
     deviceSecret: string
   ): Promise<ValidationResult> {
     try {
-      const supabase = getSupabaseClient();
+      const supabase = getSupabaseAdminClient();
 
       // Fetch device from database
       const { data: device, error } = await supabase
@@ -121,7 +121,7 @@ export const deviceAuthService = {
       };
 
       // Check if device is not already registered
-      const supabase = getSupabaseClient();
+      const supabase = getSupabaseAdminClient();
       const { data: existingDevice } = await supabase
         .from('devices')
         .select('id')
@@ -149,7 +149,7 @@ export const deviceAuthService = {
     deviceName: string;
   }): Promise<RegisterDeviceResult> {
     try {
-      const supabase = getSupabaseClient();
+      const supabase = getSupabaseAdminClient();
 
       // Generate a new device secret
       const deviceSecret = generateDeviceSecret();
@@ -194,7 +194,7 @@ export const deviceAuthService = {
     data: HeartbeatData
   ): Promise<boolean> {
     try {
-      const supabase = getSupabaseClient();
+      const supabase = getSupabaseAdminClient();
 
       // Update device last_seen and metrics
       const { error } = await supabase

@@ -10,8 +10,16 @@ async function main(): Promise<void> {
     initializeSupabase({
       url: config.supabase.url,
       anonKey: config.supabase.anonKey,
+      serviceRoleKey: config.supabase.serviceRoleKey,
     });
     console.log('✓ Supabase client initialized');
+    if (config.supabase.serviceRoleKey) {
+      console.log('✓ Supabase admin client initialized');
+    } else {
+      console.warn(
+        '⚠ Supabase service role key missing, admin operations may fail'
+      );
+    }
   } else {
     console.warn(
       '⚠ Supabase configuration missing, some features may not work'

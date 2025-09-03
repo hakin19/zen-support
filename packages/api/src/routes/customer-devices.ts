@@ -101,10 +101,10 @@ export function registerCustomerDeviceRoutes(app: FastifyInstance): void {
       }
 
       try {
-        const { getSupabaseClient } = await import(
+        const { getSupabaseAdminClient } = await import(
           '@aizen/shared/utils/supabase-client'
         );
-        const supabase = getSupabaseClient();
+        const supabase = getSupabaseAdminClient();
 
         const { data: devices, error } = await supabase
           .from('devices')
@@ -160,10 +160,10 @@ export function registerCustomerDeviceRoutes(app: FastifyInstance): void {
       }
 
       try {
-        const { getSupabaseClient } = await import(
+        const { getSupabaseAdminClient } = await import(
           '@aizen/shared/utils/supabase-client'
         );
-        const supabase = getSupabaseClient();
+        const supabase = getSupabaseAdminClient();
 
         const { data: device, error } = await supabase
           .from('devices')
