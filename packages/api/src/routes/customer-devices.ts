@@ -41,10 +41,8 @@ export function registerCustomerDeviceRoutes(app: FastifyInstance): void {
 
       try {
         // Generate activation code for the device
-        const activationCode = await deviceAuthService.createActivationCode(
-          customerId,
-          deviceId
-        );
+        const activationCode =
+          await deviceAuthService.createActivationCode(customerId);
 
         // Calculate expiry time (24 hours from now)
         const expiresAt = new Date(
