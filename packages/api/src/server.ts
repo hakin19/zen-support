@@ -3,6 +3,8 @@ import { randomUUID } from 'crypto';
 import fastify from 'fastify';
 
 import { config } from './config';
+import { registerCustomerDeviceRoutes } from './routes/customer-devices';
+import { registerDeviceAuthRoutes } from './routes/device-auth';
 import { registerHealthRoutes } from './routes/health';
 
 import type { FastifyInstance } from 'fastify';
@@ -34,6 +36,8 @@ export async function createApp(): Promise<FastifyInstance> {
 
   // Register routes
   registerHealthRoutes(app);
+  registerDeviceAuthRoutes(app);
+  registerCustomerDeviceRoutes(app);
 
   // Global error handler
   app.setErrorHandler((error, request, reply) => {

@@ -262,7 +262,8 @@ describe('Device Authentication Middleware', () => {
       expect(mockReply.status).not.toHaveBeenCalled();
       expect(mockRequest.log.warn).toHaveBeenCalledWith(
         expect.objectContaining({
-          error: expect.any(Error),
+          error: 'Error: Redis error',
+          token: 'valid-to...',
         }),
         'Failed to refresh session TTL'
       );
