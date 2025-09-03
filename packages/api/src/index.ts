@@ -1,23 +1,17 @@
 /**
  * Aizen vNE API Backend Service
- * Main entry point for the API service
+ * Main entry point for the API service (Fastify)
  */
 
-console.log('🚀 Starting Aizen vNE API Service...');
+import { startApp } from './server.js';
 
-// Example of ES2022 features
-const config = {
-  port: process.env['PORT'] ? parseInt(process.env['PORT'], 10) : 3000,
-  environment: process.env['NODE_ENV'] ?? 'development',
-} as const;
-
-// Example function using strict TypeScript
-function startServer(port: number): void {
-  console.log(`API server would start on port ${port}`);
-  console.log(`Environment: ${config.environment}`);
+async function main(): Promise<void> {
+  try {
+    await startApp();
+  } catch (err) {
+    console.error('Failed to start API service', err);
+    process.exit(1);
+  }
 }
 
-// Initialize the server
-startServer(config.port);
-
-export { config };
+void main();

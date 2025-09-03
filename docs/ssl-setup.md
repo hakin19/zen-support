@@ -32,24 +32,26 @@ npm run dev:ssl
 
 ### Service Configuration
 
-| Service | HTTP Port | HTTPS Port | Domain |
-|---------|-----------|------------|--------|
-| API Gateway | 3000 | 3443 | api.aizen.local |
-| Web Portal | 3001 | 3444 | app.aizen.local |
-| Device Agent | 3002 | 3445 | device.aizen.local |
-| AI Orchestrator | 3003 | 3446 | ai.aizen.local |
+| Service         | HTTP Port | HTTPS Port | Domain             |
+| --------------- | --------- | ---------- | ------------------ |
+| API Gateway     | 3000      | 3443       | api.aizen.local    |
+| Web Portal      | 3001      | 3444       | app.aizen.local    |
+| Device Agent    | 3002      | 3445       | device.aizen.local |
+| AI Orchestrator | 3003      | 3446       | ai.aizen.local     |
 
 ## Detailed Setup Instructions
 
 ### 1. Install mkcert
 
 #### macOS
+
 ```bash
 brew install mkcert
 brew install nss  # For Firefox support
 ```
 
 #### Linux
+
 ```bash
 # Install certutil
 sudo apt install libnss3-tools  # Debian/Ubuntu
@@ -61,6 +63,7 @@ brew install mkcert
 ```
 
 #### Windows
+
 ```powershell
 choco install mkcert
 # or
@@ -75,6 +78,7 @@ npm run ssl:setup
 ```
 
 This script will:
+
 1. Install the local Certificate Authority (CA)
 2. Generate SSL certificates for all services
 3. Create `.env.ssl` with SSL configuration
@@ -120,6 +124,7 @@ sudo nano /etc/hosts
 ```
 
 Add these lines:
+
 ```
 # Aizen vNE Development
 127.0.0.1 aizen.local
@@ -148,6 +153,7 @@ WEB_URL=https://app.aizen.local:3444
 ```
 
 Merge these into your `.env` file or source them:
+
 ```bash
 source .env.ssl
 ```
@@ -178,37 +184,36 @@ npm run dev:api
 
 ## Service Implementation
 
-### Using the Shared HTTPS Utility
+### Using Fastify (local HTTPS; in production prefer ALB TLS termination)
 
 ```typescript
-import express from 'express';
-import { createServers, startServers, getServerConfig } from '@aizen/shared';
+import fs from 'fs';
+import fastify from 'fastify';
 
-const app = express();
+const httpsEnabled = process.env.HTTPS_ENABLED === 'true';
+const certPath = process.env.SSL_CERT_PATH ?? './infrastructure/ssl/cert.pem';
+const keyPath = process.env.SSL_KEY_PATH ?? './infrastructure/ssl/key.pem';
 
-// Configure your Express app
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok' });
+const app = fastify({
+  logger: true,
+  ...(httpsEnabled && fs.existsSync(certPath) && fs.existsSync(keyPath)
+    ? { https: { cert: fs.readFileSync(certPath), key: fs.readFileSync(keyPath) } }
+    : {}),
 });
 
-// Get server configuration
-const config = getServerConfig();
+// Configure your Fastify app
+app.get('/health', async () => ({ status: 'ok' }));
 
-// Create HTTP and HTTPS servers
-const servers = createServers({
-  app,
-  port: config.httpPort,
-  httpsPort: config.httpsPort,
-  httpsEnabled: config.httpsEnabled
-});
+const port = parseInt(process.env.PORT ?? '3000', 10);
+const host = '0.0.0.0';
 
-// Start servers
-startServers(servers, config.httpPort, config.httpsPort)
-  .then(() => {
-    console.log('Servers started successfully');
+app
+  .listen({ port, host })
+  .then(address => {
+    app.log.info(`Server listening at ${address}`);
   })
-  .catch(error => {
-    console.error('Failed to start servers:', error);
+  .catch(err => {
+    app.log.error(err, 'Failed to start server');
     process.exit(1);
   });
 ```
@@ -230,6 +235,7 @@ npm run ssl:validate
 ```
 
 This checks:
+
 - mkcert installation
 - CA trust status
 - Certificate validity
@@ -243,6 +249,7 @@ This checks:
 If browsers show certificate warnings:
 
 1. Ensure CA is installed:
+
    ```bash
    mkcert -install
    ```
@@ -254,11 +261,13 @@ If browsers show certificate warnings:
 #### Connection Refused
 
 1. Check if services are running:
+
    ```bash
    docker ps
    ```
 
 2. Verify ports are not in use:
+
    ```bash
    lsof -i :3443  # Check HTTPS port
    ```
@@ -268,15 +277,17 @@ If browsers show certificate warnings:
 #### DNS Resolution Issues
 
 1. Verify hosts file entries:
+
    ```bash
    cat /etc/hosts | grep aizen
    ```
 
 2. Clear DNS cache:
+
    ```bash
    # macOS
    sudo dscacheutil -flushcache
-   
+
    # Linux
    sudo systemd-resolve --flush-caches
    ```
@@ -324,11 +335,11 @@ import https from 'https';
 import fs from 'fs';
 
 const agent = new https.Agent({
-  ca: fs.readFileSync('./infrastructure/ssl/cert.pem')
+  ca: fs.readFileSync('./infrastructure/ssl/cert.pem'),
 });
 
 const response = await fetch('https://api.aizen.local:3443/health', {
-  agent
+  agent,
 });
 ```
 
@@ -340,13 +351,10 @@ For WebSocket connections over WSS:
 // Client-side
 const ws = new WebSocket('wss://api.aizen.local:3443/ws');
 
-// Server-side (with the shared utility)
+// Server-side (Fastify)
 import { WebSocketServer } from 'ws';
-
-const wss = new WebSocketServer({
-  server: servers.httpsServer, // Use HTTPS server from createServers()
-  path: '/ws'
-});
+// After app.listen resolves, Fastify exposes the underlying Node server via app.server
+const wss = new WebSocketServer({ server: app.server, path: '/ws' });
 ```
 
 ## CI/CD Considerations
@@ -375,12 +383,13 @@ volumes:
 
 - [mkcert Documentation](https://github.com/FiloSottile/mkcert)
 - [Node.js HTTPS Module](https://nodejs.org/api/https.html)
-- [Express.js Security Best Practices](https://expressjs.com/en/advanced/best-practice-security.html)
+- [Fastify Security Guide](https://www.fastify.io/docs/latest/Guides/Security/)
 - [Docker TLS Configuration](https://docs.docker.com/engine/security/protect-access/)
 
 ## Support
 
 For issues or questions:
+
 1. Run `npm run ssl:validate` to check your setup
 2. Check the troubleshooting section above
 3. Review logs in Docker: `docker-compose logs -f`

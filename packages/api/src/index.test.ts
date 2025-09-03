@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { createApp } from './server';
 
 describe('API Service', () => {
   it('should be defined', () => {
@@ -7,9 +8,13 @@ describe('API Service', () => {
 
   // Placeholder for future API tests
   describe('Health Check', () => {
-    it('should return healthy status', () => {
-      // TODO: Implement when health check endpoint is created
-      expect(true).toBe(true);
+    it('should return healthy status', async () => {
+      const app = createApp();
+      const res = await app.inject({ method: 'GET', url: '/healthz' });
+      expect(res.statusCode).toBe(200);
+      expect(res.headers['content-type']).toContain('application/json');
+      expect(res.json()).toEqual({ status: 'ok' });
+      await app.close();
     });
   });
 

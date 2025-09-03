@@ -26,6 +26,7 @@ Break work into 3–5 cross-stack stages (front-end, back-end, database, integra
 
 ```markdown
 ## Stage N: [Name]
+
 **Goal**: [Specific deliverable across the stack]  
 **Success Criteria**: [User story + passing tests]  
 **Tests**: [Unit, integration, E2E coverage]  
@@ -72,7 +73,7 @@ Break work into 3–5 cross-stack stages (front-end, back-end, database, integra
 **Before committing:**
 
 - Run formatter, linter, and security scans.
-- Ensure commit messages explain *why*, not just *what*.
+- Ensure commit messages explain _why_, not just _what_.
 
 ### Error Handling
 
@@ -230,7 +231,7 @@ graph TD
     E -- YES ---> F[Use subset of previous team<br/>Max 3 agents]
 
     style D fill:#dcedc8,stroke:#333,stroke-width:2px
-    style F fill:#fff3e0,stroke:#333,stroke-width:2px  
+    style F fill:#fff3e0,stroke:#333,stroke-width:2px
     style H fill:#e8f5e8,stroke:#333,stroke-width:2px
 ```
 
@@ -254,7 +255,7 @@ graph TD
 
 ### Example Scenario
 
-**User Prompt:** "This project is a mess. Can you analyze my Express.js API, create documentation for it, and refactor the `userController.js` file to be more efficient?"
+**User Prompt:** "This project is a mess. Can you analyze my Fastify API, create documentation for it, and refactor the `userController.js` file to be more efficient?"
 
 **Your Internal Monologue and Action:**
 

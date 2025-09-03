@@ -8,7 +8,7 @@ This project is organized as an Nx monorepo with the following packages:
 
 ```
 packages/
-├── api/              # Backend API service (Node.js/Express)
+├── api/              # Backend API service (Node.js/Fastify)
 ├── web/              # Customer web portal (Next.js)
 ├── device-agent/     # Raspberry Pi agent
 └── shared/           # Shared types and utilities

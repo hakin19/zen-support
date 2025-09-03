@@ -19,7 +19,7 @@ The system follows a "hands on-prem, brains in-the-cloud" architecture:
 
 This is an Nx-based monorepo with the following packages:
 
-- `packages/api/` - Backend API service (Node.js/Express)
+- `packages/api/` - Backend API service (Node.js/Fastify)
 - `packages/web/` - Customer web portal (Next.js 14, TypeScript, Tailwind)
 - `packages/device-agent/` - Raspberry Pi agent (Node.js/TypeScript)
 - `packages/shared/` - Shared types and utilities

@@ -74,7 +74,6 @@ export {
   createServers,
   startServers,
   shutdownServers,
-  httpsRedirectMiddleware,
   getServerConfig,
   type HttpsServerConfig,
   type ServerInstances,

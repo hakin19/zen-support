@@ -7,10 +7,11 @@ import * as fs from 'fs';
 import * as http from 'http';
 import * as https from 'https';
 
-import type { Request, Response, NextFunction, Application } from 'express';
-
 export interface HttpsServerConfig {
-  app: Application;
+  /**
+   * A Node.js request listener (e.g., Express app or any compatible handler)
+   */
+  listener: http.RequestListener;
   port: number;
   httpsPort?: number;
   certPath?: string;
@@ -24,11 +25,11 @@ export interface ServerInstances {
 }
 
 /**
- * Creates HTTP and optionally HTTPS servers for an Express app
+ * Creates HTTP and optionally HTTPS servers for a given Node.js request listener
  */
 export function createServers(config: HttpsServerConfig): ServerInstances {
   const {
-    app,
+    listener,
     port,
     httpsPort: _httpsPort = port + 443,
     certPath = process.env.SSL_CERT_PATH,
@@ -37,7 +38,7 @@ export function createServers(config: HttpsServerConfig): ServerInstances {
   } = config;
 
   // Always create HTTP server
-  const httpServer = http.createServer(app as http.RequestListener);
+  const httpServer = http.createServer(listener);
 
   // Create HTTPS server if enabled and certificates exist
   let httpsServer: https.Server | undefined;
@@ -51,10 +52,7 @@ export function createServers(config: HttpsServerConfig): ServerInstances {
           key: fs.readFileSync(keyPath),
         };
 
-        httpsServer = https.createServer(
-          httpsOptions,
-          app as http.RequestListener
-        );
+        httpsServer = https.createServer(httpsOptions, listener);
         console.log('✅ HTTPS server configured with SSL certificates');
       } else {
         console.warn('⚠️  SSL certificates not found, HTTPS disabled');
@@ -154,23 +152,8 @@ export async function shutdownServers(servers: ServerInstances): Promise<void> {
   await Promise.all(promises);
 }
 
-/**
- * Creates HTTPS redirect middleware
- */
-export function httpsRedirectMiddleware(
-  httpsPort: number
-): (req: Request, res: Response, next: NextFunction) => void {
-  return (req: Request, res: Response, next: NextFunction): void => {
-    // Check if request is secure (HTTPS)
-    const isSecure = (req as Request & { secure?: boolean }).secure;
-    if (!isSecure && req.get('X-Forwarded-Proto') !== 'https') {
-      const host = req.get('Host')?.split(':')[0] ?? 'localhost';
-      res.redirect(`https://${host}:${httpsPort}${req.url}`);
-      return;
-    }
-    next();
-  };
-}
+// Note: HTTPS redirect middleware is framework-specific. For Express or Fastify,
+// implement redirect at the framework/router layer or via your load balancer.
 
 /**
  * Gets environment-based server configuration
