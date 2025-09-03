@@ -234,3 +234,10 @@ export function getRedisClient(): RedisClient {
   }
   return redisClient;
 }
+
+export async function closeRedis(): Promise<void> {
+  if (redisClient) {
+    await redisClient.disconnect();
+    redisClient = null;
+  }
+}

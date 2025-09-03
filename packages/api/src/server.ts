@@ -76,8 +76,15 @@ export async function startServer(
 export async function gracefulShutdown(app: FastifyInstance): Promise<void> {
   try {
     app.log.info('Starting graceful shutdown...');
+
+    // Close Fastify server
     await app.close();
     app.log.info('Server closed successfully');
+
+    // Close external connections
+    const { closeRedis } = await import('@aizen/shared/utils/redis-client');
+    await closeRedis();
+    app.log.info('Redis connection closed');
   } catch (error) {
     app.log.error(error, 'Error during graceful shutdown');
   }

@@ -1,6 +1,30 @@
+import { initializeRedis } from '@aizen/shared/utils/redis-client';
+import { initializeSupabase } from '@aizen/shared/utils/supabase-client';
+
+import { config } from './config';
 import { createApp, startServer, gracefulShutdown } from './server';
 
 async function main(): Promise<void> {
+  // Initialize external clients before creating the app
+  if (config.supabase.url && config.supabase.anonKey) {
+    initializeSupabase({
+      url: config.supabase.url,
+      anonKey: config.supabase.anonKey,
+    });
+    console.log('✓ Supabase client initialized');
+  } else {
+    console.warn(
+      '⚠ Supabase configuration missing, some features may not work'
+    );
+  }
+
+  initializeRedis({
+    host: config.redis.host,
+    port: config.redis.port,
+    password: config.redis.password,
+  });
+  console.log('✓ Redis client initialized');
+
   const app = await createApp();
 
   // Register signal handlers

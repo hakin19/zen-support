@@ -28,6 +28,24 @@ vi.mock('@aizen/shared/lib/supabase', () => ({
   },
 }));
 
+// Mock Supabase client utilities
+vi.mock('@aizen/shared/utils/supabase-client', () => ({
+  initializeSupabase: vi.fn(),
+  getSupabaseClient: vi.fn(() => ({
+    auth: {
+      getUser: vi.fn(),
+    },
+    from: vi.fn(() => ({
+      select: vi.fn().mockReturnThis(),
+      insert: vi.fn().mockReturnThis(),
+      update: vi.fn().mockReturnThis(),
+      delete: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn(),
+    })),
+  })),
+}));
+
 // Mock Redis client for unit tests
 vi.mock('@aizen/shared/utils/redis-client', () => ({
   redisClient: {
@@ -42,4 +60,12 @@ vi.mock('@aizen/shared/utils/redis-client', () => ({
     publish: vi.fn(),
     subscribe: vi.fn(),
   },
+  initializeRedis: vi.fn(),
+  getRedisClient: vi.fn(() => ({
+    setCache: vi.fn(),
+    getCache: vi.fn(),
+    deleteCache: vi.fn(),
+    close: vi.fn(),
+  })),
+  closeRedis: vi.fn().mockResolvedValue(undefined),
 }));
