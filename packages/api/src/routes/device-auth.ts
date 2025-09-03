@@ -169,13 +169,6 @@ export function registerDeviceAuthRoutes(app: FastifyInstance): void {
     {
       preHandler: [deviceAuthMiddleware],
       schema: {
-        headers: {
-          type: 'object',
-          required: ['authorization'],
-          properties: {
-            authorization: { type: 'string' },
-          },
-        },
         body: {
           type: 'object',
           required: ['status'],
