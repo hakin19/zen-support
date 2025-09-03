@@ -6,6 +6,28 @@
   "description": "Aizen vNE Shared Types and Utilities",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./utils/*": {
+      "types": "./dist/utils/*.d.ts",
+      "default": "./dist/utils/*.js"
+    },
+    "./lib/*": {
+      "types": "./dist/lib/*.d.ts",
+      "default": "./dist/lib/*.js"
+    },
+    "./types/*": {
+      "types": "./dist/types/*.d.ts",
+      "default": "./dist/types/*.js"
+    },
+    "./test/*": {
+      "types": "./dist/test/*.d.ts",
+      "default": "./dist/test/*.js"
+    }
+  },
   "scripts": {
     "build": "tsc",
     "test": "vitest run",
