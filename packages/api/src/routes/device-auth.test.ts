@@ -317,8 +317,6 @@ describe('Device Auth Routes', () => {
     it('should return 401 for invalid session', async () => {
       vi.mocked(sessionService.validateSession).mockResolvedValue({
         valid: false,
-        deviceId: '',
-        customerId: '',
       });
 
       const res = await app.inject({
@@ -333,10 +331,10 @@ describe('Device Auth Routes', () => {
       });
 
       expect(res.statusCode).toBe(401);
-      expect(res.json()).toMatchObject({
+      expect(res.json()).toEqual({
         error: {
-          code: 'UNAUTHORIZED',
-          message: 'Invalid or expired device token',
+          code: 'INVALID_SESSION',
+          message: 'Invalid or expired session',
         },
       });
 

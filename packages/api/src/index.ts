@@ -32,7 +32,6 @@ async function main(): Promise<void> {
     password: config.redis.password,
   });
   console.log('✓ Redis client initialized');
-
   const app = await createApp();
 
   // Register signal handlers

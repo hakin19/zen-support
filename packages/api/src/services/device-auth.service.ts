@@ -94,56 +94,66 @@ export const deviceAuthService = {
         device: {
           id: device.id as string,
           customerId: device.customer_id as string,
-          status: device.status as 'active' | 'inactive' | 'suspended',
+          status: device.status as 'active' | 'inactive',
           name: device.name as string,
         },
       };
     } catch (error) {
-      console.error('Failed to validate device credentials:', error);
+      console.error('Error validating device credentials:', error);
       return { valid: false };
     }
   },
 
-  async validateActivationCode(code: string): Promise<ActivationCodeResult> {
-    try {
-      const redis = getRedisClient();
-      const activationData = await redis.getCache(
-        `${ACTIVATION_CODE_PREFIX}${code}`
-      );
+  async validateActivationCode(
+    activationCode: string
+  ): Promise<ActivationCodeResult> {
+    const redis = getRedisClient();
+    const key = `${ACTIVATION_CODE_PREFIX}${activationCode}`;
 
-      if (!activationData) {
-        return { valid: false, reason: 'expired' };
-      }
+    // Check if activation code exists
+    const data = await redis.get(key);
 
-      const { customerId, deviceId } = activationData as {
-        customerId: string;
-        deviceId: string;
+    if (!data) {
+      return {
+        valid: false,
+        reason: 'invalid',
       };
+    }
 
-      // Check if device is not already registered
+    const { customerId, deviceId } = JSON.parse(data) as {
+      customerId: string;
+      deviceId?: string;
+    };
+
+    // Check if this device is already registered
+    if (deviceId) {
       const supabase = getSupabaseAdminClient();
-      const { data: existingDevice } = await supabase
+      const { data: device } = await supabase
         .from('devices')
         .select('id')
         .eq('id', deviceId)
         .single();
 
-      if (existingDevice?.id) {
-        return { valid: false, reason: 'already_registered' };
+      if (device) {
+        return {
+          valid: false,
+          reason: 'already_registered',
+        };
       }
-
-      return {
-        valid: true,
-        customerId,
-        deviceId,
-      };
-    } catch (error) {
-      console.error('Failed to validate activation code:', error);
-      return { valid: false, reason: 'error' };
     }
+
+    return {
+      valid: true,
+      customerId,
+      deviceId,
+    };
   },
 
-  async registerDevice(params: {
+  async registerDevice({
+    deviceId,
+    customerId,
+    deviceName,
+  }: {
     deviceId: string;
     customerId: string;
     deviceName: string;
@@ -151,41 +161,57 @@ export const deviceAuthService = {
     try {
       const supabase = getSupabaseAdminClient();
 
-      // Generate a new device secret
+      // Check if device already exists
+      const { data: existingDevice } = await supabase
+        .from('devices')
+        .select('id')
+        .eq('id', deviceId)
+        .single();
+
+      if (existingDevice) {
+        throw {
+          code: 'DEVICE_EXISTS',
+          message: 'Device ID already registered',
+        };
+      }
+
+      // Generate device secret
       const deviceSecret = generateDeviceSecret();
       const deviceSecretHash = hashSecret(deviceSecret);
 
-      // Insert device into database
-      const { error } = await supabase.from('devices').insert({
-        id: params.deviceId,
-        customer_id: params.customerId,
-        name: params.deviceName,
+      // Create device record
+      const { error: insertError } = await supabase.from('devices').insert({
+        id: deviceId,
+        customer_id: customerId,
+        name: deviceName,
         device_secret_hash: deviceSecretHash,
         status: 'active',
-        created_at: new Date().toISOString(),
         last_seen: new Date().toISOString(),
       });
 
-      if (error) {
-        if (error.code === '23505') {
-          // Unique violation
-          const deviceExistsError = new Error(
-            'Device ID already registered'
-          ) as Error & { code: string };
-          deviceExistsError.code = 'DEVICE_EXISTS';
-          throw deviceExistsError;
-        }
-        throw error;
+      if (insertError) {
+        console.error('Error registering device:', insertError);
+        throw new Error('Failed to register device');
       }
 
       return {
-        deviceId: params.deviceId,
-        deviceSecret,
-        customerId: params.customerId,
+        deviceId,
+        deviceSecret, // Return the plaintext secret (only shown once)
+        customerId,
       };
     } catch (error) {
-      console.error('Failed to register device:', error);
-      throw error;
+      // Re-throw known errors
+      if (
+        error &&
+        typeof error === 'object' &&
+        'code' in error &&
+        error.code === 'DEVICE_EXISTS'
+      ) {
+        throw error;
+      }
+
+      console.error('Error registering device:', error);
+      throw new Error('Failed to register device');
     }
   },
 
@@ -196,55 +222,52 @@ export const deviceAuthService = {
     try {
       const supabase = getSupabaseAdminClient();
 
-      // Update device last_seen and metrics
+      // Update device last_seen timestamp
       const { error } = await supabase
         .from('devices')
         .update({
           last_seen: new Date().toISOString(),
-          status: data.status === 'healthy' ? 'active' : 'degraded',
-          metrics: data.metrics
-            ? {
-                cpu: data.metrics.cpu,
-                memory: data.metrics.memory,
-                uptime: data.metrics.uptime,
-                updated_at: new Date().toISOString(),
-              }
-            : undefined,
+          // Note: In a real implementation, we might also store metrics
+          // in a separate time-series table for monitoring
         })
         .eq('id', deviceId);
 
       if (error) {
-        console.error('Failed to update device heartbeat:', error);
+        console.error('Error updating heartbeat:', error);
         return false;
+      }
+
+      // Could also store metrics in Redis for real-time monitoring
+      if (data.metrics) {
+        const redis = getRedisClient();
+        const metricsKey = `device:metrics:${deviceId}`;
+        await redis.setex(
+          metricsKey,
+          300, // 5 minute TTL for metrics
+          JSON.stringify({
+            ...data,
+            timestamp: new Date().toISOString(),
+          })
+        );
       }
 
       return true;
     } catch (error) {
-      console.error('Failed to update heartbeat:', error);
+      console.error('Error updating heartbeat:', error);
       return false;
     }
   },
 
-  async createActivationCode(
-    customerId: string,
-    deviceId: string
-  ): Promise<string> {
-    try {
-      const redis = getRedisClient();
+  async createActivationCode(customerId: string): Promise<string> {
+    const redis = getRedisClient();
 
-      // Generate a human-friendly activation code (8 chars, uppercase)
-      const code = randomBytes(4).toString('hex').toUpperCase();
+    // Generate a unique activation code
+    const activationCode = randomBytes(16).toString('hex');
+    const key = `${ACTIVATION_CODE_PREFIX}${activationCode}`;
 
-      await redis.setCache(
-        `${ACTIVATION_CODE_PREFIX}${code}`,
-        { customerId, deviceId },
-        ACTIVATION_CODE_TTL
-      );
+    // Store in Redis with TTL
+    await redis.setex(key, ACTIVATION_CODE_TTL, JSON.stringify({ customerId }));
 
-      return code;
-    } catch (error) {
-      console.error('Failed to create activation code:', error);
-      throw error;
-    }
+    return activationCode;
   },
 };
