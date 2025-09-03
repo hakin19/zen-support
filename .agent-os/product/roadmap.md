@@ -28,7 +28,7 @@ The following infrastructure and development setup has been implemented:
 - [ ] **API Gateway Implementation** - Express/Fastify gateway with authentication and routing `M`
 - [ ] **Basic Network Diagnostics** - Ping, traceroute, DNS resolution, and connectivity tests `M`
 - [ ] **Secure Communication Channel** - End-to-end encrypted communication via cellular simulation `L`
-- [ ] **Multi-Factor Authentication** - Caller ID verification + Email OTP implementation `M`
+
 - [ ] **Real-time WebSocket Updates** - Live status updates between device and portal `S`
 
 ### Dependencies

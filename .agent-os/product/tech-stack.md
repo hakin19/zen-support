@@ -46,7 +46,7 @@
 ## External Services
 
 - **AI Integration:** Claude SDK for LLM orchestration
-- **Authentication:** Supabase Auth with MFA
+- **Authentication:** Supabase Auth (email-based sign-in); MFA deferred
 - **Cellular Connectivity:** Out-of-band LTE/4G for device agents
 
 ## Development Tools

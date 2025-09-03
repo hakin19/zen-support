@@ -2,8 +2,8 @@ Product Requirements Document: Zen & Zen Network Support (vNE MVP)
 Version: 1.0
 
 1. Introduction
-1.1. Problem Statement
-Small and Medium-sized Businesses (SMBs) and mid-market companies with remote branches lose significant time and money when their networks fail or underperform. Their current support options are inadequate: on-site IT staff are often generalists who lack deep networking expertise, and traditional remote support services (like MSPs) are rendered helpless during a total network outage. This leaves businesses unable to operate and their IT managers without a viable path to a quick resolution.
+   1.1. Problem Statement
+   Small and Medium-sized Businesses (SMBs) and mid-market companies with remote branches lose significant time and money when their networks fail or underperform. Their current support options are inadequate: on-site IT staff are often generalists who lack deep networking expertise, and traditional remote support services (like MSPs) are rendered helpless during a total network outage. This leaves businesses unable to operate and their IT managers without a viable path to a quick resolution.
 
 1.2. Proposed Solution
 This document outlines the requirements for the Minimum Viable Product (MVP) of "Zen & Zen Network Support." The solution is a subscription service that provides an AI-powered Virtual Network Engineer (vNE). The vNE is delivered via a small, off-the-shelf hardware device that the subscriber plugs into their network on-demand. Using a secure, out-of-band cellular connection, the vNE can diagnose and, with user permission, remediate the full spectrum of network issues—from catastrophic outages to subtle performance degradations.
@@ -12,16 +12,16 @@ This document outlines the requirements for the Minimum Viable Product (MVP) of 
 The purpose of this PRD is to define the specific features, user flows, and technical requirements for the MVP. This document will serve as the single source of truth for the engineering and design teams to build and launch the initial version of the service.
 
 2. User Personas
-Primary Persona: "David" - The Overwhelmed IT Generalist: The IT Manager at an SMB responsible for all technology. His goal is to keep systems running smoothly and avoid firefighting. He is frustrated by the pressure of network outages, the time wasted with ISP support, and the lack of budget for specialized tools.
+   Primary Persona: "David" - The Overwhelmed IT Generalist: The IT Manager at an SMB responsible for all technology. His goal is to keep systems running smoothly and avoid firefighting. He is frustrated by the pressure of network outages, the time wasted with ISP support, and the lack of budget for specialized tools.
 
 Secondary Persona: "Maria" - The Centralized IT Manager: An IT Director for a multi-location business (e.g., healthcare clinics, retail) responsible for remote sites with no on-site IT. Her goal is to resolve remote issues efficiently and avoid the high cost and delay of dispatching technicians.
 
 3. User Stories & Requirements
-The core user journey involves the user plugging in the vNE device during a network issue, calling the support number, and then interacting with the AI via voice and a secure web portal to diagnose the problem, provide credentials securely, and approve remediation steps.
+   The core user journey involves the user plugging in the vNE device during a network issue, calling the support number, and then interacting with the AI via voice and a secure web portal to diagnose the problem, provide credentials securely, and approve remediation steps.
 
 4. Detailed Requirements
-4.1. Hardware Requirements (The vNE Device)
-The device shall be a cost-effective single-board computer (e.g., Raspberry Pi) with integrated LTE and a Gigabit Ethernet port. It will be shipped pre-configured for zero-touch deployment and will include a multi-color LED for status indication. The OS will be hardened, and all communication will be outbound-only for security.
+   4.1. Hardware Requirements (The vNE Device)
+   The device shall be a cost-effective single-board computer (e.g., Raspberry Pi) with integrated LTE and a Gigabit Ethernet port. It will be shipped pre-configured for zero-touch deployment and will include a multi-color LED for status indication. The OS will be hardened, and all communication will be outbound-only for security.
 
 4.2. AI Service & Cloud Back-End Requirements
 The architecture is defined as "hands on-prem, brains in-the-cloud."
@@ -32,7 +32,7 @@ The "Brain" (Cloud LLM): A fine-tuned, cloud-based frontier LLM will perform pla
 
 Security & Privacy:
 
-MFA: Authentication requires both Caller ID and an SMS-based OTP.
+Authentication (MVP): Single-factor. Caller ID is used to verify phone support sessions; the web portal uses email-based sign-in. MFA is deferred.
 
 Data Sanitization: Raw diagnostic data is transmitted to the cloud where PII sanitization occurs before analysis by foundational AI models, protecting sensitive information from AI exposure.
 
@@ -41,8 +41,8 @@ HITL: All state-altering actions must be approved by the user via the secure web
 User Experience: The system will support a multi-modal experience, where the user interacts with the voice agent on the phone while simultaneously using the web portal for detailed information and approvals.
 
 5. Success Metrics & Go-to-Market Strategy
-5.1. Success Metrics (MVP)
-Mean Time to Resolution (MTTR): Target < 30 minutes for common outages.
+   5.1. Success Metrics (MVP)
+   Mean Time to Resolution (MTTR): Target < 30 minutes for common outages.
 
 Customer Satisfaction (CSAT): Target > 4.5/5.
 

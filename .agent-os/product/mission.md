@@ -17,12 +17,14 @@ Aizen vNE is an AI-powered Virtual Network Engineer system that helps SMBs and m
 ### User Personas
 
 **IT Manager** (35-50 years old)
-- **Role:** IT Manager or Office Manager with IT responsibilities  
+
+- **Role:** IT Manager or Office Manager with IT responsibilities
 - **Context:** Manages technology for a growing business without a full IT team
 - **Pain Points:** Network outages cause productivity loss, expensive technician visits, lack of network visibility
 - **Goals:** Quick issue resolution, reduced downtime, cost-effective network management
 
 **Business Owner** (30-55 years old)
+
 - **Role:** Small business owner or operations manager
 - **Context:** Relies on technology for daily operations but has limited technical expertise
 - **Pain Points:** Network issues disrupt business operations, difficulty finding reliable IT support, high costs for emergency service calls
@@ -76,6 +78,6 @@ Unlike fully automated systems that might cause additional network disruption, A
 ### Collaboration Features
 
 - **Human-in-the-Loop Approval:** All network changes require explicit human authorization for safety
-- **Multi-Factor Authentication:** Caller ID verification combined with email OTP for secure access
+- **Authentication (MVP):** Single-factor. Caller ID verifies phone sessions; the web portal uses email-based sign-in. MFA is deferred.
 - **Audit Trail:** Complete logging of all diagnostic actions and network changes for compliance
 - **Customer Portal:** Web-based dashboard for viewing network status, history, and diagnostics
