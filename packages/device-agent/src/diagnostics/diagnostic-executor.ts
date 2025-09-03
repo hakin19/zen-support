@@ -315,7 +315,7 @@ export class DiagnosticExecutor {
   private async testHttpConnectivity(
     commandId: string,
     url: string,
-    timeout: number
+    _timeout: number
   ): Promise<DiagnosticResult> {
     const startTime = Date.now();
 
@@ -353,7 +353,7 @@ export class DiagnosticExecutor {
     commandId: string,
     host: string,
     port: number,
-    timeout: number
+    _timeout: number
   ): Promise<DiagnosticResult> {
     const startTime = Date.now();
 
@@ -397,7 +397,7 @@ export class DiagnosticExecutor {
     timeout: number
   ): Promise<{ stdout: string; stderr: string }> {
     return new Promise((resolve, reject) => {
-      const child = exec(command, { timeout }, (error, stdout, stderr) => {
+      exec(command, { timeout }, (error, stdout, stderr) => {
         if (error) {
           if (error.killed && error.signal === 'SIGTERM') {
             reject(new Error(`Command timed out after ${timeout}ms`));
@@ -432,7 +432,7 @@ export class DiagnosticExecutor {
       const statsMatch = output.match(
         /Packets: Sent = (\d+), Received = (\d+), Lost = (\d+)/
       );
-      if (statsMatch) {
+      if (statsMatch?.[1] && statsMatch[2] && statsMatch[3]) {
         metrics.packetsTransmitted = parseInt(statsMatch[1]);
         metrics.packetsReceived = parseInt(statsMatch[2]);
         metrics.packetLoss = Math.round(
@@ -443,7 +443,7 @@ export class DiagnosticExecutor {
       const timesMatch = output.match(
         /Minimum = (\d+)ms, Maximum = (\d+)ms, Average = (\d+)ms/
       );
-      if (timesMatch) {
+      if (timesMatch?.[1] && timesMatch[2] && timesMatch[3]) {
         metrics.minRtt = parseInt(timesMatch[1]);
         metrics.maxRtt = parseInt(timesMatch[2]);
         metrics.avgRtt = parseInt(timesMatch[3]);
@@ -453,7 +453,7 @@ export class DiagnosticExecutor {
       const statsMatch = output.match(
         /(\d+) packets transmitted, (\d+) (?:packets )?received, ([\d.]+)% packet loss/
       );
-      if (statsMatch) {
+      if (statsMatch?.[1] && statsMatch[2] && statsMatch[3]) {
         metrics.packetsTransmitted = parseInt(statsMatch[1]);
         metrics.packetsReceived = parseInt(statsMatch[2]);
         metrics.packetLoss = parseFloat(statsMatch[3]);
@@ -462,7 +462,7 @@ export class DiagnosticExecutor {
       const timesMatch = output.match(
         /min\/avg\/max\/(?:mdev|stddev) = ([\d.]+)\/([\d.]+)\/([\d.]+)\/([\d.]+)/
       );
-      if (timesMatch) {
+      if (timesMatch?.[1] && timesMatch[2] && timesMatch[3] && timesMatch[4]) {
         metrics.minRtt = parseFloat(timesMatch[1]);
         metrics.avgRtt = parseFloat(timesMatch[2]);
         metrics.maxRtt = parseFloat(timesMatch[3]);
@@ -494,7 +494,7 @@ export class DiagnosticExecutor {
       const targetMatch = output.match(
         /Tracing route to ([\d.]+|[\da-f:]+|\S+)/
       );
-      if (targetMatch) {
+      if (targetMatch?.[1]) {
         target = targetMatch[1];
       }
 
@@ -503,7 +503,7 @@ export class DiagnosticExecutor {
 
       for (const line of lines) {
         const match = line.match(hopRegex);
-        if (match) {
+        if (match?.[1] && match[2] && match[3]) {
           const hopNum = parseInt(match[1]);
           const times = match[2]
             .trim()
@@ -534,7 +534,7 @@ export class DiagnosticExecutor {
     } else {
       // Unix/Linux traceroute format
       const targetMatch = output.match(/traceroute to (.+?) \(/);
-      if (targetMatch) {
+      if (targetMatch?.[1]) {
         target = targetMatch[1];
       }
 
@@ -542,7 +542,7 @@ export class DiagnosticExecutor {
 
       for (const line of lines) {
         const match = line.match(hopRegex);
-        if (match) {
+        if (match?.[1] && match[2]) {
           const hopNum = parseInt(match[1]);
           const rest = match[2].trim();
 

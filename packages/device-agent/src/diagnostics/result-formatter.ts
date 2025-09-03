@@ -92,7 +92,7 @@ export class ResultFormatter {
       const statsMatch = rawOutput.match(
         /Packets: Sent = (\d+), Received = (\d+), Lost = (\d+)/
       );
-      if (statsMatch) {
+      if (statsMatch?.[1] && statsMatch[2] && statsMatch[3]) {
         metrics.packetsTransmitted = parseInt(statsMatch[1]);
         metrics.packetsReceived = parseInt(statsMatch[2]);
         const lost = parseInt(statsMatch[3]);
@@ -105,7 +105,7 @@ export class ResultFormatter {
       const timesMatch = rawOutput.match(
         /Minimum = (\d+)ms, Maximum = (\d+)ms, Average = (\d+)ms/
       );
-      if (timesMatch) {
+      if (timesMatch?.[1] && timesMatch[2] && timesMatch[3]) {
         metrics.minRtt = parseInt(timesMatch[1]);
         metrics.maxRtt = parseInt(timesMatch[2]);
         metrics.avgRtt = parseInt(timesMatch[3]);
@@ -115,7 +115,7 @@ export class ResultFormatter {
       const statsMatch = rawOutput.match(
         /(\d+) packets transmitted, (\d+) (?:packets )?received, ([\d.]+)% packet loss/
       );
-      if (statsMatch) {
+      if (statsMatch?.[1] && statsMatch[2] && statsMatch[3]) {
         metrics.packetsTransmitted = parseInt(statsMatch[1]);
         metrics.packetsReceived = parseInt(statsMatch[2]);
         metrics.packetLoss = parseFloat(statsMatch[3]);
@@ -124,7 +124,7 @@ export class ResultFormatter {
       const timesMatch = rawOutput.match(
         /min\/avg\/max\/(?:mdev|stddev|std-dev) = ([\d.]+)\/([\d.]+)\/([\d.]+)\/([\d.]+)/
       );
-      if (timesMatch) {
+      if (timesMatch?.[1] && timesMatch[2] && timesMatch[3] && timesMatch[4]) {
         metrics.minRtt = parseFloat(timesMatch[1]);
         metrics.avgRtt = parseFloat(timesMatch[2]);
         metrics.maxRtt = parseFloat(timesMatch[3]);
@@ -151,7 +151,7 @@ export class ResultFormatter {
       ? rawOutput.match(/Tracing route to ([\d.]+|[\da-f:]+|\S+)/)
       : rawOutput.match(/traceroute to ([\d.]+|[\da-f:]+|\S+)/);
 
-    if (targetMatch) {
+    if (targetMatch?.[1]) {
       target = targetMatch[1];
     }
 
@@ -163,7 +163,7 @@ export class ResultFormatter {
 
       for (const line of lines) {
         const match = line.match(hopRegex);
-        if (match) {
+        if (match?.[1] && match[2]) {
           const hopNum = parseInt(match[1]);
           const rest = match[2].trim();
 
@@ -200,8 +200,8 @@ export class ResultFormatter {
 
             hops.push({
               hop: hopNum,
-              ip: host,
-              hostname: host,
+              ip: host ?? null,
+              hostname: host ?? null,
               times,
               avgTime:
                 times.length > 0
@@ -221,7 +221,7 @@ export class ResultFormatter {
 
       for (const line of lines) {
         const match = line.match(hopRegex);
-        if (match) {
+        if (match?.[1] && match[2]) {
           const hopNum = parseInt(match[1]);
           const rest = match[2].trim();
 
@@ -243,13 +243,13 @@ export class ResultFormatter {
             let ip: string | null = null;
             let hostname: string | null = null;
 
-            if (ipHostMatch) {
+            if (ipHostMatch?.[1] && ipHostMatch[2]) {
               hostname = ipHostMatch[1];
               ip = ipHostMatch[2];
             } else {
               // Simple IP without parentheses
               const simpleMatch = rest.match(/^([\d.]+|[\da-f:]+|\S+)/);
-              if (simpleMatch) {
+              if (simpleMatch?.[1]) {
                 ip = simpleMatch[1];
                 hostname = simpleMatch[1];
               }

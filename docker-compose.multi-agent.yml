@@ -1,0 +1,179 @@
+version: '3.8'
+
+services:
+  # Redis service (shared)
+  redis:
+    image: redis:7.4-alpine
+    container_name: aizen-redis-multi
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - aizen-network
+    restart: unless-stopped
+
+  # Device Agent 1 - US-WEST
+  device-agent-1:
+    build:
+      context: ./packages/device-agent
+      dockerfile: Dockerfile
+    container_name: device-agent-us-west-001
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      DEVICE_ID: DEV-US-WEST-001
+      DEVICE_SECRET: ${DEVICE_SECRET:-dev-secret-us-west-001}
+      CUSTOMER_ID: ${CUSTOMER_ID:-test-customer-001}
+      API_URL: ${API_URL:-http://host.docker.internal:3001}
+      API_KEY: ${API_KEY}
+      LOCATION: US-WEST
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      HEARTBEAT_INTERVAL: ${HEARTBEAT_INTERVAL:-30000}
+      MAX_COMMAND_TIMEOUT: ${MAX_COMMAND_TIMEOUT:-30000}
+      REDIS_URL: redis://redis:6379
+    volumes:
+      - ./packages/device-agent:/app
+      - /app/node_modules
+      - agent1-logs:/app/logs
+    networks:
+      - aizen-network
+      - agent-1-network
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3002/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+
+  # Device Agent 2 - US-EAST
+  device-agent-2:
+    build:
+      context: ./packages/device-agent
+      dockerfile: Dockerfile
+    container_name: device-agent-us-east-001
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      DEVICE_ID: DEV-US-EAST-001
+      DEVICE_SECRET: ${DEVICE_SECRET:-dev-secret-us-east-001}
+      CUSTOMER_ID: ${CUSTOMER_ID:-test-customer-001}
+      API_URL: ${API_URL:-http://host.docker.internal:3001}
+      API_KEY: ${API_KEY}
+      LOCATION: US-EAST
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      HEARTBEAT_INTERVAL: ${HEARTBEAT_INTERVAL:-30000}
+      MAX_COMMAND_TIMEOUT: ${MAX_COMMAND_TIMEOUT:-30000}
+      REDIS_URL: redis://redis:6379
+    volumes:
+      - ./packages/device-agent:/app
+      - /app/node_modules
+      - agent2-logs:/app/logs
+    networks:
+      - aizen-network
+      - agent-2-network
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3002/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+
+  # Device Agent 3 - EU-CENTRAL
+  device-agent-3:
+    build:
+      context: ./packages/device-agent
+      dockerfile: Dockerfile
+    container_name: device-agent-eu-central-001
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      DEVICE_ID: DEV-EU-CENTRAL-001
+      DEVICE_SECRET: ${DEVICE_SECRET:-dev-secret-eu-central-001}
+      CUSTOMER_ID: ${CUSTOMER_ID:-test-customer-001}
+      API_URL: ${API_URL:-http://host.docker.internal:3001}
+      API_KEY: ${API_KEY}
+      LOCATION: EU-CENTRAL
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      HEARTBEAT_INTERVAL: ${HEARTBEAT_INTERVAL:-30000}
+      MAX_COMMAND_TIMEOUT: ${MAX_COMMAND_TIMEOUT:-30000}
+      REDIS_URL: redis://redis:6379
+    volumes:
+      - ./packages/device-agent:/app
+      - /app/node_modules
+      - agent3-logs:/app/logs
+    networks:
+      - aizen-network
+      - agent-3-network
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3002/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+
+  # Optional: Log Aggregator (Fluentd)
+  log-aggregator:
+    image: fluent/fluentd:v1.17-debian
+    container_name: aizen-log-aggregator
+    volumes:
+      - ./config/fluentd:/fluentd/etc
+      - agent1-logs:/logs/agent1:ro
+      - agent2-logs:/logs/agent2:ro
+      - agent3-logs:/logs/agent3:ro
+      - aggregated-logs:/fluentd/log
+    environment:
+      FLUENTD_CONF: fluent.conf
+    networks:
+      - aizen-network
+    depends_on:
+      - device-agent-1
+      - device-agent-2
+      - device-agent-3
+    restart: unless-stopped
+
+networks:
+  aizen-network:
+    driver: bridge
+    name: aizen-network-multi
+  
+  agent-1-network:
+    driver: bridge
+    internal: true
+    name: agent-1-isolated
+  
+  agent-2-network:
+    driver: bridge
+    internal: true
+    name: agent-2-isolated
+  
+  agent-3-network:
+    driver: bridge
+    internal: true
+    name: agent-3-isolated
+
+volumes:
+  redis-data:
+    name: aizen-redis-data-multi
+  agent1-logs:
+    name: aizen-agent1-logs
+  agent2-logs:
+    name: aizen-agent2-logs
+  agent3-logs:
+    name: aizen-agent3-logs
+  aggregated-logs:
+    name: aizen-aggregated-logs
