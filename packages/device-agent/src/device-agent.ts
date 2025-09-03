@@ -1,5 +1,7 @@
 import { EventEmitter } from 'events';
 
+import { getDeviceId } from './utils/device-id-generator.js';
+
 import type {
   DeviceConfig,
   DeviceStatus,
@@ -29,8 +31,13 @@ export class DeviceAgent extends EventEmitter {
 
   constructor(config: DeviceConfig) {
     super();
-    this.validateConfig(config);
-    this.#config = config;
+    // Auto-generate device ID only if not provided but not empty string
+    const configWithDeviceId = {
+      ...config,
+      deviceId: config.deviceId === undefined ? getDeviceId() : config.deviceId,
+    };
+    this.validateConfig(configWithDeviceId);
+    this.#config = configWithDeviceId;
     this.#heartbeatInterval = config.heartbeatInterval ?? 60000;
   }
 

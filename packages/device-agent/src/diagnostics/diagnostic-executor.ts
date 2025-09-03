@@ -224,39 +224,32 @@ export class DiagnosticExecutor {
       } else {
         // Real DNS resolution would go here
         switch (recordType) {
-          case 'A': {
+          case 'A':
             const addresses = await dns.promises.resolve4(target);
             metrics.addresses = addresses;
             break;
-          }
-          case 'AAAA': {
+          case 'AAAA':
             const ipv6Addresses = await dns.promises.resolve6(target);
             metrics.addresses = ipv6Addresses;
             break;
-          }
-          case 'MX': {
+          case 'MX':
             const mxRecords = await dns.promises.resolveMx(target);
             metrics.records = mxRecords;
             break;
-          }
-          case 'TXT': {
+          case 'TXT':
             const txtRecords = await dns.promises.resolveTxt(target);
             metrics.records = txtRecords;
             break;
-          }
-          case 'NS': {
+          case 'NS':
             const nsRecords = await dns.promises.resolveNs(target);
             metrics.servers = nsRecords;
             break;
-          }
-          case 'CNAME': {
+          case 'CNAME':
             const cnameRecords = await dns.promises.resolveCname(target);
             metrics.cname = cnameRecords;
             break;
-          }
-          default: {
+          default:
             throw new Error(`Unsupported record type: ${recordType}`);
-          }
         }
       }
 
@@ -327,8 +320,6 @@ export class DiagnosticExecutor {
     const startTime = Date.now();
 
     try {
-      // Keep async, ensure at least one await for lint rule
-      await Promise.resolve();
       const metrics = await this.getMockHttpResult(url);
 
       return {
@@ -367,7 +358,6 @@ export class DiagnosticExecutor {
     const startTime = Date.now();
 
     try {
-      await Promise.resolve();
       const reachable = await this.getMockPortResult(host, port);
 
       return {
@@ -385,7 +375,7 @@ export class DiagnosticExecutor {
         executedAt: new Date().toISOString(),
         duration: Date.now() - startTime,
       };
-    } catch {
+    } catch (error) {
       return {
         commandId,
         deviceId: process.env.DEVICE_ID ?? 'unknown',
@@ -442,42 +432,41 @@ export class DiagnosticExecutor {
       const statsMatch = output.match(
         /Packets: Sent = (\d+), Received = (\d+), Lost = (\d+)/
       );
-      if (statsMatch) {
-        metrics.packetsTransmitted = parseInt(statsMatch[1] || '0');
-        metrics.packetsReceived = parseInt(statsMatch[2] || '0');
-        const lost = parseInt(statsMatch[3] || '0');
-        const transmitted = parseInt(statsMatch[1] || '0');
-        metrics.packetLoss =
-          transmitted > 0 ? Math.round((lost / transmitted) * 100) : 0;
+      if (statsMatch?.[1] && statsMatch[2] && statsMatch[3]) {
+        metrics.packetsTransmitted = parseInt(statsMatch[1]);
+        metrics.packetsReceived = parseInt(statsMatch[2]);
+        metrics.packetLoss = Math.round(
+          (parseInt(statsMatch[3]) / parseInt(statsMatch[1])) * 100
+        );
       }
 
       const timesMatch = output.match(
         /Minimum = (\d+)ms, Maximum = (\d+)ms, Average = (\d+)ms/
       );
-      if (timesMatch) {
-        metrics.minRtt = parseInt(timesMatch[1] || '0');
-        metrics.maxRtt = parseInt(timesMatch[2] || '0');
-        metrics.avgRtt = parseInt(timesMatch[3] || '0');
+      if (timesMatch?.[1] && timesMatch[2] && timesMatch[3]) {
+        metrics.minRtt = parseInt(timesMatch[1]);
+        metrics.maxRtt = parseInt(timesMatch[2]);
+        metrics.avgRtt = parseInt(timesMatch[3]);
       }
     } else {
       // Unix/Linux ping format
       const statsMatch = output.match(
         /(\d+) packets transmitted, (\d+) (?:packets )?received, ([\d.]+)% packet loss/
       );
-      if (statsMatch) {
-        metrics.packetsTransmitted = parseInt(statsMatch[1] || '0');
-        metrics.packetsReceived = parseInt(statsMatch[2] || '0');
-        metrics.packetLoss = parseFloat(statsMatch[3] || '0');
+      if (statsMatch?.[1] && statsMatch[2] && statsMatch[3]) {
+        metrics.packetsTransmitted = parseInt(statsMatch[1]);
+        metrics.packetsReceived = parseInt(statsMatch[2]);
+        metrics.packetLoss = parseFloat(statsMatch[3]);
       }
 
       const timesMatch = output.match(
         /min\/avg\/max\/(?:mdev|stddev) = ([\d.]+)\/([\d.]+)\/([\d.]+)\/([\d.]+)/
       );
-      if (timesMatch) {
-        metrics.minRtt = parseFloat(timesMatch[1] || '0');
-        metrics.avgRtt = parseFloat(timesMatch[2] || '0');
-        metrics.maxRtt = parseFloat(timesMatch[3] || '0');
-        metrics.stddev = parseFloat(timesMatch[4] || '0');
+      if (timesMatch?.[1] && timesMatch[2] && timesMatch[3] && timesMatch[4]) {
+        metrics.minRtt = parseFloat(timesMatch[1]);
+        metrics.avgRtt = parseFloat(timesMatch[2]);
+        metrics.maxRtt = parseFloat(timesMatch[3]);
+        metrics.stddev = parseFloat(timesMatch[4]);
       }
     }
 
@@ -505,8 +494,8 @@ export class DiagnosticExecutor {
       const targetMatch = output.match(
         /Tracing route to ([\d.]+|[\da-f:]+|\S+)/
       );
-      if (targetMatch) {
-        target = targetMatch[1] || '';
+      if (targetMatch?.[1]) {
+        target = targetMatch[1];
       }
 
       const hopRegex =
@@ -514,9 +503,9 @@ export class DiagnosticExecutor {
 
       for (const line of lines) {
         const match = line.match(hopRegex);
-        if (match) {
-          const hopNum = parseInt(match[1] || '0');
-          const times = (match[2] || '')
+        if (match?.[1] && match[2] && match[3]) {
+          const hopNum = parseInt(match[1]);
+          const times = match[2]
             .trim()
             .split(/\s+/)
             .map(t => {
@@ -524,7 +513,7 @@ export class DiagnosticExecutor {
               return parseInt(t.replace('ms', ''));
             })
             .filter(t => t !== null);
-          const host = (match[3] || '').trim();
+          const host = match[3].trim();
 
           hops.push({
             hop: hopNum,
@@ -545,17 +534,17 @@ export class DiagnosticExecutor {
     } else {
       // Unix/Linux traceroute format
       const targetMatch = output.match(/traceroute to (.+?) \(/);
-      if (targetMatch) {
-        target = targetMatch[1] || '';
+      if (targetMatch?.[1]) {
+        target = targetMatch[1];
       }
 
       const hopRegex = /^\s*(\d+)\s+(.+)$/;
 
       for (const line of lines) {
         const match = line.match(hopRegex);
-        if (match) {
-          const hopNum = parseInt(match[1] || '0');
-          const rest = (match[2] || '').trim();
+        if (match?.[1] && match[2]) {
+          const hopNum = parseInt(match[1]);
+          const rest = match[2].trim();
 
           if (rest === '* * *') {
             hops.push({
@@ -571,10 +560,8 @@ export class DiagnosticExecutor {
             );
             const timesMatch = rest.match(/([\d.]+)\s*ms/g);
 
-            const ip = ipMatch
-              ? (ipMatch[2] ?? ipMatch[1] ?? ipMatch[3])
-              : null;
-            const hostname = ipMatch ? (ipMatch[1] ?? ipMatch[3]) : null;
+            const ip = ipMatch ? ipMatch[2] || ipMatch[1] || ipMatch[3] : null;
+            const hostname = ipMatch ? ipMatch[1] || ipMatch[3] : null;
             const times = timesMatch
               ? timesMatch.map(t => parseFloat(t.replace(/\s*ms/, '')))
               : [];
@@ -666,7 +653,6 @@ export class DiagnosticExecutor {
   private async getMockHttpResult(
     url: string
   ): Promise<Record<string, unknown>> {
-    await Promise.resolve();
     if (url.includes('192.168.99.99')) {
       throw new Error('Connection timeout');
     }
@@ -710,7 +696,6 @@ export class DiagnosticExecutor {
     host: string,
     port: number
   ): Promise<boolean> {
-    await Promise.resolve();
     // Mock some common open ports
     if (host === '8.8.8.8' && port === 53) return true;
     if (host === 'google.com' && port === 443) return true;

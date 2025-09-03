@@ -84,7 +84,7 @@ export class ResultFormatter {
       : rawOutput.match(/PING (?:\S+\s+\()?([\d.]+|[\da-f:]+|\S+)/);
 
     if (targetMatch) {
-      metrics.target = targetMatch[1] || '';
+      metrics.target = targetMatch[1];
     }
 
     if (isWindows) {
@@ -92,10 +92,10 @@ export class ResultFormatter {
       const statsMatch = rawOutput.match(
         /Packets: Sent = (\d+), Received = (\d+), Lost = (\d+)/
       );
-      if (statsMatch) {
-        metrics.packetsTransmitted = parseInt(statsMatch[1] || '0');
-        metrics.packetsReceived = parseInt(statsMatch[2] || '0');
-        const lost = parseInt(statsMatch[3] || '0');
+      if (statsMatch?.[1] && statsMatch[2] && statsMatch[3]) {
+        metrics.packetsTransmitted = parseInt(statsMatch[1]);
+        metrics.packetsReceived = parseInt(statsMatch[2]);
+        const lost = parseInt(statsMatch[3]);
         metrics.packetLoss =
           metrics.packetsTransmitted > 0
             ? Math.round((lost / metrics.packetsTransmitted) * 100)
@@ -105,30 +105,30 @@ export class ResultFormatter {
       const timesMatch = rawOutput.match(
         /Minimum = (\d+)ms, Maximum = (\d+)ms, Average = (\d+)ms/
       );
-      if (timesMatch) {
-        metrics.minRtt = parseInt(timesMatch[1] || '0');
-        metrics.maxRtt = parseInt(timesMatch[2] || '0');
-        metrics.avgRtt = parseInt(timesMatch[3] || '0');
+      if (timesMatch?.[1] && timesMatch[2] && timesMatch[3]) {
+        metrics.minRtt = parseInt(timesMatch[1]);
+        metrics.maxRtt = parseInt(timesMatch[2]);
+        metrics.avgRtt = parseInt(timesMatch[3]);
       }
     } else {
       // Unix/Linux format
       const statsMatch = rawOutput.match(
         /(\d+) packets transmitted, (\d+) (?:packets )?received, ([\d.]+)% packet loss/
       );
-      if (statsMatch) {
-        metrics.packetsTransmitted = parseInt(statsMatch[1] || '0');
-        metrics.packetsReceived = parseInt(statsMatch[2] || '0');
-        metrics.packetLoss = parseFloat(statsMatch[3] || '0');
+      if (statsMatch?.[1] && statsMatch[2] && statsMatch[3]) {
+        metrics.packetsTransmitted = parseInt(statsMatch[1]);
+        metrics.packetsReceived = parseInt(statsMatch[2]);
+        metrics.packetLoss = parseFloat(statsMatch[3]);
       }
 
       const timesMatch = rawOutput.match(
         /min\/avg\/max\/(?:mdev|stddev|std-dev) = ([\d.]+)\/([\d.]+)\/([\d.]+)\/([\d.]+)/
       );
-      if (timesMatch) {
-        metrics.minRtt = parseFloat(timesMatch[1] || '0');
-        metrics.avgRtt = parseFloat(timesMatch[2] || '0');
-        metrics.maxRtt = parseFloat(timesMatch[3] || '0');
-        metrics.stddev = parseFloat(timesMatch[4] || '0');
+      if (timesMatch?.[1] && timesMatch[2] && timesMatch[3] && timesMatch[4]) {
+        metrics.minRtt = parseFloat(timesMatch[1]);
+        metrics.avgRtt = parseFloat(timesMatch[2]);
+        metrics.maxRtt = parseFloat(timesMatch[3]);
+        metrics.stddev = parseFloat(timesMatch[4]);
       }
     }
 
@@ -151,8 +151,8 @@ export class ResultFormatter {
       ? rawOutput.match(/Tracing route to ([\d.]+|[\da-f:]+|\S+)/)
       : rawOutput.match(/traceroute to ([\d.]+|[\da-f:]+|\S+)/);
 
-    if (targetMatch) {
-      target = targetMatch[1] || '';
+    if (targetMatch?.[1]) {
+      target = targetMatch[1];
     }
 
     const lines = rawOutput.split('\n');
@@ -163,9 +163,9 @@ export class ResultFormatter {
 
       for (const line of lines) {
         const match = line.match(hopRegex);
-        if (match) {
-          const hopNum = parseInt(match[1] || '0');
-          const rest = (match[2] || '').trim();
+        if (match?.[1] && match[2]) {
+          const hopNum = parseInt(match[1]);
+          const rest = match[2].trim();
 
           if (rest.includes('Request timed out') || rest.includes('*')) {
             const times: number[] = [];
@@ -196,12 +196,12 @@ export class ResultFormatter {
             }
 
             const hostMatch = rest.match(/([^\s]+)$/);
-            const host = hostMatch ? hostMatch[1] || null : null;
+            const host = hostMatch ? hostMatch[1] : null;
 
             hops.push({
               hop: hopNum,
-              ip: host,
-              hostname: host,
+              ip: host ?? null,
+              hostname: host ?? null,
               times,
               avgTime:
                 times.length > 0
@@ -221,9 +221,9 @@ export class ResultFormatter {
 
       for (const line of lines) {
         const match = line.match(hopRegex);
-        if (match) {
-          const hopNum = parseInt(match[1] || '0');
-          const rest = (match[2] || '').trim();
+        if (match?.[1] && match[2]) {
+          const hopNum = parseInt(match[1]);
+          const rest = match[2].trim();
 
           if (rest === '* * *') {
             hops.push({
@@ -243,15 +243,15 @@ export class ResultFormatter {
             let ip: string | null = null;
             let hostname: string | null = null;
 
-            if (ipHostMatch) {
-              hostname = ipHostMatch[1] || null;
-              ip = ipHostMatch[2] || null;
+            if (ipHostMatch?.[1] && ipHostMatch[2]) {
+              hostname = ipHostMatch[1];
+              ip = ipHostMatch[2];
             } else {
               // Simple IP without parentheses
               const simpleMatch = rest.match(/^([\d.]+|[\da-f:]+|\S+)/);
-              if (simpleMatch) {
-                ip = simpleMatch[1] || null;
-                hostname = simpleMatch[1] || null;
+              if (simpleMatch?.[1]) {
+                ip = simpleMatch[1];
+                hostname = simpleMatch[1];
               }
             }
 
