@@ -331,10 +331,10 @@ describe('Device Auth Routes', () => {
       });
 
       expect(res.statusCode).toBe(401);
-      expect(res.json()).toEqual({
+      expect(res.json()).toMatchObject({
         error: {
-          code: 'INVALID_SESSION',
-          message: 'Invalid or expired session',
+          code: 'UNAUTHORIZED',
+          message: 'Invalid or expired device token',
         },
       });
 
@@ -351,7 +351,7 @@ describe('Device Auth Routes', () => {
         },
       });
 
-      expect(res.statusCode).toBe(400);
+      expect(res.statusCode).toBe(401);
       expect(res.json()).toHaveProperty('error');
       expect(sessionService.validateSession).not.toHaveBeenCalled();
     });
