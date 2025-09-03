@@ -477,13 +477,19 @@ describe('ApiClient', () => {
       // All attempts fail
       mockFetch.mockRejectedValue(new Error('Network error'));
 
-      const resultPromise = apiClient.submitDiagnosticResult(diagnosticResult);
+      // Catch the promise to prevent unhandled rejection
+      const resultPromise = apiClient
+        .submitDiagnosticResult(diagnosticResult)
+        .catch(e => {
+          throw e;
+        });
 
       // Advance through all retry delays
       await vi.advanceTimersByTimeAsync(1000); // First retry
       await vi.advanceTimersByTimeAsync(2000); // Second retry
       await vi.advanceTimersByTimeAsync(4000); // Third retry
 
+      // Ensure the promise rejection is properly handled
       await expect(resultPromise).rejects.toThrow(
         'Failed to submit diagnostic result after 3 attempts'
       );

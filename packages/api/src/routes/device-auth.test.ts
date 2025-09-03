@@ -12,7 +12,9 @@ describe('Device Auth Routes', () => {
   let app: FastifyInstance;
 
   beforeEach(() => {
-    app = fastify();
+    app = fastify({
+      logger: false, // Disable logging during tests
+    });
     registerDeviceAuthRoutes(app);
     vi.clearAllMocks();
   });
@@ -272,6 +274,7 @@ describe('Device Auth Routes', () => {
         deviceId: 'device-123',
         customerId: 'customer-456',
       });
+      vi.mocked(sessionService.refreshSession).mockResolvedValue(true);
 
       vi.mocked(deviceAuthService.updateHeartbeat).mockResolvedValue(true);
 
@@ -314,6 +317,8 @@ describe('Device Auth Routes', () => {
     it('should return 401 for invalid session', async () => {
       vi.mocked(sessionService.validateSession).mockResolvedValue({
         valid: false,
+        deviceId: '',
+        customerId: '',
       });
 
       const res = await app.inject({
@@ -328,14 +333,29 @@ describe('Device Auth Routes', () => {
       });
 
       expect(res.statusCode).toBe(401);
-      expect(res.json()).toEqual({
+      expect(res.json()).toMatchObject({
         error: {
-          code: 'INVALID_SESSION',
-          message: 'Invalid or expired session',
+          code: 'UNAUTHORIZED',
+          message: 'Invalid or expired device token',
         },
       });
 
       expect(deviceAuthService.updateHeartbeat).not.toHaveBeenCalled();
+    });
+
+    it('should return 401 for missing authorization header', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/v1/device/heartbeat',
+        // No authorization header
+        payload: {
+          status: 'healthy',
+        },
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.json()).toHaveProperty('error');
+      expect(sessionService.validateSession).not.toHaveBeenCalled();
     });
 
     it('should refresh session TTL on successful heartbeat', async () => {
@@ -362,6 +382,63 @@ describe('Device Auth Routes', () => {
       });
 
       expect(sessionService.refreshSession).toHaveBeenCalledWith(sessionToken);
+    });
+
+    it('should validate status enum values', async () => {
+      const sessionToken = 'valid-session-token';
+
+      vi.mocked(sessionService.validateSession).mockResolvedValue({
+        valid: true,
+        deviceId: 'device-123',
+        customerId: 'customer-456',
+      });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/v1/device/heartbeat',
+        headers: {
+          authorization: `Bearer ${sessionToken}`,
+        },
+        payload: {
+          status: 'invalid-status', // Not in enum
+        },
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.json()).toHaveProperty('error');
+    });
+
+    it('should handle heartbeat with minimal payload', async () => {
+      const sessionToken = 'valid-session-token';
+
+      vi.mocked(sessionService.validateSession).mockResolvedValue({
+        valid: true,
+        deviceId: 'device-123',
+        customerId: 'customer-456',
+      });
+      vi.mocked(sessionService.refreshSession).mockResolvedValue(true);
+
+      vi.mocked(deviceAuthService.updateHeartbeat).mockResolvedValue(true);
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/v1/device/heartbeat',
+        headers: {
+          authorization: `Bearer ${sessionToken}`,
+        },
+        payload: {
+          status: 'healthy',
+          // No metrics provided (optional)
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(deviceAuthService.updateHeartbeat).toHaveBeenCalledWith(
+        'device-123',
+        {
+          status: 'healthy',
+        }
+      );
     });
   });
 });

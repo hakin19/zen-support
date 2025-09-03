@@ -11,14 +11,14 @@
   - [x] 1.6 Implement readiness checks for Supabase and Redis dependencies
   - [x] 1.7 Verify all health endpoint tests pass
 
-- [ ] 2. Implement device authentication system
-  - [ ] 2.1 Write tests for device auth endpoints (auth, register)
-  - [ ] 2.2 Create device authentication middleware with session tokens
-  - [ ] 2.3 Implement POST /api/v1/device/auth with Redis session storage
-  - [ ] 2.4 Implement device provisioning endpoint for customers
-  - [ ] 2.5 Implement POST /api/v1/device/register with activation codes
-  - [ ] 2.6 Add session token validation and TTL refresh logic
-  - [ ] 2.7 Verify all device auth tests pass
+- [x] 2. Implement device authentication system
+  - [x] 2.1 Write tests for device auth endpoints (auth, register)
+  - [x] 2.2 Create device authentication middleware with session tokens
+  - [x] 2.3 Implement POST /api/v1/device/auth with Redis session storage
+  - [x] 2.4 Implement device provisioning endpoint for customers
+  - [x] 2.5 Implement POST /api/v1/device/register with activation codes
+  - [x] 2.6 Add session token validation and TTL refresh logic
+  - [x] 2.7 Verify all device auth tests pass
 
 - [ ] 3. Build command queue system with claim semantics
   - [ ] 3.1 Write tests for command claim/extend/result endpoints
