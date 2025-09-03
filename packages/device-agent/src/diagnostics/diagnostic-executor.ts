@@ -375,7 +375,7 @@ export class DiagnosticExecutor {
         executedAt: new Date().toISOString(),
         duration: Date.now() - startTime,
       };
-    } catch (error) {
+    } catch {
       return {
         commandId,
         deviceId: process.env.DEVICE_ID ?? 'unknown',

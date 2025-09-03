@@ -18,7 +18,7 @@ export interface DeviceIdOptions {
  */
 export function generateDeviceId(options: DeviceIdOptions = {}): string {
   const {
-    location = process.env.LOCATION || 'UNKNOWN',
+    location = process.env.LOCATION ?? 'UNKNOWN',
     index = process.env.DEVICE_INDEX ? parseInt(process.env.DEVICE_INDEX) : 1,
     prefix = 'DEV',
     includeHost = false,
@@ -99,7 +99,7 @@ export function generateFromDockerEnv(): string {
   }
 
   // Extract info from container hostname if available
-  const hostname = process.env.HOSTNAME || '';
+  const hostname = process.env.HOSTNAME ?? '';
   const containerMatch = hostname.match(/device-agent-([a-z-]+)-(\d+)/);
 
   if (containerMatch?.[1] && containerMatch[2]) {
@@ -110,7 +110,7 @@ export function generateFromDockerEnv(): string {
   }
 
   // Use environment variables as fallback
-  return process.env.DEVICE_ID || generateDeviceId();
+  return process.env.DEVICE_ID ?? generateDeviceId();
 }
 
 /**
@@ -119,13 +119,7 @@ export function generateFromDockerEnv(): string {
 let cachedDeviceId: string | null = null;
 
 export function getDeviceId(): string {
-  if (!cachedDeviceId) {
-    // Priority order:
-    // 1. Explicit DEVICE_ID environment variable
-    // 2. Generated from Docker environment
-    // 3. Generated with defaults
-    cachedDeviceId = process.env.DEVICE_ID || generateFromDockerEnv();
-  }
+  cachedDeviceId ??= process.env.DEVICE_ID ?? generateFromDockerEnv();
   return cachedDeviceId;
 }
 

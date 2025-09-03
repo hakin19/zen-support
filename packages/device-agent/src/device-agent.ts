@@ -34,7 +34,7 @@ export class DeviceAgent extends EventEmitter {
     // Auto-generate device ID only if not provided but not empty string
     const configWithDeviceId = {
       ...config,
-      deviceId: config.deviceId === undefined ? getDeviceId() : config.deviceId,
+      deviceId: config.deviceId ?? getDeviceId(),
     };
     this.validateConfig(configWithDeviceId);
     this.#config = configWithDeviceId;
