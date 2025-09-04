@@ -5,7 +5,13 @@ import { registerDeviceCommandRoutes } from './device-commands';
 import { commandQueueService } from '../services/command-queue.service';
 import { deviceAuthMiddleware } from '../middleware/device-auth.middleware';
 
-vi.mock('../services/command-queue.service');
+vi.mock('../services/command-queue.service', () => ({
+  commandQueueService: {
+    claimCommands: vi.fn(),
+    extendVisibility: vi.fn(),
+    submitResult: vi.fn(),
+  },
+}));
 vi.mock('../middleware/device-auth.middleware', () => ({
   deviceAuthMiddleware: vi.fn(
     async (request: FastifyRequest, reply: FastifyReply) => {
@@ -58,6 +64,9 @@ describe('Device Command Routes', () => {
         payload: {},
       });
 
+      if (res.statusCode !== 200) {
+        console.error('Response:', res.json());
+      }
       expect(res.statusCode).toBe(200);
       expect(res.json()).toEqual({ commands: mockCommands });
 

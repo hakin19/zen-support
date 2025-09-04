@@ -58,16 +58,14 @@ export function registerDeviceCommandRoutes(app: FastifyInstance): void {
           });
         }
 
-        // For now, only support claiming one command at a time
-        const command = await commandQueueService.claimCommand(
-          request.deviceId
+        // Claim commands with limit and visibility timeout from request
+        const commands = await commandQueueService.claimCommands(
+          request.deviceId,
+          request.body.limit ?? 1,
+          request.body.visibilityTimeout ?? 300000
         );
 
-        if (!command) {
-          return reply.send({ commands: [] });
-        }
-
-        return reply.send({ commands: [command] });
+        return reply.send({ commands });
       } catch (error) {
         request.log.error(error, 'Failed to claim commands');
         return reply.status(500).send({
@@ -125,14 +123,11 @@ export function registerDeviceCommandRoutes(app: FastifyInstance): void {
         const { claimToken, visibilityTimeout = 300000 } = request.body;
         const commandId = request.params.id;
 
-        // Convert milliseconds to seconds for the service method
-        const extensionSeconds = Math.floor(visibilityTimeout / 1000);
-
-        const result = await commandQueueService.extendCommand(
-          request.deviceId,
+        const result = await commandQueueService.extendVisibility(
           commandId,
           claimToken,
-          extensionSeconds
+          request.deviceId,
+          visibilityTimeout
         );
 
         if (!result.success) {
@@ -213,9 +208,9 @@ export function registerDeviceCommandRoutes(app: FastifyInstance): void {
         const commandId = request.params.id;
 
         const submitResult = await commandQueueService.submitResult(
-          request.deviceId,
           commandId,
           claimToken,
+          request.deviceId,
           result
         );
 
