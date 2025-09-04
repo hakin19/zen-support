@@ -15,61 +15,11 @@ interface ExtendBody {
 
 interface ResultBody {
   claimToken: string;
-  result: Record<string, unknown>;
-}
-
-/**
- * Sanitize result object to prevent deeply nested structures
- * that could cause memory/storage issues
- */
-function sanitizeResult(
-  obj: Record<string, unknown>,
-  maxDepth: number = 5,
-  currentDepth: number = 0
-): Record<string, unknown> {
-  if (currentDepth >= maxDepth) {
-    return { _truncated: 'Max depth exceeded' };
-  }
-
-  const sanitized: Record<string, unknown> = {};
-
-  for (const [key, value] of Object.entries(obj)) {
-    // Limit key length to prevent abuse
-    const sanitizedKey = key.substring(0, 100);
-
-    if (value === null || value === undefined) {
-      sanitized[sanitizedKey] = value;
-    } else if (typeof value === 'string') {
-      // Limit string length
-      sanitized[sanitizedKey] = value.substring(0, 10000);
-    } else if (typeof value === 'number' || typeof value === 'boolean') {
-      sanitized[sanitizedKey] = value;
-    } else if (Array.isArray(value)) {
-      // Limit array size and recursively sanitize items
-      sanitized[sanitizedKey] = value.slice(0, 100).map((item): unknown => {
-        if (typeof item === 'object' && item !== null) {
-          return sanitizeResult(
-            item as Record<string, unknown>,
-            maxDepth,
-            currentDepth + 1
-          );
-        }
-        if (typeof item === 'string') {
-          return item.substring(0, 1000);
-        }
-        return item;
-      });
-    } else if (typeof value === 'object') {
-      // Recursively sanitize nested objects
-      sanitized[sanitizedKey] = sanitizeResult(
-        value as Record<string, unknown>,
-        maxDepth,
-        currentDepth + 1
-      );
-    }
-  }
-
-  return sanitized;
+  status: 'success' | 'failure' | 'timeout';
+  output?: string;
+  error?: string;
+  executedAt: string;
+  duration: number;
 }
 
 export function registerDeviceCommandRoutes(app: FastifyInstance): void {
@@ -239,14 +189,28 @@ export function registerDeviceCommandRoutes(app: FastifyInstance): void {
         },
         body: {
           type: 'object',
-          required: ['claimToken', 'result'],
+          required: ['claimToken', 'status', 'executedAt', 'duration'],
           properties: {
             claimToken: { type: 'string' },
-            result: {
-              type: 'object',
-              // Limit result object depth and size
-              maxProperties: 100, // Max 100 properties in result
-              additionalProperties: true, // Allow flexible structure but size is limited by bodyLimit
+            status: {
+              type: 'string',
+              enum: ['success', 'failure', 'timeout'],
+            },
+            output: {
+              type: 'string',
+              maxLength: 10000, // 10KB max
+            },
+            error: {
+              type: 'string',
+              maxLength: 5000, // 5KB max
+            },
+            executedAt: {
+              type: 'string',
+              format: 'date-time',
+            },
+            duration: {
+              type: 'number',
+              minimum: 0,
             },
           },
         },
@@ -263,17 +227,24 @@ export function registerDeviceCommandRoutes(app: FastifyInstance): void {
           });
         }
 
-        const { claimToken, result } = request.body;
+        const { claimToken, status, output, error, executedAt, duration } =
+          request.body;
         const commandId = request.params.id;
 
-        // Sanitize result to prevent deeply nested/large objects
-        const sanitizedResult = sanitizeResult(result);
+        // Build result object for storage
+        const result = {
+          status,
+          output: output ? output.substring(0, 10000) : undefined, // Ensure limits
+          error: error ? error.substring(0, 5000) : undefined,
+          executedAt,
+          duration,
+        };
 
         const submitResult = await commandQueueService.submitResult(
           commandId,
           claimToken,
           request.deviceId,
-          sanitizedResult
+          result
         );
 
         if (!submitResult.success) {

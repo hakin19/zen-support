@@ -307,11 +307,7 @@ describe('Device Command Routes', () => {
     it('should submit command result successfully', async () => {
       const commandId = 'cmd-123';
       const claimToken = 'claim-token-abc';
-      const result = {
-        success: true,
-        output: 'Command executed successfully',
-        executionTime: 1500,
-      };
+      const executedAt = new Date().toISOString();
 
       vi.mocked(commandQueueService.submitResult).mockResolvedValue({
         success: true,
@@ -325,7 +321,10 @@ describe('Device Command Routes', () => {
         },
         payload: {
           claimToken,
-          result,
+          status: 'success',
+          output: 'Command executed successfully',
+          executedAt,
+          duration: 1500,
         },
       });
 
@@ -338,19 +337,19 @@ describe('Device Command Routes', () => {
         commandId,
         claimToken,
         'test-device-123',
-        result
+        {
+          status: 'success',
+          output: 'Command executed successfully',
+          executedAt,
+          duration: 1500,
+        }
       );
     });
 
     it('should submit error result', async () => {
       const commandId = 'cmd-123';
       const claimToken = 'claim-token-abc';
-      const result = {
-        success: false,
-        error: 'Command failed',
-        errorCode: 'EXECUTION_FAILED',
-        executionTime: 500,
-      };
+      const executedAt = new Date().toISOString();
 
       vi.mocked(commandQueueService.submitResult).mockResolvedValue({
         success: true,
@@ -364,7 +363,10 @@ describe('Device Command Routes', () => {
         },
         payload: {
           claimToken,
-          result,
+          status: 'failure',
+          error: 'Command failed: EXECUTION_FAILED',
+          executedAt,
+          duration: 500,
         },
       });
 
@@ -373,7 +375,12 @@ describe('Device Command Routes', () => {
         commandId,
         claimToken,
         'test-device-123',
-        result
+        {
+          status: 'failure',
+          error: 'Command failed: EXECUTION_FAILED',
+          executedAt,
+          duration: 500,
+        }
       );
     });
 
@@ -391,7 +398,9 @@ describe('Device Command Routes', () => {
         },
         payload: {
           claimToken: 'token',
-          result: { success: true },
+          status: 'success',
+          executedAt: new Date().toISOString(),
+          duration: 1000,
         },
       });
 
@@ -418,7 +427,9 @@ describe('Device Command Routes', () => {
         },
         payload: {
           claimToken: 'wrong-token',
-          result: { success: true },
+          status: 'success',
+          executedAt: new Date().toISOString(),
+          duration: 1000,
         },
       });
 
@@ -445,7 +456,9 @@ describe('Device Command Routes', () => {
         },
         payload: {
           claimToken: 'token',
-          result: { success: true },
+          status: 'success',
+          executedAt: new Date().toISOString(),
+          duration: 1000,
         },
       });
 
@@ -500,7 +513,12 @@ describe('Device Command Routes', () => {
         {
           method: 'POST',
           url: '/api/v1/device/commands/cmd-123/result',
-          payload: { claimToken: 'test', result: {} },
+          payload: {
+            claimToken: 'test',
+            status: 'success',
+            executedAt: new Date().toISOString(),
+            duration: 1000,
+          },
         },
       ];
 

@@ -44,7 +44,7 @@ interface SubmitResult {
 
 // Redis key patterns:
 // commands:pending:{deviceId} - sorted set of pending command IDs (score = priority:timestamp)
-// commands:claimed:{deviceId} - hash of claimed commands (field = commandId, value = claimToken:visibleUntil)
+// commands:claimed:{deviceId} - hash of claimed commands (field = commandId, value = claimToken|visibleUntil)
 // command:{commandId} - hash of command data
 // commands:by-device:{deviceId} - set of all command IDs for a device
 
@@ -121,23 +121,24 @@ export const commandQueueService = {
     const claimedCommands: ClaimedCommand[] = [];
     const now = Date.now();
 
-    // Get pending commands (lowest score = highest priority + oldest)
-    const pendingCommands = await redis.zRange(
+    // Use ZPOPMIN for atomic claim to prevent race conditions
+    // This atomically removes and returns the commands with lowest scores
+    const poppedCommands = await redis.zPopMinCount(
       `${PENDING_QUEUE_PREFIX}${deviceId}`,
-      0,
-      limit - 1
+      limit
     );
 
-    if (pendingCommands.length === 0) {
+    if (!poppedCommands || poppedCommands.length === 0) {
       return [];
     }
 
-    // Use transaction for atomic claim
-    const multi = redis.multi();
-
-    for (const commandId of pendingCommands) {
+    // Process each successfully popped command
+    for (const { value: commandId } of poppedCommands) {
       const claimToken = randomUUID();
       const visibleUntil = new Date(now + visibilityTimeout).toISOString();
+
+      // Use transaction to update command status and add to claimed set
+      const multi = redis.multi();
 
       // Update command status
       multi.hSet(`${COMMAND_PREFIX}${commandId}`, {
@@ -148,50 +149,50 @@ export const commandQueueService = {
         visibleUntil,
       });
 
-      // Move from pending to claimed
-      multi.zRem(`${PENDING_QUEUE_PREFIX}${deviceId}`, commandId);
+      // Add to claimed set
       multi.hSet(
         `${CLAIMED_PREFIX}${deviceId}`,
         commandId,
-        `${claimToken}:${visibleUntil}`
+        `${claimToken}|${visibleUntil}`
       );
-    }
 
-    const results = await multi.exec();
+      const results = await multi.exec();
 
-    // Check if all operations succeeded (node-redis v4 returns array of values)
-    if (!results || results.length === 0) {
-      return [];
-    }
+      // Check if transaction succeeded for this command
+      // In Redis v4, exec returns null only if WATCH failed (we don't use WATCH here)
+      // For normal operations, check actual command results
+      if (!results || results.length !== 2) {
+        // Failed to update command status - return it to pending queue
+        console.error(
+          `Failed to claim command ${commandId}, returning to queue`
+        );
+        const timestamp = Date.now();
+        const commandData = await redis.hGet(
+          `${COMMAND_PREFIX}${commandId}`,
+          'priority'
+        );
+        const priority = parseInt(commandData ?? '1', 10);
+        const score = priority * 1e13 + timestamp;
+        await redis.zAdd(`${PENDING_QUEUE_PREFIX}${deviceId}`, {
+          score,
+          value: commandId,
+        });
+        continue;
+      }
 
-    // Check for null results which indicate operation failure
-    const hasFailure = results.some(result => result === null);
-    if (hasFailure) {
-      // Transaction failed, commands remain in pending state
-      return [];
-    }
-
-    // Fetch command details for response
-    for (const commandId of pendingCommands) {
+      // Fetch command details for response
       const commandData = await redis.hGetAll(`${COMMAND_PREFIX}${commandId}`);
       if (commandData) {
-        const claimInfo = await redis.hGet(
-          `${CLAIMED_PREFIX}${deviceId}`,
-          commandId
-        );
-        if (claimInfo) {
-          const [claimToken, visibleUntil] = claimInfo.split(':');
-          claimedCommands.push({
-            id: commandId,
-            type: commandData.type ?? '',
-            parameters: JSON.parse(
-              commandData.parameters ?? '{}'
-            ) as CommandParameters,
-            priority: parseInt(commandData.priority ?? '1', 10),
-            claimToken: claimToken ?? '',
-            visibleUntil: visibleUntil ?? '',
-          });
-        }
+        claimedCommands.push({
+          id: commandId,
+          type: commandData.type ?? '',
+          parameters: JSON.parse(
+            commandData.parameters ?? '{}'
+          ) as CommandParameters,
+          priority: parseInt(commandData.priority ?? '1', 10),
+          claimToken,
+          visibleUntil,
+        });
       }
     }
 
@@ -218,8 +219,13 @@ export const commandQueueService = {
       return { success: false, error: 'NOT_FOUND' };
     }
 
-    const [storedToken] = claimInfo.split(':');
+    const [storedToken, currentVisibleUntil] = claimInfo.split('|');
     if (storedToken !== claimToken) {
+      return { success: false, error: 'INVALID_CLAIM' };
+    }
+
+    // Check if the claim has already expired
+    if (currentVisibleUntil && new Date(currentVisibleUntil) < new Date()) {
       return { success: false, error: 'INVALID_CLAIM' };
     }
 
@@ -233,7 +239,7 @@ export const commandQueueService = {
     multi.hSet(
       `${CLAIMED_PREFIX}${deviceId}`,
       commandId,
-      `${claimToken}:${newVisibleUntil}`
+      `${claimToken}|${newVisibleUntil}`
     );
 
     multi.hSet(`${COMMAND_PREFIX}${commandId}`, {
@@ -243,8 +249,10 @@ export const commandQueueService = {
     const results = await multi.exec();
 
     // Check if transaction succeeded
-    if (!results || results.some(result => result === null)) {
-      return { success: false, error: 'INVALID_CLAIM' };
+    // Both hSet operations should return a number (0 or 1)
+    if (!results || results.length !== 2) {
+      // Redis transaction failure is a server error, not an invalid claim
+      throw new Error('Redis transaction failed during command extension');
     }
 
     return { success: true, visibleUntil: newVisibleUntil };
@@ -284,7 +292,7 @@ export const commandQueueService = {
       return { success: false, error: 'INVALID_CLAIM' };
     }
 
-    const [storedToken] = claimInfo.split(':');
+    const [storedToken] = claimInfo.split('|');
     if (storedToken !== claimToken) {
       return { success: false, error: 'INVALID_CLAIM' };
     }
@@ -304,8 +312,10 @@ export const commandQueueService = {
     const results = await multi.exec();
 
     // Check if transaction succeeded
-    if (!results || results.some(result => result === null)) {
-      return { success: false, error: 'INVALID_CLAIM' };
+    // hSet returns a number, hDel returns the number of fields removed (0 or 1)
+    if (!results || results.length !== 2) {
+      // Redis transaction failure is a server error, not an invalid claim
+      throw new Error('Redis transaction failed during result submission');
     }
 
     return { success: true };
@@ -319,25 +329,19 @@ export const commandQueueService = {
     const redis = getRedisClient().getClient();
     const now = new Date();
 
-    // Use SCAN iterator to avoid blocking Redis
-    const claimedKeys: string[] = [];
+    // Use SCAN iterator to avoid blocking Redis and process inline to reduce memory usage
     const iterator = redis.scanIterator({
       MATCH: `${CLAIMED_PREFIX}*`,
       COUNT: 100,
     });
 
     for await (const key of iterator) {
-      // Type assertion needed due to redis client typing issue
-      claimedKeys.push(String(key));
-    }
-
-    for (const key of claimedKeys) {
-      const deviceId = key.replace(CLAIMED_PREFIX, '');
-      const claimedCommands = await redis.hGetAll(key);
+      // Process each key immediately to reduce memory usage
+      const deviceId = String(key).replace(CLAIMED_PREFIX, '');
+      const claimedCommands = await redis.hGetAll(String(key));
 
       for (const [commandId, claimInfo] of Object.entries(claimedCommands)) {
-        const parts = claimInfo.split(':');
-        const visibleUntil = parts[1];
+        const [, visibleUntil] = claimInfo.split('|');
 
         if (visibleUntil && new Date(visibleUntil) < now) {
           // Command visibility has expired, return to pending queue
@@ -373,7 +377,8 @@ export const commandQueueService = {
           const results = await multi.exec();
 
           // Log if transaction failed but continue processing
-          if (!results || results.some(result => result === null)) {
+          // We expect 3 results: hSet (number), zAdd (0 or 1), hDel (0 or 1)
+          if (!results || results.length !== 3) {
             console.error(`Failed to reclaim expired command ${commandId}`);
           }
         }
@@ -460,7 +465,8 @@ export const commandQueueService = {
     const results = await multi.exec();
 
     // Check if transaction succeeded
-    if (!results || results.some(result => result === null)) {
+    // We expect 4 results from: del, zRem, hDel, sRem
+    if (!results || results.length !== 4) {
       throw new Error('Failed to delete command');
     }
 
@@ -473,7 +479,9 @@ let visibilityCheckInterval: NodeJS.Timeout | null = null;
 
 export function startVisibilityCheck(): void {
   visibilityCheckInterval ??= setInterval(() => {
-    void commandQueueService.reclaimExpiredCommands();
+    void commandQueueService.reclaimExpiredCommands().catch(error => {
+      console.error('Failed to reclaim expired commands:', error);
+    });
   }, VISIBILITY_CHECK_INTERVAL);
 }
 
