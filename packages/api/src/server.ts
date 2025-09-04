@@ -8,9 +8,18 @@ import { registerCustomerSessionRoutes } from './routes/customer-sessions';
 import { registerDeviceAuthRoutes } from './routes/device-auth';
 import { registerDeviceCommandRoutes } from './routes/device-commands';
 import { registerHealthRoutes } from './routes/health';
+import {
+  registerWebSocketRoutes,
+  getConnectionManager,
+} from './routes/websocket';
 import { startVisibilityCheck } from './services/command-queue.service';
+import { correlationIdPlugin } from './utils/correlation-id';
 
 import type { FastifyInstance } from 'fastify';
+
+export async function createServer(): Promise<FastifyInstance> {
+  return createApp();
+}
 
 export async function createApp(): Promise<FastifyInstance> {
   const app = fastify({
@@ -32,10 +41,8 @@ export async function createApp(): Promise<FastifyInstance> {
   // Register plugins
   // TODO: Add @fastify/sensible when version compatibility is resolved
 
-  // Add hook to set X-Request-ID in response headers
-  app.addHook('onSend', async (request, reply) => {
-    reply.header('x-request-id', request.id);
-  });
+  // Register correlation ID plugin (replaces the old hook)
+  await app.register(correlationIdPlugin);
 
   // Register routes
   registerHealthRoutes(app);
@@ -43,6 +50,9 @@ export async function createApp(): Promise<FastifyInstance> {
   registerDeviceCommandRoutes(app);
   registerCustomerDeviceRoutes(app);
   registerCustomerSessionRoutes(app);
+
+  // Register WebSocket routes
+  await registerWebSocketRoutes(app);
 
   // Start background processes
   startVisibilityCheck();
@@ -84,6 +94,14 @@ export async function startServer(
 export async function gracefulShutdown(app: FastifyInstance): Promise<void> {
   try {
     app.log.info('Starting graceful shutdown...');
+
+    // Close WebSocket connections gracefully
+    const connectionManager = getConnectionManager();
+    if (connectionManager) {
+      app.log.info('Closing WebSocket connections...');
+      await connectionManager.closeAllConnections();
+      app.log.info('WebSocket connections closed');
+    }
 
     // Stop background processes
     const { stopVisibilityCheck } = await import(

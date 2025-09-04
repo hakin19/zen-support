@@ -10,6 +10,24 @@ export interface RedisConfig {
   retryStrategy?: (times: number) => number | false;
 }
 
+export interface SubscriptionHandle {
+  channel: string;
+  unsubscribe: () => Promise<void>;
+  disconnect: () => Promise<void>;
+}
+
+export interface MultiChannelSubscriptionHandle {
+  channels: string[];
+  subscriber: RedisClientType;
+  subscribe: (
+    channel: string,
+    callback: (message: unknown) => void
+  ) => Promise<void>;
+  unsubscribe: (channel: string) => Promise<void>;
+  unsubscribeAll: () => Promise<void>;
+  disconnect: () => Promise<void>;
+}
+
 export class RedisClient {
   private client: RedisClientType;
   private config: RedisConfig;
@@ -179,13 +197,23 @@ export class RedisClient {
     return await this.client.publish(channel, data);
   }
 
-  async subscribe(
+  /**
+   * Creates a subscription to a Redis channel.
+   * Returns a SubscriptionHandle that must be used to properly clean up the subscription.
+   *
+   * @param channel - Channel to subscribe to
+   * @param callback - Callback to handle messages
+   * @returns SubscriptionHandle for managing the subscription lifecycle
+   */
+  async createSubscription(
     channel: string,
     callback: (message: unknown) => void
-  ): Promise<void> {
+  ): Promise<SubscriptionHandle> {
+    // Create a dedicated subscriber client for this subscription
     const subscriber = this.client.duplicate();
     await subscriber.connect();
 
+    // Subscribe to the channel
     await subscriber.subscribe(channel, message => {
       try {
         const data = JSON.parse(message) as unknown;
@@ -194,6 +222,171 @@ export class RedisClient {
         console.error('Failed to parse subscription message:', error);
       }
     });
+
+    // Return handle for cleanup
+    return {
+      channel,
+      unsubscribe: async (): Promise<void> => {
+        try {
+          await subscriber.unsubscribe(channel);
+          await subscriber.disconnect();
+        } catch (error) {
+          console.error(
+            `Failed to cleanup subscription for channel ${channel}:`,
+            error
+          );
+        }
+      },
+      disconnect: async (): Promise<void> => {
+        try {
+          await subscriber.disconnect();
+        } catch (error) {
+          console.error(
+            `Failed to disconnect subscriber for channel ${channel}:`,
+            error
+          );
+        }
+      },
+    };
+  }
+
+  /**
+   * Create a multi-channel subscription with a single Redis connection.
+   * This is more efficient than creating separate connections for each channel.
+   * Ideal for scenarios where you need to subscribe to multiple channels
+   * from the same logical client (e.g., WebSocket connection).
+   */
+  async createMultiChannelSubscription(): Promise<MultiChannelSubscriptionHandle> {
+    // Create a single dedicated subscriber for all channels
+    const subscriber = this.client.duplicate();
+    await subscriber.connect();
+
+    const subscribedChannels = new Set<string>();
+    const callbacks = new Map<string, Array<(message: unknown) => void>>();
+
+    // Message handler that will route to appropriate callbacks
+    const messageHandler = (message: string, channel: string): void => {
+      try {
+        const data = JSON.parse(message) as unknown;
+        const channelCallbacks = callbacks.get(channel);
+        if (channelCallbacks) {
+          for (const callback of channelCallbacks) {
+            try {
+              callback(data);
+            } catch (error) {
+              console.error(`Error in callback for channel ${channel}:`, error);
+            }
+          }
+        }
+      } catch (error) {
+        console.error(
+          `Failed to parse message from channel ${channel}:`,
+          error
+        );
+      }
+    };
+
+    return {
+      channels: Array.from(subscribedChannels),
+      subscriber,
+      subscribe: async (
+        channel: string,
+        callback: (message: unknown) => void
+      ): Promise<void> => {
+        // Add callback to the list for this channel
+        if (!callbacks.has(channel)) {
+          callbacks.set(channel, []);
+        }
+        callbacks.get(channel)!.push(callback);
+
+        // Subscribe to the channel if not already subscribed
+        if (!subscribedChannels.has(channel)) {
+          await subscriber.subscribe(channel, messageHandler);
+          subscribedChannels.add(channel);
+        }
+      },
+      unsubscribe: async (channel: string): Promise<void> => {
+        try {
+          if (subscribedChannels.has(channel)) {
+            await subscriber.unsubscribe(channel);
+            subscribedChannels.delete(channel);
+            callbacks.delete(channel);
+          }
+        } catch (error) {
+          console.error(
+            `Failed to unsubscribe from channel ${channel}:`,
+            error
+          );
+        }
+      },
+      unsubscribeAll: async (): Promise<void> => {
+        try {
+          if (subscribedChannels.size > 0) {
+            await subscriber.unsubscribe(...Array.from(subscribedChannels));
+            subscribedChannels.clear();
+            callbacks.clear();
+          }
+        } catch (error) {
+          console.error('Failed to unsubscribe from all channels:', error);
+        }
+      },
+      disconnect: async (): Promise<void> => {
+        try {
+          await subscriber.disconnect();
+          subscribedChannels.clear();
+          callbacks.clear();
+        } catch (error) {
+          console.error(
+            'Failed to disconnect multi-channel subscriber:',
+            error
+          );
+        }
+      },
+    };
+  }
+
+  /**
+   * @deprecated Use createSubscription() instead for proper lifecycle management.
+   * This method should only be called on a duplicate client instance
+   * that is dedicated to subscriptions.
+   */
+  async subscribe(
+    channel: string,
+    callback: (message: unknown) => void
+  ): Promise<void> {
+    await this.client.subscribe(channel, message => {
+      try {
+        const data = JSON.parse(message) as unknown;
+        callback(data);
+      } catch (error) {
+        console.error('Failed to parse subscription message:', error);
+      }
+    });
+  }
+
+  async unsubscribe(channel: string): Promise<void> {
+    await this.client.unsubscribe(channel);
+  }
+
+  // Direct Redis operations (for compatibility)
+  async get(key: string): Promise<string | null> {
+    return await this.client.get(key);
+  }
+
+  async set(key: string, value: string): Promise<string | null> {
+    return await this.client.set(key, value);
+  }
+
+  async setex(key: string, ttl: number, value: string): Promise<string> {
+    return await this.client.setEx(key, ttl, value);
+  }
+
+  async rpush(key: string, value: string): Promise<number> {
+    return await this.client.rPush(key, value);
+  }
+
+  async lpop(key: string): Promise<string | null> {
+    return await this.client.lPop(key);
   }
 
   // Utility methods
@@ -213,6 +406,15 @@ export class RedisClient {
     return this.client;
   }
 
+  duplicate(): RedisClient {
+    // Create a new RedisClient instance with the same config
+    // but using a duplicate of the internal Redis client
+    const duplicateInstance = new RedisClient(this.config);
+    // Replace the internal client with a duplicate
+    (duplicateInstance as any).client = this.client.duplicate();
+    return duplicateInstance;
+  }
+
   isReady(): boolean {
     return this.isConnected;
   }
@@ -222,7 +424,7 @@ export class RedisClient {
 let redisClient: RedisClient | null = null;
 
 export function initializeRedis(config: RedisConfig): RedisClient {
-  redisClient ??= new RedisClient(config);
+  redisClient = redisClient ?? new RedisClient(config);
   return redisClient;
 }
 

@@ -178,20 +178,54 @@ describe('RedisClient', () => {
     it('should subscribe to a channel', async () => {
       const handler = vi.fn();
       const client = redisClient.getClient();
+
+      // Subscribe should now be called directly on the client, not on a duplicate
+      await redisClient.subscribe('test-channel', handler);
+
+      expect(client.subscribe).toHaveBeenCalledWith(
+        'test-channel',
+        expect.any(Function)
+      );
+
+      // Test that the handler parses JSON correctly
+      const subscribeFn = vi.mocked(client.subscribe).mock.calls[0][1];
+      const testData = { test: 'data' };
+      subscribeFn(JSON.stringify(testData));
+      expect(handler).toHaveBeenCalledWith(testData);
+    });
+
+    it('should create a subscription with proper lifecycle management', async () => {
+      const handler = vi.fn();
+      const client = redisClient.getClient();
       const mockDuplicate = {
         connect: vi.fn().mockResolvedValue(undefined),
         subscribe: vi.fn().mockResolvedValue(undefined),
+        unsubscribe: vi.fn().mockResolvedValue(undefined),
+        disconnect: vi.fn().mockResolvedValue(undefined),
       };
       vi.mocked(client.duplicate).mockReturnValue(mockDuplicate as any);
 
-      await redisClient.subscribe('test-channel', handler);
+      // Create subscription
+      const handle = await redisClient.createSubscription(
+        'test-channel',
+        handler
+      );
 
+      // Verify duplicate was created and connected
       expect(client.duplicate).toHaveBeenCalled();
       expect(mockDuplicate.connect).toHaveBeenCalled();
-      expect(mockDuplicate.subscribe).toHaveBeenCalled();
+      expect(mockDuplicate.subscribe).toHaveBeenCalledWith(
+        'test-channel',
+        expect.any(Function)
+      );
+
+      // Test cleanup
+      await handle.unsubscribe();
+      expect(mockDuplicate.unsubscribe).toHaveBeenCalledWith('test-channel');
+      expect(mockDuplicate.disconnect).toHaveBeenCalled();
     });
 
-    // Note: unsubscribe method doesn't exist in the implementation
+    // Note: unsubscribe method for base subscribe doesn't exist in the implementation
     // This test is removed as the method is not implemented
   });
 });
