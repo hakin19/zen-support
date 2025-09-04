@@ -34,7 +34,7 @@ describe('Device Auth Routes', () => {
         device: {
           id: deviceId,
           customerId: 'customer-456',
-          status: 'active',
+          status: 'online',
         },
       });
 
@@ -94,13 +94,50 @@ describe('Device Auth Routes', () => {
       expect(sessionService.createSession).not.toHaveBeenCalled();
     });
 
-    it('should return 403 for inactive device', async () => {
+    it('should allow offline devices to authenticate', async () => {
       vi.mocked(deviceAuthService.validateCredentials).mockResolvedValue({
         valid: true,
         device: {
           id: 'device-123',
           customerId: 'customer-456',
-          status: 'inactive',
+          status: 'offline',
+        },
+      });
+
+      vi.mocked(sessionService.createSession).mockResolvedValue({
+        token: 'session-token',
+        expiresAt: new Date(Date.now() + 604800000),
+      });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/v1/device/auth',
+        payload: {
+          deviceId: 'device-123',
+          deviceSecret: 'secret-abc',
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({
+        token: 'session-token',
+        expiresIn: 604800,
+      });
+
+      expect(sessionService.createSession).toHaveBeenCalledWith({
+        deviceId: 'device-123',
+        customerId: 'customer-456',
+        ttl: 604800,
+      });
+    });
+
+    it('should return 403 for maintenance device', async () => {
+      vi.mocked(deviceAuthService.validateCredentials).mockResolvedValue({
+        valid: true,
+        device: {
+          id: 'device-123',
+          customerId: 'customer-456',
+          status: 'maintenance',
         },
       });
 
@@ -116,8 +153,8 @@ describe('Device Auth Routes', () => {
       expect(res.statusCode).toBe(403);
       expect(res.json()).toEqual({
         error: {
-          code: 'DEVICE_INACTIVE',
-          message: 'Device is not active',
+          code: 'DEVICE_MAINTENANCE',
+          message: 'Device is under maintenance',
         },
       });
 

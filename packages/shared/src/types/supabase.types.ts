@@ -71,9 +71,10 @@ export interface Database {
           mac_address: string;
           ip_address: string;
           location: string;
-          status: 'online' | 'offline' | 'error';
+          status: 'online' | 'offline' | 'error' | 'maintenance';
           last_seen: string | null;
           config: Record<string, any>;
+          metrics: Record<string, any> | null;
           created_at: string;
           updated_at: string;
         };
@@ -85,9 +86,10 @@ export interface Database {
           mac_address: string;
           ip_address: string;
           location: string;
-          status: 'online' | 'offline' | 'error';
+          status: 'online' | 'offline' | 'error' | 'maintenance';
           last_seen?: string | null;
           config?: Record<string, any>;
+          metrics?: Record<string, any> | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -101,15 +103,19 @@ export interface Database {
           user_id: string;
           session_type: string;
           status:
+            | 'pending'
             | 'in_progress'
             | 'completed'
             | 'failed'
             | 'remediation_pending';
           started_at: string;
           ended_at: string | null;
+          expires_at: string | null;
+          issue_description: string | null;
           diagnostic_data: Record<string, any>;
           remediation_actions: any[];
           notes: string | null;
+          commands: any[] | null;
           created_at: string;
           updated_at: string;
         };
@@ -117,18 +123,22 @@ export interface Database {
           id?: string;
           customer_id: string;
           device_id: string;
-          user_id: string;
+          user_id?: string;
           session_type?: string;
-          status:
+          status?:
+            | 'pending'
             | 'in_progress'
             | 'completed'
             | 'failed'
             | 'remediation_pending';
-          started_at: string;
+          started_at?: string;
           ended_at?: string | null;
+          expires_at?: string | null;
+          issue_description?: string | null;
           diagnostic_data?: Record<string, any>;
           remediation_actions?: any[];
           notes?: string | null;
+          commands?: any[] | null;
           created_at?: string;
           updated_at?: string;
         };

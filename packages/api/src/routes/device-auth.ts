@@ -58,15 +58,13 @@ export function registerDeviceAuthRoutes(app: FastifyInstance): void {
         });
       }
 
-      // Check device status
-      if (
-        result.device?.status === 'inactive' ||
-        result.device?.status === 'suspended'
-      ) {
+      // Check device status - only block maintenance devices
+      // Allow offline and error devices to authenticate so they can recover
+      if (result.device?.status === 'maintenance') {
         return reply.status(403).send({
           error: {
-            code: 'DEVICE_INACTIVE',
-            message: 'Device is not active',
+            code: 'DEVICE_MAINTENANCE',
+            message: 'Device is under maintenance',
           },
         });
       }
@@ -125,6 +123,24 @@ export function registerDeviceAuthRoutes(app: FastifyInstance): void {
                 : 'Invalid or expired activation code',
           },
         });
+      }
+
+      // SECURITY: Validate that the deviceId in the request matches the one bound to the activation code
+      if (validation.deviceId && validation.deviceId !== deviceId) {
+        return reply.status(403).send({
+          error: {
+            code: 'DEVICE_ID_MISMATCH',
+            message: 'Activation code is not valid for this device ID',
+          },
+        });
+      }
+
+      // For enhanced security: require device-bound activation codes (new behavior)
+      // Legacy codes without deviceId are still supported but logged for monitoring
+      if (!validation.deviceId) {
+        console.warn(
+          `Legacy activation code used for device ${deviceId} - consider upgrading provision flow`
+        );
       }
 
       try {

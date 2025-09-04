@@ -30,15 +30,15 @@
   - [x] 3.7 Implement automatic visibility timeout expiry
   - [x] 3.8 Verify all command queue tests pass
 
-- [ ] 4. Develop customer API endpoints and authentication
-  - [ ] 4.1 Write tests for customer endpoints and Supabase JWT validation
-  - [ ] 4.2 Create customer authentication middleware for Supabase JWTs
-  - [ ] 4.3 Implement GET /api/v1/customer/devices endpoint
-  - [ ] 4.4 Implement POST /api/v1/customer/sessions endpoints
-  - [ ] 4.5 Implement session approval endpoint with HITL workflow
-  - [ ] 4.6 Add customer-device relationship validation
-  - [ ] 4.7 Implement system info endpoint for authenticated users
-  - [ ] 4.8 Verify all customer API tests pass
+- [x] 4. Develop customer API endpoints and authentication
+  - [x] 4.1 Write tests for customer endpoints and Supabase JWT validation
+  - [x] 4.2 Create customer authentication middleware for Supabase JWTs
+  - [x] 4.3 Implement GET /api/v1/customer/devices endpoint
+  - [x] 4.4 Implement POST /api/v1/customer/sessions endpoints
+  - [x] 4.5 Implement session approval endpoint with HITL workflow
+  - [x] 4.6 Add customer-device relationship validation
+  - [x] 4.7 Implement system info endpoint for authenticated users
+  - [x] 4.8 Verify all customer API tests pass
 
 - [ ] 5. Add WebSocket support and correlation tracking
   - [ ] 5.1 Write tests for WebSocket connections and message handling

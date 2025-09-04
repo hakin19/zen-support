@@ -10,6 +10,7 @@ export interface SupabaseConfig {
 
 let supabaseClient: SupabaseClient | null = null;
 let supabaseAdminClient: SupabaseClient | null = null;
+let supabaseConfig: SupabaseConfig | null = null;
 
 /**
  * Initialize the Supabase client with configuration
@@ -19,6 +20,9 @@ export function initializeSupabase(config: SupabaseConfig): void {
   if (!config.url || !config.anonKey) {
     throw new Error('Supabase URL and anon key are required');
   }
+
+  // Store config for later use
+  supabaseConfig = config;
 
   // Initialize regular client with anon key
   supabaseClient = createClient(config.url, config.anonKey, {
@@ -69,6 +73,36 @@ export function getSupabaseAdminClient(): SupabaseClient {
     );
   }
   return supabaseAdminClient;
+}
+
+/**
+ * Create an authenticated Supabase client with a JWT token
+ * This client respects Row Level Security policies based on the user's auth state
+ */
+export function getAuthenticatedSupabaseClient(
+  accessToken: string
+): SupabaseClient<any, 'public', any> {
+  if (!supabaseConfig) {
+    throw new Error(
+      'Supabase client not initialized. Call initializeSupabase first.'
+    );
+  }
+
+  // Create a new client with the provided access token
+  return createClient(supabaseConfig.url, supabaseConfig.anonKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+    db: {
+      schema: 'public',
+    },
+    global: {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    },
+  }) as SupabaseClient<any, 'public', any>;
 }
 
 /**

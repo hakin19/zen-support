@@ -6,7 +6,7 @@ import { getSupabaseAdminClient } from '@aizen/shared/utils/supabase-client';
 export interface Device {
   id: string;
   customerId: string;
-  status: 'active' | 'inactive' | 'suspended';
+  status: 'online' | 'offline' | 'error' | 'maintenance';
   name?: string;
   deviceSecret?: string;
 }
@@ -86,14 +86,14 @@ export const deviceAuthService = {
         return { valid: false };
       }
 
-      // Check if device is not suspended
-      if (device.status === 'suspended') {
+      // Check if device is in maintenance mode
+      if (device.status === 'maintenance') {
         return {
           valid: true,
           device: {
             id: device.id as string,
             customerId: device.customer_id as string,
-            status: 'suspended',
+            status: 'maintenance',
             name: device.name as string,
           },
         };
@@ -104,7 +104,11 @@ export const deviceAuthService = {
         device: {
           id: device.id as string,
           customerId: device.customer_id as string,
-          status: device.status as 'active' | 'inactive',
+          status: device.status as
+            | 'online'
+            | 'offline'
+            | 'error'
+            | 'maintenance',
           name: device.name as string,
         },
       };
@@ -205,7 +209,7 @@ export const deviceAuthService = {
         customer_id: customerId,
         name: deviceName,
         device_secret_hash: deviceSecretHash,
-        status: 'active',
+        status: 'offline',
         last_seen: new Date().toISOString(),
       });
 
@@ -249,7 +253,7 @@ export const deviceAuthService = {
         .from('devices')
         .update({
           last_seen: new Date().toISOString(),
-          status: data.status === 'healthy' ? 'active' : 'inactive',
+          status: data.status === 'healthy' ? 'online' : 'offline',
           metrics: data.metrics ?? null,
         })
         .eq('id', deviceId);
@@ -280,17 +284,24 @@ export const deviceAuthService = {
     }
   },
 
-  async createActivationCode(customerId: string): Promise<string> {
+  async createActivationCode(
+    customerId: string,
+    deviceId: string
+  ): Promise<string> {
     const redis = getRedisClient();
 
     // Generate a unique activation code
     const activationCode = randomBytes(16).toString('hex');
     const key = `${ACTIVATION_CODE_PREFIX}${activationCode}`;
 
-    // Store in Redis with TTL
+    // Store in Redis with TTL - now includes both customerId AND deviceId for security
     await redis
       .getClient()
-      .setEx(key, ACTIVATION_CODE_TTL, JSON.stringify({ customerId }));
+      .setEx(
+        key,
+        ACTIVATION_CODE_TTL,
+        JSON.stringify({ customerId, deviceId })
+      );
 
     return activationCode;
   },
