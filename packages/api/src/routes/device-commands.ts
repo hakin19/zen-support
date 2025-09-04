@@ -204,7 +204,8 @@ export function registerDeviceCommandRoutes(app: FastifyInstance): void {
         }
 
         return reply.send({
-          visibleUntil: result.visibleUntil,
+          success: true,
+          visibleUntil: result.visibleUntil ?? '',
         });
       } catch (error) {
         request.log.error(error, 'Failed to extend command visibility');

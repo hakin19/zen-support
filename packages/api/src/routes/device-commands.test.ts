@@ -206,6 +206,7 @@ describe('Device Command Routes', () => {
 
       expect(res.statusCode).toBe(200);
       expect(res.json()).toEqual({
+        success: true,
         visibleUntil: newVisibleUntil,
       });
 
