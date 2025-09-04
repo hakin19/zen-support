@@ -18,6 +18,60 @@ interface ResultBody {
   result: Record<string, unknown>;
 }
 
+/**
+ * Sanitize result object to prevent deeply nested structures
+ * that could cause memory/storage issues
+ */
+function sanitizeResult(
+  obj: Record<string, unknown>,
+  maxDepth: number = 5,
+  currentDepth: number = 0
+): Record<string, unknown> {
+  if (currentDepth >= maxDepth) {
+    return { _truncated: 'Max depth exceeded' };
+  }
+
+  const sanitized: Record<string, unknown> = {};
+
+  for (const [key, value] of Object.entries(obj)) {
+    // Limit key length to prevent abuse
+    const sanitizedKey = key.substring(0, 100);
+
+    if (value === null || value === undefined) {
+      sanitized[sanitizedKey] = value;
+    } else if (typeof value === 'string') {
+      // Limit string length
+      sanitized[sanitizedKey] = value.substring(0, 10000);
+    } else if (typeof value === 'number' || typeof value === 'boolean') {
+      sanitized[sanitizedKey] = value;
+    } else if (Array.isArray(value)) {
+      // Limit array size and recursively sanitize items
+      sanitized[sanitizedKey] = value.slice(0, 100).map((item): unknown => {
+        if (typeof item === 'object' && item !== null) {
+          return sanitizeResult(
+            item as Record<string, unknown>,
+            maxDepth,
+            currentDepth + 1
+          );
+        }
+        if (typeof item === 'string') {
+          return item.substring(0, 1000);
+        }
+        return item;
+      });
+    } else if (typeof value === 'object') {
+      // Recursively sanitize nested objects
+      sanitized[sanitizedKey] = sanitizeResult(
+        value as Record<string, unknown>,
+        maxDepth,
+        currentDepth + 1
+      );
+    }
+  }
+
+  return sanitized;
+}
+
 export function registerDeviceCommandRoutes(app: FastifyInstance): void {
   /**
    * POST /api/v1/device/commands/claim
@@ -172,6 +226,8 @@ export function registerDeviceCommandRoutes(app: FastifyInstance): void {
     '/api/v1/device/commands/:id/result',
     {
       preHandler: [deviceAuthMiddleware],
+      // Limit body size to 100KB for result submissions (default is 1MB)
+      bodyLimit: 102400, // 100KB in bytes
       schema: {
         params: {
           type: 'object',
@@ -187,7 +243,9 @@ export function registerDeviceCommandRoutes(app: FastifyInstance): void {
             claimToken: { type: 'string' },
             result: {
               type: 'object',
-              additionalProperties: true,
+              // Limit result object depth and size
+              maxProperties: 100, // Max 100 properties in result
+              additionalProperties: true, // Allow flexible structure but size is limited by bodyLimit
             },
           },
         },
@@ -207,11 +265,14 @@ export function registerDeviceCommandRoutes(app: FastifyInstance): void {
         const { claimToken, result } = request.body;
         const commandId = request.params.id;
 
+        // Sanitize result to prevent deeply nested/large objects
+        const sanitizedResult = sanitizeResult(result);
+
         const submitResult = await commandQueueService.submitResult(
           commandId,
           claimToken,
           request.deviceId,
-          result
+          sanitizedResult
         );
 
         if (!submitResult.success) {
