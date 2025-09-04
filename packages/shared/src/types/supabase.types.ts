@@ -120,6 +120,7 @@ export interface Database {
           user_id: string;
           session_type?: string;
           status:
+            | 'pending'
             | 'in_progress'
             | 'completed'
             | 'failed'

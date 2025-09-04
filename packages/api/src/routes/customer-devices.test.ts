@@ -31,6 +31,22 @@ vi.mock('@aizen/shared/utils/supabase-client', () => ({
       })),
     })),
   })),
+  getAuthenticatedSupabaseClient: vi.fn(() => ({
+    from: vi.fn(() => ({
+      select: vi.fn(() => ({
+        eq: vi.fn(() => ({
+          order: vi.fn(() => ({
+            data: [],
+            error: null,
+          })),
+          single: vi.fn(() => ({
+            data: null,
+            error: null,
+          })),
+        })),
+      })),
+    })),
+  })),
 }));
 
 describe('Customer Device Routes', () => {
@@ -57,10 +73,10 @@ describe('Customer Device Routes', () => {
       from: vi.fn(),
     };
 
-    const { getSupabaseAdminClient } = vi.mocked(
-      await import('@aizen/shared/utils/supabase-client')
-    );
+    const { getSupabaseAdminClient, getAuthenticatedSupabaseClient } =
+      vi.mocked(await import('@aizen/shared/utils/supabase-client'));
     getSupabaseAdminClient.mockReturnValue(mockSupabase);
+    getAuthenticatedSupabaseClient.mockReturnValue(mockSupabase);
 
     // Register routes
     registerCustomerDeviceRoutes(app);

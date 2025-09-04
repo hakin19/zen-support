@@ -40,9 +40,11 @@ export function registerCustomerDeviceRoutes(app: FastifyInstance): void {
       }
 
       try {
-        // Generate activation code for the device
-        const activationCode =
-          await deviceAuthService.createActivationCode(customerId);
+        // Generate activation code for the device - now bound to specific deviceId
+        const activationCode = await deviceAuthService.createActivationCode(
+          customerId,
+          deviceId
+        );
 
         // Calculate expiry time (24 hours from now)
         const expiresAt = new Date(
@@ -70,14 +72,41 @@ export function registerCustomerDeviceRoutes(app: FastifyInstance): void {
     }
   );
 
-  // GET /api/v1/customer/devices - List customer's devices
-  app.get(
+  // GET /api/v1/customer/devices - List customer's devices with pagination
+  app.get<{
+    Querystring: {
+      limit?: string;
+      cursor?: string;
+    };
+  }>(
     '/api/v1/customer/devices',
     {
       preHandler: [customerAuthMiddleware],
+      schema: {
+        querystring: {
+          type: 'object',
+          properties: {
+            limit: { type: 'string', pattern: '^[1-9][0-9]*$' }, // positive integer
+            cursor: { type: 'string' }, // ISO timestamp
+          },
+        },
+      },
     },
     async (request, reply) => {
       const customerId = request.customerId;
+      const { limit: limitStr, cursor } = request.query;
+
+      // Parse and validate pagination parameters
+      const limit = limitStr ? parseInt(limitStr, 10) : 50; // Default to 50
+      if (limit > 200) {
+        return reply.status(400).send({
+          error: {
+            code: 'INVALID_LIMIT',
+            message: 'Limit cannot exceed 200',
+            requestId: request.id,
+          },
+        });
+      }
 
       if (!customerId) {
         return reply.status(401).send({
@@ -101,25 +130,59 @@ export function registerCustomerDeviceRoutes(app: FastifyInstance): void {
         const token = authHeader.replace('Bearer ', '');
         const supabase = getAuthenticatedSupabaseClient(token);
 
-        const { data: devices, error } = await supabase
+        // Build the query with pagination
+        let query = supabase
           .from('devices')
           .select('id, name, status, last_seen, created_at')
           .eq('customer_id', customerId)
-          .order('created_at', { ascending: false });
+          .order('created_at', { ascending: false })
+          .limit(limit + 1); // Fetch one extra to determine if there's a next page
+
+        // Apply cursor if provided
+        if (cursor) {
+          query = query.lt('created_at', cursor);
+        }
+
+        const { data: devices, error } = await query;
 
         if (error) {
           throw error;
         }
 
+        // Determine if there are more results
+        const hasMore = devices.length > limit;
+        const resultDevices = hasMore ? devices.slice(0, limit) : devices;
+        const nextCursor = hasMore
+          ? (resultDevices[resultDevices.length - 1]?.created_at as string)
+          : null;
+
+        // Get total count for pagination info (only if no cursor, for performance)
+        let totalCount: number | undefined;
+        if (!cursor) {
+          const { count, error: countError } = await supabase
+            .from('devices')
+            .select('*', { count: 'exact', head: true })
+            .eq('customer_id', customerId);
+
+          if (!countError) {
+            totalCount = count ?? 0;
+          }
+        }
+
         return {
-          devices: devices.map(device => ({
+          devices: resultDevices.map(device => ({
             id: device.id as string,
             name: device.name as string,
             status: device.status as string,
             lastSeen: device.last_seen as string,
             createdAt: device.created_at as string,
           })),
-          total: devices.length,
+          pagination: {
+            limit,
+            hasMore,
+            nextCursor,
+            total: totalCount,
+          },
         };
       } catch (error) {
         console.error('Failed to list customer devices:', error);

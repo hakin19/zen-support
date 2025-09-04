@@ -12,6 +12,9 @@ vi.mock('@aizen/shared/utils/supabase-client', () => ({
   getSupabaseAdminClient: vi.fn(() => ({
     from: vi.fn(),
   })),
+  getAuthenticatedSupabaseClient: vi.fn(() => ({
+    from: vi.fn(),
+  })),
 }));
 
 describe('Customer Session Routes', () => {
@@ -29,6 +32,7 @@ describe('Customer Session Routes', () => {
     vi.mocked(customerAuthMiddleware).mockImplementation(
       async (request, reply) => {
         request.customerId = 'test-customer-123';
+        request.userId = 'test-user-456';
         request.customerEmail = 'customer@example.com';
       }
     );
@@ -38,10 +42,10 @@ describe('Customer Session Routes', () => {
       from: vi.fn(),
     };
 
-    const { getSupabaseAdminClient } = vi.mocked(
-      await import('@aizen/shared/utils/supabase-client')
-    );
+    const { getSupabaseAdminClient, getAuthenticatedSupabaseClient } =
+      vi.mocked(await import('@aizen/shared/utils/supabase-client'));
     getSupabaseAdminClient.mockReturnValue(mockSupabase);
+    getAuthenticatedSupabaseClient.mockReturnValue(mockSupabase);
 
     // Register routes
     registerCustomerSessionRoutes(app);
@@ -344,6 +348,7 @@ describe('Customer Session Routes', () => {
                     data: {
                       id: 'session-123',
                       customer_id: 'test-customer-123',
+                      updated_at: '2024-01-01T00:00:00Z',
                       commands: [
                         {
                           id: 'cmd-1',
@@ -361,12 +366,22 @@ describe('Customer Session Routes', () => {
             update: vi.fn().mockReturnValue({
               eq: vi.fn().mockReturnValue({
                 eq: vi.fn().mockReturnValue({
-                  select: vi.fn().mockResolvedValue({
-                    data: [{ id: 'session-123' }],
-                    error: null,
+                  eq: vi.fn().mockReturnValue({
+                    select: vi.fn().mockResolvedValue({
+                      data: [{ id: 'session-123' }],
+                      error: null,
+                    }),
                   }),
                 }),
               }),
+            }),
+          };
+        }
+        if (table === 'audit_logs') {
+          return {
+            insert: vi.fn().mockResolvedValue({
+              data: null,
+              error: null,
             }),
           };
         }
@@ -405,6 +420,7 @@ describe('Customer Session Routes', () => {
                     data: {
                       id: 'session-123',
                       customer_id: 'test-customer-123',
+                      updated_at: '2024-01-01T00:00:00Z',
                       commands: [
                         {
                           id: 'cmd-1',
@@ -422,12 +438,22 @@ describe('Customer Session Routes', () => {
             update: vi.fn().mockReturnValue({
               eq: vi.fn().mockReturnValue({
                 eq: vi.fn().mockReturnValue({
-                  select: vi.fn().mockResolvedValue({
-                    data: [{ id: 'session-123' }],
-                    error: null,
+                  eq: vi.fn().mockReturnValue({
+                    select: vi.fn().mockResolvedValue({
+                      data: [{ id: 'session-123' }],
+                      error: null,
+                    }),
                   }),
                 }),
               }),
+            }),
+          };
+        }
+        if (table === 'audit_logs') {
+          return {
+            insert: vi.fn().mockResolvedValue({
+              data: null,
+              error: null,
             }),
           };
         }
@@ -491,7 +517,7 @@ describe('Customer Session Routes', () => {
       expect(body.error.code).toBe('COMMAND_NOT_FOUND');
     });
 
-    it('should return 404 when session no longer exists during update', async () => {
+    it('should return 409 when session no longer exists during update', async () => {
       mockSupabase.from.mockImplementation((table: string) => {
         if (table === 'diagnostic_sessions') {
           return {
@@ -502,6 +528,7 @@ describe('Customer Session Routes', () => {
                     data: {
                       id: 'session-123',
                       customer_id: 'test-customer-123',
+                      updated_at: '2024-01-01T00:00:00Z',
                       commands: [
                         {
                           id: 'cmd-1',
@@ -518,12 +545,22 @@ describe('Customer Session Routes', () => {
             update: vi.fn().mockReturnValue({
               eq: vi.fn().mockReturnValue({
                 eq: vi.fn().mockReturnValue({
-                  select: vi.fn().mockResolvedValue({
-                    data: [], // Session was deleted/reassigned
-                    error: null,
+                  eq: vi.fn().mockReturnValue({
+                    select: vi.fn().mockResolvedValue({
+                      data: [], // Session was deleted/reassigned or updated_at changed
+                      error: null,
+                    }),
                   }),
                 }),
               }),
+            }),
+          };
+        }
+        if (table === 'audit_logs') {
+          return {
+            insert: vi.fn().mockResolvedValue({
+              data: null,
+              error: null,
             }),
           };
         }
@@ -541,11 +578,11 @@ describe('Customer Session Routes', () => {
         },
       });
 
-      expect(response.statusCode).toBe(404);
+      expect(response.statusCode).toBe(409);
       const body = JSON.parse(response.body);
-      expect(body.error.code).toBe('SESSION_NOT_FOUND');
+      expect(body.error.code).toBe('CONCURRENT_UPDATE_CONFLICT');
       expect(body.error.message).toBe(
-        'Session no longer exists or access denied'
+        'Session was modified by another request. Please retry.'
       );
     });
 
@@ -595,11 +632,11 @@ describe('Customer Session Routes', () => {
     });
   });
 
-  describe('GET /api/v1/customer/system', () => {
+  describe('GET /api/v1/customer/system/info', () => {
     it('should return system information for authenticated users', async () => {
       const response = await app.inject({
         method: 'GET',
-        url: '/api/v1/customer/system',
+        url: '/api/v1/customer/system/info',
         headers: {
           authorization: 'Bearer test-token',
         },
@@ -629,7 +666,7 @@ describe('Customer Session Routes', () => {
 
       const response = await app.inject({
         method: 'GET',
-        url: '/api/v1/customer/system',
+        url: '/api/v1/customer/system/info',
       });
 
       expect(response.statusCode).toBe(401);
