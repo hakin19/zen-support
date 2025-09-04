@@ -1,4 +1,4 @@
-import { getSupabaseAdminClient } from '@aizen/shared/utils/supabase-client';
+import { getAuthenticatedSupabaseClient } from '@aizen/shared/utils/supabase-client';
 
 import { customerAuthMiddleware } from '../middleware/customer-auth.middleware';
 
@@ -21,6 +21,7 @@ interface SessionRecord {
   customer_id: string;
   status: string;
   created_at: string;
+  updated_at: string;
   expires_at: string;
   commands?: Command[];
 }
@@ -29,6 +30,7 @@ interface Command {
   id: string;
   status: string;
   type?: string;
+  approvedBy?: string; // Individual user ID who approved the command
   [key: string]: unknown;
 }
 
@@ -71,7 +73,13 @@ export function registerCustomerSessionRoutes(app: FastifyInstance): void {
       }
 
       try {
-        const supabase = getSupabaseAdminClient();
+        // Get the JWT token from the authorization header
+        const authHeader = request.headers.authorization;
+        if (!authHeader) {
+          throw new Error('No authorization header found');
+        }
+        const token = authHeader.replace('Bearer ', '');
+        const supabase = getAuthenticatedSupabaseClient(token);
 
         // Verify device ownership and status
         const { data: device, error: deviceError } = await supabase
@@ -106,8 +114,10 @@ export function registerCustomerSessionRoutes(app: FastifyInstance): void {
         const sessionData = {
           device_id: deviceId,
           customer_id: customerId,
-          status: 'active',
-          reason,
+          user_id: request.userId, // Track which user created the session
+          session_type: 'web', // This is a web-initiated session
+          status: 'pending', // Use proper enum value
+          issue_description: reason,
           expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(), // 1 hour
         };
 
@@ -169,7 +179,13 @@ export function registerCustomerSessionRoutes(app: FastifyInstance): void {
       }
 
       try {
-        const supabase = getSupabaseAdminClient();
+        // Get the JWT token from the authorization header
+        const authHeader = request.headers.authorization;
+        if (!authHeader) {
+          throw new Error('No authorization header found');
+        }
+        const token = authHeader.replace('Bearer ', '');
+        const supabase = getAuthenticatedSupabaseClient(token);
 
         const { data: session, error } = (await supabase
           .from('diagnostic_sessions')
@@ -238,8 +254,9 @@ export function registerCustomerSessionRoutes(app: FastifyInstance): void {
       const { id: sessionId } = request.params;
       const { commandId, approved, reason } = request.body;
       const customerId = request.customerId;
+      const userId = request.userId;
 
-      if (!customerId) {
+      if (!customerId || !userId) {
         return reply.status(401).send({
           error: {
             code: 'UNAUTHORIZED',
@@ -250,12 +267,18 @@ export function registerCustomerSessionRoutes(app: FastifyInstance): void {
       }
 
       try {
-        const supabase = getSupabaseAdminClient();
+        // Get the JWT token from the authorization header
+        const authHeader = request.headers.authorization;
+        if (!authHeader) {
+          throw new Error('No authorization header found');
+        }
+        const token = authHeader.replace('Bearer ', '');
+        const supabase = getAuthenticatedSupabaseClient(token);
 
         // Get session and verify ownership
         const { data: session, error: sessionError } = (await supabase
           .from('diagnostic_sessions')
-          .select('id, customer_id, commands')
+          .select('id, customer_id, commands, updated_at')
           .eq('id', sessionId)
           .eq('customer_id', customerId)
           .single()) as { data: SessionRecord | null; error: unknown };
@@ -309,20 +332,21 @@ export function registerCustomerSessionRoutes(app: FastifyInstance): void {
           status: approved ? 'approved' : 'rejected',
           approvedAt: new Date().toISOString(),
           approvalReason: reason,
-          approvedBy: customerId,
+          approvedBy: userId, // Track individual user who approved
         };
 
         const updatedCommands = commands.map((cmd: Command) =>
           cmd.id === commandId ? updatedCommand : cmd
         );
 
-        // Update session with new command status
-        // Include customer_id in update to prevent race conditions
+        // Update session with new command status using optimistic concurrency control
+        // Include customer_id and updated_at to prevent race conditions
         const { data: updateData, error: updateError } = await supabase
           .from('diagnostic_sessions')
           .update({ commands: updatedCommands })
           .eq('id', sessionId)
           .eq('customer_id', customerId)
+          .eq('updated_at', session.updated_at)
           .select('id');
 
         if (updateError) {
@@ -331,14 +355,30 @@ export function registerCustomerSessionRoutes(app: FastifyInstance): void {
 
         // Verify that a row was actually updated
         if (!updateData || updateData.length === 0) {
-          return reply.status(404).send({
+          return reply.status(409).send({
             error: {
-              code: 'SESSION_NOT_FOUND',
-              message: 'Session no longer exists or access denied',
+              code: 'CONCURRENT_UPDATE_CONFLICT',
+              message: 'Session was modified by another request. Please retry.',
               requestId: request.id,
             },
           });
         }
+
+        // Log the approval action for audit trail
+        await supabase.from('audit_logs').insert({
+          customer_id: customerId,
+          user_id: userId,
+          action: approved ? 'command_approved' : 'command_rejected',
+          resource_type: 'diagnostic_command',
+          resource_id: commandId,
+          details: {
+            session_id: sessionId,
+            command_type: command.type,
+            approval_reason: reason,
+          },
+          ip_address: request.ip ?? null,
+          user_agent: request.headers['user-agent'] ?? null,
+        });
 
         return {
           success: true,
@@ -360,9 +400,9 @@ export function registerCustomerSessionRoutes(app: FastifyInstance): void {
     }
   );
 
-  // GET /api/v1/customer/system - Get system information
+  // GET /api/v1/customer/system/info - Get system information
   app.get(
-    '/api/v1/customer/system',
+    '/api/v1/customer/system/info',
     {
       preHandler: [customerAuthMiddleware],
     },

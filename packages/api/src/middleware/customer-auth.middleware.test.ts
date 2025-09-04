@@ -32,6 +32,13 @@ describe('Customer Authentication Middleware', () => {
       auth: {
         getUser: vi.fn(),
       },
+      from: vi.fn(() => ({
+        select: vi.fn(() => ({
+          eq: vi.fn(() => ({
+            single: vi.fn(),
+          })),
+        })),
+      })),
     };
 
     const { getSupabaseAdminClient } = vi.mocked(
@@ -158,13 +165,25 @@ describe('Customer Authentication Middleware', () => {
       };
 
       const mockUser = {
-        id: 'customer-123',
+        id: 'user-123',
         email: 'customer@example.com',
       };
 
       mockSupabaseClient.auth.getUser.mockResolvedValue({
         data: { user: mockUser },
         error: null,
+      });
+
+      // Mock the users table lookup
+      mockSupabaseClient.from.mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            single: vi.fn().mockResolvedValue({
+              data: { customer_id: 'customer-456' },
+              error: null,
+            }),
+          }),
+        }),
       });
 
       await customerAuthMiddleware(
@@ -175,7 +194,9 @@ describe('Customer Authentication Middleware', () => {
       expect(mockSupabaseClient.auth.getUser).toHaveBeenCalledWith(
         'valid-jwt-token'
       );
-      expect(mockRequest.customerId).toBe('customer-123');
+      expect(mockSupabaseClient.from).toHaveBeenCalledWith('users');
+      expect(mockRequest.userId).toBe('user-123');
+      expect(mockRequest.customerId).toBe('customer-456');
       expect(mockRequest.customerEmail).toBe('customer@example.com');
       expect(mockReply.status).not.toHaveBeenCalled();
       expect(mockReply.send).not.toHaveBeenCalled();
@@ -187,7 +208,7 @@ describe('Customer Authentication Middleware', () => {
       };
 
       const mockUser = {
-        id: 'customer-456',
+        id: 'user-789',
         email: null,
       };
 
@@ -196,18 +217,71 @@ describe('Customer Authentication Middleware', () => {
         error: null,
       });
 
+      mockSupabaseClient.from.mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            single: vi.fn().mockResolvedValue({
+              data: { customer_id: 'customer-999' },
+              error: null,
+            }),
+          }),
+        }),
+      });
+
       await customerAuthMiddleware(
         mockRequest as FastifyRequest,
         mockReply as FastifyReply
       );
 
-      expect(mockRequest.customerId).toBe('customer-456');
+      expect(mockRequest.userId).toBe('user-789');
+      expect(mockRequest.customerId).toBe('customer-999');
       expect(mockRequest.customerEmail).toBeUndefined();
       expect(mockReply.status).not.toHaveBeenCalled();
     });
   });
 
   describe('Error Handling', () => {
+    it('should reject when user not found in customer database', async () => {
+      mockRequest.headers = {
+        authorization: 'Bearer valid-jwt-token',
+      };
+
+      const mockUser = {
+        id: 'user-not-in-db',
+        email: 'orphan@example.com',
+      };
+
+      mockSupabaseClient.auth.getUser.mockResolvedValue({
+        data: { user: mockUser },
+        error: null,
+      });
+
+      mockSupabaseClient.from.mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            single: vi.fn().mockResolvedValue({
+              data: null,
+              error: { code: 'PGRST116' }, // Not found
+            }),
+          }),
+        }),
+      });
+
+      await customerAuthMiddleware(
+        mockRequest as FastifyRequest,
+        mockReply as FastifyReply
+      );
+
+      expect(mockReply.status).toHaveBeenCalledWith(401);
+      expect(mockReply.send).toHaveBeenCalledWith({
+        error: {
+          code: 'UNAUTHORIZED',
+          message: 'User not found in customer database',
+          requestId: 'req-123',
+        },
+      });
+    });
+
     it('should handle Supabase service errors', async () => {
       mockRequest.headers = {
         authorization: 'Bearer valid-jwt-token',
@@ -261,7 +335,7 @@ describe('Customer Authentication Middleware', () => {
       };
 
       const mockUser = {
-        id: 'cust-uuid-789',
+        id: 'user-uuid-789',
         email: 'user@company.com',
         user_metadata: {
           full_name: 'John Doe',
@@ -273,12 +347,24 @@ describe('Customer Authentication Middleware', () => {
         error: null,
       });
 
+      mockSupabaseClient.from.mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            single: vi.fn().mockResolvedValue({
+              data: { customer_id: 'company-abc-123' },
+              error: null,
+            }),
+          }),
+        }),
+      });
+
       await customerAuthMiddleware(
         mockRequest as FastifyRequest,
         mockReply as FastifyReply
       );
 
-      expect(mockRequest.customerId).toBe('cust-uuid-789');
+      expect(mockRequest.userId).toBe('user-uuid-789');
+      expect(mockRequest.customerId).toBe('company-abc-123');
       expect(mockRequest.customerEmail).toBe('user@company.com');
     });
 

@@ -90,10 +90,16 @@ export function registerCustomerDeviceRoutes(app: FastifyInstance): void {
       }
 
       try {
-        const { getSupabaseAdminClient } = await import(
+        const { getAuthenticatedSupabaseClient } = await import(
           '@aizen/shared/utils/supabase-client'
         );
-        const supabase = getSupabaseAdminClient();
+        // Get the JWT token from the authorization header
+        const authHeader = request.headers.authorization;
+        if (!authHeader) {
+          throw new Error('No authorization header found');
+        }
+        const token = authHeader.replace('Bearer ', '');
+        const supabase = getAuthenticatedSupabaseClient(token);
 
         const { data: devices, error } = await supabase
           .from('devices')
@@ -149,10 +155,16 @@ export function registerCustomerDeviceRoutes(app: FastifyInstance): void {
       }
 
       try {
-        const { getSupabaseAdminClient } = await import(
+        const { getAuthenticatedSupabaseClient } = await import(
           '@aizen/shared/utils/supabase-client'
         );
-        const supabase = getSupabaseAdminClient();
+        // Get the JWT token from the authorization header
+        const authHeader = request.headers.authorization;
+        if (!authHeader) {
+          throw new Error('No authorization header found');
+        }
+        const token = authHeader.replace('Bearer ', '');
+        const supabase = getAuthenticatedSupabaseClient(token);
 
         const { data: device, error } = await supabase
           .from('devices')

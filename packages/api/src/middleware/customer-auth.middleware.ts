@@ -4,6 +4,7 @@ import type { FastifyRequest, FastifyReply } from 'fastify';
 
 declare module 'fastify' {
   interface FastifyRequest {
+    userId?: string;
     customerId?: string;
     customerEmail?: string;
   }
@@ -63,8 +64,29 @@ export async function customerAuthMiddleware(
       });
     }
 
-    // Attach customer info to request for downstream use
-    request.customerId = user.id;
+    // Get the actual customer_id from the users table
+    // user.id is the Supabase auth user ID, we need the tenant customer_id
+    // Use admin client here because this is authentication/authorization logic
+    // and needs to work regardless of RLS policies
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('customer_id')
+      .eq('id', user.id)
+      .single();
+
+    if (userError || !userData) {
+      return reply.status(401).send({
+        error: {
+          code: 'UNAUTHORIZED',
+          message: 'User not found in customer database',
+          requestId: request.id,
+        },
+      });
+    }
+
+    // Attach both user ID and customer ID to request for downstream use
+    request.userId = user.id; // Supabase auth user ID
+    request.customerId = userData.customer_id as string; // Actual tenant/customer ID
     request.customerEmail = user.email ?? undefined;
   } catch (error) {
     request.log.error(error, 'Customer authentication middleware error');
