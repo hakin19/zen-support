@@ -10,7 +10,7 @@ interface ClaimBody {
 
 interface ExtendBody {
   claimToken: string;
-  visibilityTimeout?: number;
+  extensionMs?: number;
 }
 
 interface ResultBody {
@@ -153,10 +153,10 @@ export function registerDeviceCommandRoutes(app: FastifyInstance): void {
           required: ['claimToken'],
           properties: {
             claimToken: { type: 'string' },
-            visibilityTimeout: {
+            extensionMs: {
               type: 'integer',
               minimum: 60000, // 1 minute
-              maximum: 3600000, // 1 hour
+              maximum: 300000, // 5 minutes (matching spec max)
               default: 300000, // 5 minutes
             },
           },
@@ -174,14 +174,14 @@ export function registerDeviceCommandRoutes(app: FastifyInstance): void {
           });
         }
 
-        const { claimToken, visibilityTimeout = 300000 } = request.body;
+        const { claimToken, extensionMs = 300000 } = request.body;
         const commandId = request.params.id;
 
         const result = await commandQueueService.extendVisibility(
           commandId,
           claimToken,
           request.deviceId,
-          visibilityTimeout
+          extensionMs
         );
 
         if (!result.success) {

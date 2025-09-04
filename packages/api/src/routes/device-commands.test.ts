@@ -109,7 +109,7 @@ describe('Device Command Routes', () => {
         },
         payload: {
           limit: 5,
-          visibilityTimeout: 600000, // 10 minutes
+          visibilityTimeout: 600000, // 10 minutes - this is for claim, not extend
         },
       });
 
@@ -200,7 +200,7 @@ describe('Device Command Routes', () => {
         },
         payload: {
           claimToken,
-          visibilityTimeout: 600000, // 10 minutes
+          extensionMs: 300000, // 5 minutes (max per spec)
         },
       });
 
@@ -213,7 +213,7 @@ describe('Device Command Routes', () => {
         commandId,
         claimToken,
         'test-device-123',
-        600000
+        300000 // Should match the value we sent
       );
     });
 
