@@ -15,6 +15,30 @@ interface ApproveCommandBody {
   reason?: string;
 }
 
+interface SessionRecord {
+  id: string;
+  device_id: string;
+  customer_id: string;
+  status: string;
+  created_at: string;
+  expires_at: string;
+  commands?: Command[];
+}
+
+interface Command {
+  id: string;
+  status: string;
+  type?: string;
+  [key: string]: unknown;
+}
+
+// Utility function to safely stringify errors
+function stringifyError(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'string') return error;
+  return JSON.stringify(error);
+}
+
 export function registerCustomerSessionRoutes(app: FastifyInstance): void {
   // POST /api/v1/customer/sessions - Create a new diagnostic session
   app.post<{ Body: CreateSessionBody }>(
@@ -87,23 +111,28 @@ export function registerCustomerSessionRoutes(app: FastifyInstance): void {
           expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(), // 1 hour
         };
 
-        const { data: session, error: sessionError } = await supabase
+        const { data: session, error: sessionError } = (await supabase
           .from('diagnostic_sessions')
           .insert(sessionData)
           .select()
-          .single();
+          .single()) as { data: SessionRecord | null; error: unknown };
 
-        if (sessionError || !session) {
-          throw sessionError || new Error('Failed to create session');
+        if (sessionError ?? !session) {
+          throw new Error(
+            sessionError
+              ? `Failed to create session: ${stringifyError(sessionError)}`
+              : 'Failed to create session'
+          );
         }
 
+        const sessionRecord = session;
         return {
           session: {
-            id: session.id as string,
-            deviceId: session.device_id as string,
-            status: session.status as string,
-            createdAt: session.created_at as string,
-            expiresAt: session.expires_at as string,
+            id: sessionRecord.id,
+            deviceId: sessionRecord.device_id,
+            status: sessionRecord.status,
+            createdAt: sessionRecord.created_at,
+            expiresAt: sessionRecord.expires_at,
           },
         };
       } catch (error) {
@@ -142,15 +171,15 @@ export function registerCustomerSessionRoutes(app: FastifyInstance): void {
       try {
         const supabase = getSupabaseAdminClient();
 
-        const { data: session, error } = await supabase
+        const { data: session, error } = (await supabase
           .from('diagnostic_sessions')
           .select('*')
           .eq('id', sessionId)
           .eq('customer_id', customerId)
-          .single();
+          .single()) as { data: SessionRecord | null; error: unknown };
 
-        if (error || !session) {
-          if (error?.code === 'PGRST116') {
+        if (error ?? !session) {
+          if ((error as { code?: string })?.code === 'PGRST116') {
             return reply.status(404).send({
               error: {
                 code: 'SESSION_NOT_FOUND',
@@ -159,15 +188,20 @@ export function registerCustomerSessionRoutes(app: FastifyInstance): void {
               },
             });
           }
-          throw error;
+          throw new Error(
+            error
+              ? `Session not found: ${stringifyError(error)}`
+              : 'Session not found'
+          );
         }
 
+        const sessionRecord = session;
         return {
           session: {
-            id: session.id as string,
-            status: session.status as string,
-            commands: session.commands || [],
-            createdAt: session.created_at as string,
+            id: sessionRecord.id,
+            status: sessionRecord.status,
+            commands: sessionRecord.commands ?? [],
+            createdAt: sessionRecord.created_at,
           },
         };
       } catch (error) {
@@ -219,15 +253,15 @@ export function registerCustomerSessionRoutes(app: FastifyInstance): void {
         const supabase = getSupabaseAdminClient();
 
         // Get session and verify ownership
-        const { data: session, error: sessionError } = await supabase
+        const { data: session, error: sessionError } = (await supabase
           .from('diagnostic_sessions')
           .select('id, customer_id, commands')
           .eq('id', sessionId)
           .eq('customer_id', customerId)
-          .single();
+          .single()) as { data: SessionRecord | null; error: unknown };
 
-        if (sessionError || !session) {
-          if (sessionError?.code === 'PGRST116') {
+        if (sessionError ?? !session) {
+          if ((sessionError as { code?: string })?.code === 'PGRST116') {
             return reply.status(404).send({
               error: {
                 code: 'SESSION_NOT_FOUND',
@@ -236,12 +270,17 @@ export function registerCustomerSessionRoutes(app: FastifyInstance): void {
               },
             });
           }
-          throw sessionError;
+          throw new Error(
+            sessionError
+              ? `Session not found: ${stringifyError(sessionError)}`
+              : 'Session not found'
+          );
         }
 
         // Find the command
-        const commands = (session.commands as any[]) || [];
-        const command = commands.find((cmd: any) => cmd.id === commandId);
+        const sessionRecord = session;
+        const commands = sessionRecord.commands ?? [];
+        const command = commands.find((cmd: Command) => cmd.id === commandId);
 
         if (!command) {
           return reply.status(404).send({
@@ -265,7 +304,7 @@ export function registerCustomerSessionRoutes(app: FastifyInstance): void {
         }
 
         // Update command status
-        const updatedCommand = {
+        const updatedCommand: Command = {
           ...command,
           status: approved ? 'approved' : 'rejected',
           approvedAt: new Date().toISOString(),
@@ -273,7 +312,7 @@ export function registerCustomerSessionRoutes(app: FastifyInstance): void {
           approvedBy: customerId,
         };
 
-        const updatedCommands = commands.map((cmd: any) =>
+        const updatedCommands = commands.map((cmd: Command) =>
           cmd.id === commandId ? updatedCommand : cmd
         );
 
@@ -291,7 +330,7 @@ export function registerCustomerSessionRoutes(app: FastifyInstance): void {
           success: true,
           command: {
             id: commandId,
-            status: approved ? 'approved' : 'rejected',
+            status: approved ? ('approved' as const) : ('rejected' as const),
           },
         };
       } catch (error) {
@@ -328,9 +367,9 @@ export function registerCustomerSessionRoutes(app: FastifyInstance): void {
 
       // Return system information
       return {
-        version: process.env.API_VERSION || '1.0.0',
-        region: process.env.AWS_REGION || 'us-east-1',
-        environment: process.env.NODE_ENV || 'development',
+        version: process.env.API_VERSION ?? '1.0.0',
+        region: process.env.AWS_REGION ?? 'us-east-1',
+        environment: process.env.NODE_ENV ?? 'development',
         features: {
           webSockets: true,
           hitl: true,
