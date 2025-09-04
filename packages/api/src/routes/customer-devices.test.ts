@@ -217,15 +217,49 @@ describe('Customer Device Routes', () => {
         },
       ];
 
-      mockSupabase.from.mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            order: vi.fn().mockResolvedValue({
-              data: mockDevices,
-              error: null,
+      let callCount = 0;
+      mockSupabase.from.mockImplementation((table: string) => {
+        if (table === 'devices') {
+          callCount++;
+          // First call is for fetching devices
+          if (callCount === 1) {
+            return {
+              select: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  order: vi.fn().mockReturnValue({
+                    limit: vi.fn().mockResolvedValue({
+                      data: mockDevices,
+                      error: null,
+                    }),
+                  }),
+                }),
+              }),
+            };
+          }
+          // Second call is for count
+          if (callCount === 2) {
+            return {
+              select: vi.fn().mockReturnValue({
+                eq: vi.fn().mockResolvedValue({
+                  count: 2,
+                  error: null,
+                }),
+              }),
+            };
+          }
+        }
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              order: vi.fn().mockReturnValue({
+                limit: vi.fn().mockResolvedValue({
+                  data: [],
+                  error: null,
+                }),
+              }),
             }),
           }),
-        }),
+        };
       });
 
       const response = await app.inject({
@@ -239,7 +273,9 @@ describe('Customer Device Routes', () => {
       expect(response.statusCode).toBe(200);
       const body = JSON.parse(response.body);
       expect(body.devices).toHaveLength(2);
-      expect(body.total).toBe(2);
+      expect(body.pagination).toBeDefined();
+      expect(body.pagination.total).toBe(2);
+      expect(body.pagination.hasMore).toBe(false);
       expect(body.devices[0]).toMatchObject({
         id: 'device-001',
         name: 'Office Router',
@@ -249,15 +285,49 @@ describe('Customer Device Routes', () => {
     });
 
     it('should return empty list when customer has no devices', async () => {
-      mockSupabase.from.mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            order: vi.fn().mockResolvedValue({
-              data: [],
-              error: null,
+      let callCount = 0;
+      mockSupabase.from.mockImplementation((table: string) => {
+        if (table === 'devices') {
+          callCount++;
+          // First call is for fetching devices
+          if (callCount === 1) {
+            return {
+              select: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  order: vi.fn().mockReturnValue({
+                    limit: vi.fn().mockResolvedValue({
+                      data: [],
+                      error: null,
+                    }),
+                  }),
+                }),
+              }),
+            };
+          }
+          // Second call is for count
+          if (callCount === 2) {
+            return {
+              select: vi.fn().mockReturnValue({
+                eq: vi.fn().mockResolvedValue({
+                  count: 0,
+                  error: null,
+                }),
+              }),
+            };
+          }
+        }
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              order: vi.fn().mockReturnValue({
+                limit: vi.fn().mockResolvedValue({
+                  data: [],
+                  error: null,
+                }),
+              }),
             }),
           }),
-        }),
+        };
       });
 
       const response = await app.inject({
@@ -271,7 +341,9 @@ describe('Customer Device Routes', () => {
       expect(response.statusCode).toBe(200);
       const body = JSON.parse(response.body);
       expect(body.devices).toHaveLength(0);
-      expect(body.total).toBe(0);
+      expect(body.pagination).toBeDefined();
+      expect(body.pagination.total).toBe(0);
+      expect(body.pagination.hasMore).toBe(false);
     });
 
     it('should reject unauthenticated requests', async () => {
