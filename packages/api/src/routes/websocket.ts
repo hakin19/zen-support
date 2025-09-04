@@ -19,7 +19,11 @@ import {
 } from '../utils/redis-pubsub';
 
 import type { MultiChannelSubscriptionHandle } from '@aizen/shared/utils/redis-client';
-import type { FastifyInstance, FastifyRequest } from 'fastify';
+import type {
+  FastifyInstance,
+  FastifyPluginCallback,
+  FastifyRequest,
+} from 'fastify';
 import type { WebSocket } from 'ws';
 
 // Global connection manager instance
@@ -44,7 +48,9 @@ export async function registerWebSocketRoutes(
   app: FastifyInstance
 ): Promise<void> {
   // Register WebSocket plugin with security limits
-  await app.register((await import('@fastify/websocket')) as any, {
+  const websocketPlugin = (await import('@fastify/websocket'))
+    .default as FastifyPluginCallback;
+  await app.register(websocketPlugin, {
     options: {
       maxPayload: 1048576, // 1MB limit - sufficient for diagnostic data
       // Additional security options
@@ -330,7 +336,7 @@ export async function registerWebSocketRoutes(
               // Build channel configurations
               const channelConfigs = devices.map(device => ({
                 channel: `device:${device.id}:updates`,
-                handler: async (data: DeviceStatusMessage) => {
+                handler: async (data: DeviceStatusMessage): Promise<void> => {
                   await manager.sendToConnection(
                     connectionId,
                     addCorrelationIdToMessage({
@@ -760,14 +766,14 @@ async function handleGetSystemInfo(
   supabase: ReturnType<typeof getSupabaseAdminClient>
 ): Promise<void> {
   // Verify customer owns the device
-  const result = await supabase
+  const result = (await supabase
     .from('devices')
-    .select('*')
+    .select('id')
     .eq('id', String(message.deviceId))
     .eq('customer_id', customerId)
-    .single();
+    .single()) as { data: { id: string } | null };
 
-  const device = result.data;
+  const { data: device } = result;
 
   if (!device) {
     await manager.sendToConnection(

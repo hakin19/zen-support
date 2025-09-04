@@ -297,7 +297,10 @@ export class RedisClient {
         if (!callbacks.has(channel)) {
           callbacks.set(channel, []);
         }
-        callbacks.get(channel)!.push(callback);
+        const channelCallbacks = callbacks.get(channel);
+        if (channelCallbacks) {
+          channelCallbacks.push(callback);
+        }
 
         // Subscribe to the channel if not already subscribed
         if (!subscribedChannels.has(channel)) {
@@ -411,7 +414,8 @@ export class RedisClient {
     // but using a duplicate of the internal Redis client
     const duplicateInstance = new RedisClient(this.config);
     // Replace the internal client with a duplicate
-    (duplicateInstance as any).client = this.client.duplicate();
+    (duplicateInstance as unknown as { client: RedisClientType }).client =
+      this.client.duplicate();
     return duplicateInstance;
   }
 

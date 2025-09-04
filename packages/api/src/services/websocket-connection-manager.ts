@@ -3,7 +3,7 @@ import { WebSocket } from 'ws';
 export interface WebSocketConnection {
   id: string;
   ws: WebSocket;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   alive: boolean;
   connectedAt: Date;
   messageQueue?: Array<{
@@ -42,7 +42,7 @@ export class WebSocketConnectionManager {
   addConnection(
     connectionId: string,
     ws: WebSocket,
-    metadata?: Record<string, any>
+    metadata?: Record<string, unknown>
   ): void {
     this.connections.set(connectionId, {
       id: connectionId,
@@ -106,7 +106,7 @@ export class WebSocketConnectionManager {
   /**
    * Get connections by metadata property
    */
-  getConnectionsByMetadata(key: string, value: any): WebSocketConnection[] {
+  getConnectionsByMetadata(key: string, value: unknown): WebSocketConnection[] {
     const result: WebSocketConnection[] = [];
     this.connections.forEach(conn => {
       if (conn.metadata?.[key] === value) {
@@ -121,7 +121,7 @@ export class WebSocketConnectionManager {
    */
   updateConnectionMetadata(
     connectionId: string,
-    metadata: Record<string, any>
+    metadata: Record<string, unknown>
   ): boolean {
     const connection = this.connections.get(connectionId);
     if (!connection) {
@@ -134,7 +134,7 @@ export class WebSocketConnectionManager {
   /**
    * Broadcast message to all connections with backpressure handling
    */
-  async broadcastToAll(message: any): Promise<void> {
+  async broadcastToAll(message: unknown): Promise<void> {
     const promises: Promise<boolean>[] = [];
 
     this.connections.forEach(conn => {
@@ -147,7 +147,7 @@ export class WebSocketConnectionManager {
   /**
    * Broadcast message to connections of a specific type with backpressure handling
    */
-  async broadcastToType(type: string, message: any): Promise<void> {
+  async broadcastToType(type: string, message: unknown): Promise<void> {
     const connections = this.getConnectionsByType(type);
     const promises: Promise<boolean>[] = [];
 
@@ -161,7 +161,10 @@ export class WebSocketConnectionManager {
   /**
    * Send message to a specific connection with backpressure handling
    */
-  async sendToConnection(connectionId: string, message: any): Promise<boolean> {
+  async sendToConnection(
+    connectionId: string,
+    message: unknown
+  ): Promise<boolean> {
     const connection = this.connections.get(connectionId);
     if (!connection || connection.ws.readyState !== WebSocket.OPEN) {
       return false;
@@ -397,7 +400,8 @@ export class WebSocketConnectionManager {
     };
 
     this.connections.forEach(conn => {
-      const type = String(conn.metadata?.type ?? 'unknown');
+      const rawType = conn.metadata?.type;
+      const type = typeof rawType === 'string' ? rawType : 'unknown';
       stats.byType[type] = (stats.byType[type] ?? 0) + 1;
     });
 
