@@ -34,7 +34,7 @@ describe('Device Auth Routes', () => {
         device: {
           id: deviceId,
           customerId: 'customer-456',
-          status: 'active',
+          status: 'online',
         },
       });
 

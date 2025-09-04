@@ -87,7 +87,7 @@ describe('Customer Session Routes', () => {
                     id: 'session-123',
                     device_id: 'device-001',
                     customer_id: 'test-customer-123',
-                    status: 'active',
+                    status: 'online',
                     created_at: '2025-01-04T10:00:00Z',
                     expires_at: '2025-01-04T11:00:00Z',
                   },
@@ -116,7 +116,7 @@ describe('Customer Session Routes', () => {
       expect(body.session).toMatchObject({
         id: 'session-123',
         deviceId: 'device-001',
-        status: 'active',
+        status: 'online',
         createdAt: '2025-01-04T10:00:00Z',
         expiresAt: '2025-01-04T11:00:00Z',
       });
@@ -225,7 +225,7 @@ describe('Customer Session Routes', () => {
                       id: 'session-123',
                       device_id: 'device-001',
                       customer_id: 'test-customer-123',
-                      status: 'active',
+                      status: 'online',
                       created_at: '2025-01-04T10:00:00Z',
                       commands: [
                         {
@@ -262,7 +262,7 @@ describe('Customer Session Routes', () => {
       const body = JSON.parse(response.body);
       expect(body.session).toMatchObject({
         id: 'session-123',
-        status: 'active',
+        status: 'online',
         commands: expect.arrayContaining([
           expect.objectContaining({
             id: 'cmd-1',
