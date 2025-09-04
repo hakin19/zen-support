@@ -32,7 +32,7 @@ interface DnsMetrics {
   recordType: string;
   domain: string;
   addresses?: string[];
-  records?: any[];
+  records?: unknown[];
   servers?: string[];
   cname?: string;
   resolutionTime: number;
@@ -62,7 +62,9 @@ export class ResultFormatter {
   /**
    * Format a complete diagnostic result
    */
-  format(result: DiagnosticResult): any {
+  format(
+    result: DiagnosticResult
+  ): DiagnosticResult & { formattedDuration: string } {
     return {
       ...result,
       formattedDuration: this.formatDuration(result.duration),
@@ -290,7 +292,7 @@ export class ResultFormatter {
   /**
    * Format DNS results
    */
-  formatDns(dnsResult: any): DnsMetrics {
+  formatDns(dnsResult: Record<string, unknown>): DnsMetrics {
     const { recordType, domain } = dnsResult;
     let summary = '';
 
@@ -298,26 +300,30 @@ export class ResultFormatter {
       case 'A':
       case 'AAAA':
         const ipType = recordType === 'A' ? 'IPv4' : 'IPv6';
-        summary = `Resolved ${domain} to ${dnsResult.addresses.length} ${ipType} address${dnsResult.addresses.length !== 1 ? 'es' : ''}`;
+        const addresses = (dnsResult.addresses as string[]) || [];
+        summary = `Resolved ${String(domain)} to ${addresses.length} ${ipType} address${addresses.length !== 1 ? 'es' : ''}`;
         break;
       case 'MX':
-        summary = `Found ${dnsResult.records.length} MX record${dnsResult.records.length !== 1 ? 's' : ''} for ${domain}`;
+        const mxRecords = (dnsResult.records as unknown[]) || [];
+        summary = `Found ${mxRecords.length} MX record${mxRecords.length !== 1 ? 's' : ''} for ${String(domain)}`;
         break;
       case 'TXT':
-        summary = `Found ${dnsResult.records.length} TXT record${dnsResult.records.length !== 1 ? 's' : ''} for ${domain}`;
+        const txtRecords = (dnsResult.records as unknown[]) || [];
+        summary = `Found ${txtRecords.length} TXT record${txtRecords.length !== 1 ? 's' : ''} for ${String(domain)}`;
         break;
       case 'NS':
-        summary = `Found ${dnsResult.servers.length} name server${dnsResult.servers.length !== 1 ? 's' : ''} for ${domain}`;
+        const servers = (dnsResult.servers as string[]) || [];
+        summary = `Found ${servers.length} name server${servers.length !== 1 ? 's' : ''} for ${String(domain)}`;
         break;
       case 'CNAME':
-        summary = `${domain} points to ${dnsResult.cname}`;
+        summary = `${String(domain)} points to ${String(dnsResult.cname)}`;
         break;
       default:
-        summary = `DNS lookup completed for ${domain}`;
+        summary = `DNS lookup completed for ${String(domain)}`;
     }
 
     return {
-      ...dnsResult,
+      ...(dnsResult as unknown as DnsMetrics),
       summary,
     };
   }
@@ -325,31 +331,40 @@ export class ResultFormatter {
   /**
    * Format connectivity results
    */
-  formatConnectivity(connResult: any): ConnectivityMetrics {
+  formatConnectivity(connResult: Record<string, unknown>): ConnectivityMetrics {
     let summary = '';
 
     if (connResult.url) {
       // HTTP/HTTPS connectivity
       if (connResult.reachable) {
-        if (connResult.certificate && !connResult.certificate.valid) {
+        const certificate = connResult.certificate as
+          | { valid: boolean }
+          | undefined;
+        if (certificate && !certificate.valid) {
           summary = `HTTPS connection succeeded but certificate is invalid`;
         } else {
-          summary = `${connResult.url.startsWith('https') ? 'HTTPS' : 'HTTP'} connection successful (${connResult.statusCode} ${this.getStatusText(connResult.statusCode)}) in ${connResult.responseTime}ms`;
+          const url = connResult.url as string;
+          const statusCode = connResult.statusCode as number;
+          const responseTime = connResult.responseTime as number;
+          summary = `${url.startsWith('https') ? 'HTTPS' : 'HTTP'} connection successful (${statusCode} ${this.getStatusText(statusCode)}) in ${responseTime}ms`;
         }
       } else {
-        summary = `Failed to connect to ${connResult.url}`;
+        summary = `Failed to connect to ${connResult.url as string}`;
       }
     } else if (connResult.host && connResult.port !== undefined) {
       // Port connectivity
+      const port = connResult.port as string | number;
+      const host = connResult.host as string;
       if (connResult.reachable) {
-        summary = `Port ${connResult.port} on ${connResult.host} is open (${connResult.responseTime}ms)`;
+        const responseTime = connResult.responseTime as number;
+        summary = `Port ${port} on ${host} is open (${responseTime}ms)`;
       } else {
-        summary = `Port ${connResult.port} on ${connResult.host} is unreachable`;
+        summary = `Port ${port} on ${host} is unreachable`;
       }
     }
 
     return {
-      ...connResult,
+      ...(connResult as unknown as ConnectivityMetrics),
       summary,
     };
   }

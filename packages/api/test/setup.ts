@@ -40,25 +40,60 @@ vi.mock('@aizen/shared/utils/supabase-client', () => ({
 }));
 
 // Mock Redis client for unit tests
+const mockRedisClient = {
+  connect: vi.fn().mockResolvedValue(undefined),
+  disconnect: vi.fn().mockResolvedValue(undefined),
+  get: vi.fn().mockResolvedValue(null),
+  set: vi.fn().mockResolvedValue('OK'),
+  setex: vi.fn().mockResolvedValue('OK'),
+  rpush: vi.fn().mockResolvedValue(1),
+  lpop: vi.fn().mockResolvedValue(null),
+  del: vi.fn().mockResolvedValue(0),
+  exists: vi.fn().mockResolvedValue(0),
+  expire: vi.fn().mockResolvedValue(0),
+  ttl: vi.fn().mockResolvedValue(-1),
+  publish: vi.fn().mockResolvedValue(0),
+  subscribe: vi.fn().mockResolvedValue(undefined),
+  unsubscribe: vi.fn().mockResolvedValue(undefined),
+  ping: vi.fn().mockResolvedValue('PONG'),
+  flushAll: vi.fn().mockResolvedValue(undefined),
+  keys: vi.fn().mockResolvedValue([]),
+
+  // Session management methods
+  setSession: vi.fn().mockResolvedValue(undefined),
+  getSession: vi.fn().mockResolvedValue(null),
+  deleteSession: vi.fn().mockResolvedValue(false),
+  extendSession: vi.fn().mockResolvedValue(false),
+
+  // Cache management methods
+  setCache: vi.fn().mockResolvedValue(undefined),
+  getCache: vi.fn().mockResolvedValue(null),
+  deleteCache: vi.fn().mockResolvedValue(false),
+
+  // Pub/Sub methods
+  createSubscription: vi.fn().mockResolvedValue({
+    channel: 'test',
+    unsubscribe: vi.fn().mockResolvedValue(undefined),
+    disconnect: vi.fn().mockResolvedValue(undefined),
+  }),
+  createMultiChannelSubscription: vi.fn().mockResolvedValue({
+    channels: [],
+    subscriber: {},
+    subscribe: vi.fn().mockResolvedValue(undefined),
+    unsubscribe: vi.fn().mockResolvedValue(undefined),
+    unsubscribeAll: vi.fn().mockResolvedValue(undefined),
+    disconnect: vi.fn().mockResolvedValue(undefined),
+  }),
+
+  // Utility methods
+  getClient: vi.fn().mockReturnValue({}),
+  duplicate: vi.fn().mockReturnValue(mockRedisClient),
+  isReady: vi.fn().mockReturnValue(true),
+};
+
 vi.mock('@aizen/shared/utils/redis-client', () => ({
-  redisClient: {
-    connect: vi.fn(),
-    disconnect: vi.fn(),
-    get: vi.fn(),
-    set: vi.fn(),
-    del: vi.fn(),
-    exists: vi.fn(),
-    expire: vi.fn(),
-    ttl: vi.fn(),
-    publish: vi.fn(),
-    subscribe: vi.fn(),
-  },
-  initializeRedis: vi.fn(),
-  getRedisClient: vi.fn(() => ({
-    setCache: vi.fn(),
-    getCache: vi.fn(),
-    deleteCache: vi.fn(),
-    close: vi.fn(),
-  })),
+  RedisClient: vi.fn().mockImplementation(() => mockRedisClient),
+  initializeRedis: vi.fn().mockReturnValue(mockRedisClient),
+  getRedisClient: vi.fn().mockReturnValue(mockRedisClient),
   closeRedis: vi.fn().mockResolvedValue(undefined),
 }));

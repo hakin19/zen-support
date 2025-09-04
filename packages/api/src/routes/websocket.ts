@@ -22,6 +22,8 @@ import type { MultiChannelSubscriptionHandle } from '@aizen/shared/utils/redis-c
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { WebSocket } from 'ws';
 
+// WebSocket route options are handled with type assertion since Fastify types don't include the websocket property
+
 // Global connection manager instance
 let connectionManager: WebSocketConnectionManager;
 
@@ -44,7 +46,9 @@ export async function registerWebSocketRoutes(
   app: FastifyInstance
 ): Promise<void> {
   // Register WebSocket plugin with security limits
-  await app.register((await import('@fastify/websocket')) as any, {
+  const fastifyWebsocket = await import('@fastify/websocket');
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument
+  await app.register(fastifyWebsocket.default as any, {
     options: {
       maxPayload: 1048576, // 1MB limit - sufficient for diagnostic data
       // Additional security options
@@ -63,10 +67,14 @@ export async function registerWebSocketRoutes(
 
   // Device WebSocket endpoint
   app.register(async fastify => {
-    fastify.get(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+    (fastify as any).get(
       '/api/v1/device/ws',
       { websocket: true },
-      async (socket: WebSocket, request: FastifyRequest) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      async (connection: any, request: FastifyRequest) => {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        const socket = connection.socket as WebSocket;
         const ws = socket;
         const connectionId = generateCorrelationId();
         let deviceId: string | null = null;
@@ -125,7 +133,9 @@ export async function registerWebSocketRoutes(
               async data => {
                 await manager.sendToConnection(
                   connectionId,
-                  addCorrelationIdToMessage(data)
+                  addCorrelationIdToMessage(
+                    data as unknown as Record<string, unknown>
+                  )
                 );
               }
             );
@@ -260,10 +270,14 @@ export async function registerWebSocketRoutes(
 
   // Customer WebSocket endpoint
   app.register(async fastify => {
-    fastify.get(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+    (fastify as any).get(
       '/api/v1/customer/ws',
       { websocket: true },
-      async (socket: WebSocket, request: FastifyRequest) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      async (connection: any, request: FastifyRequest) => {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        const socket = connection.socket as WebSocket;
         const ws = socket;
         const connectionId = generateCorrelationId();
         let customerId: string | null = null;
@@ -330,7 +344,7 @@ export async function registerWebSocketRoutes(
               // Build channel configurations
               const channelConfigs = devices.map(device => ({
                 channel: `device:${device.id}:updates`,
-                handler: async (data: DeviceStatusMessage) => {
+                handler: async (data: DeviceStatusMessage): Promise<void> => {
                   await manager.sendToConnection(
                     connectionId,
                     addCorrelationIdToMessage({
@@ -528,22 +542,24 @@ async function handleDeviceClaimCommand(
 
     if (claimedCommands.length > 0) {
       const command = claimedCommands[0];
-      await manager.sendToConnection(
-        connectionId,
-        addCorrelationIdToMessage(
-          {
-            type: 'command',
-            command: {
-              id: command.id,
-              type: command.type,
-              parameters: command.parameters,
-              claimToken: command.claimToken, // Include claim token for result submission
-              visibleUntil: command.visibleUntil,
+      if (command) {
+        await manager.sendToConnection(
+          connectionId,
+          addCorrelationIdToMessage(
+            {
+              type: 'command',
+              command: {
+                id: command.id,
+                type: command.type,
+                parameters: command.parameters ?? {},
+                claimToken: command.claimToken, // Include claim token for result submission
+                visibleUntil: command.visibleUntil,
+              },
             },
-          },
-          requestId
-        )
-      );
+            requestId
+          )
+        );
+      }
     } else {
       await manager.sendToConnection(
         connectionId,
@@ -605,8 +621,8 @@ async function handleDeviceCommandResult(
 
     // Use the secure command queue service to submit result with claim token validation
     const submitResult = await commandQueueService.submitResult(
-      message.commandId,
-      message.claimToken,
+      message.commandId as string,
+      message.claimToken as string,
       deviceId,
       result
     );
@@ -767,6 +783,7 @@ async function handleGetSystemInfo(
     .eq('customer_id', customerId)
     .single();
 
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
   const device = result.data;
 
   if (!device) {

@@ -79,6 +79,7 @@ export function getSupabaseAdminClient(): SupabaseClient {
  * Create an authenticated Supabase client with a JWT token
  * This client respects Row Level Security policies based on the user's auth state
  */
+
 export function getAuthenticatedSupabaseClient(
   accessToken: string
 ): SupabaseClient<any, 'public', any> {
@@ -102,7 +103,7 @@ export function getAuthenticatedSupabaseClient(
         Authorization: `Bearer ${accessToken}`,
       },
     },
-  }) as SupabaseClient<any, 'public', any>;
+  }) as SupabaseClient<any, 'public', any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 }
 
 /**

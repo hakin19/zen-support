@@ -66,9 +66,9 @@ export function parseDeviceId(deviceId: string): {
   }
 
   return {
-    prefix: match[1]!,
-    location: match[2]!,
-    index: parseInt(match[3]!),
+    prefix: match[1] as string,
+    location: match[2] as string,
+    index: parseInt(match[3] as string),
     hostname: match[4],
   };
 }
