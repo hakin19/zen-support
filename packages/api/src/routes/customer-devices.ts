@@ -58,23 +58,14 @@ export function registerCustomerDeviceRoutes(app: FastifyInstance): void {
           instructions: `Provide the activation code "${activationCode}" to the device during setup. This code expires in 24 hours.`,
         };
       } catch (error) {
-        if (
-          error &&
-          typeof error === 'object' &&
-          'code' in error &&
-          error.code === '23505'
-        ) {
-          // Unique violation
-          return reply.status(409).send({
-            error: {
-              code: 'DEVICE_EXISTS',
-              message: 'Device ID already exists',
-              requestId: request.id,
-            },
-          });
-        }
-
-        throw error;
+        console.error('Failed to generate activation code:', error);
+        return reply.status(500).send({
+          error: {
+            code: 'INTERNAL_ERROR',
+            message: 'Failed to generate activation code',
+            requestId: request.id,
+          },
+        });
       }
     }
   );

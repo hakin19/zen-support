@@ -130,11 +130,23 @@ export const deviceAuthService = {
       };
     }
 
-    const parsedData = JSON.parse(data) as {
-      customerId: string;
-      deviceId?: string;
-    };
-    const { customerId, deviceId } = parsedData;
+    let customerId: string;
+    let deviceId: string | undefined;
+
+    try {
+      const parsedData = JSON.parse(data) as {
+        customerId: string;
+        deviceId?: string;
+      };
+      customerId = parsedData.customerId;
+      deviceId = parsedData.deviceId;
+    } catch (error) {
+      console.error('Failed to parse activation code data:', error);
+      return {
+        valid: false,
+        reason: 'invalid',
+      };
+    }
 
     // Check if this device is already registered
     if (deviceId) {
@@ -198,6 +210,13 @@ export const deviceAuthService = {
       });
 
       if (insertError) {
+        // Check for unique constraint violation (Postgres error code 23505)
+        if ('code' in insertError && insertError.code === '23505') {
+          throw new DeviceError(
+            'Device ID already registered',
+            'DEVICE_EXISTS'
+          );
+        }
         console.error('Error registering device:', insertError);
         throw new Error('Failed to register device');
       }
@@ -225,13 +244,13 @@ export const deviceAuthService = {
     try {
       const supabase = getSupabaseAdminClient();
 
-      // Update device last_seen timestamp
+      // Update device last_seen timestamp, status, and metrics in DB
       const { error } = await supabase
         .from('devices')
         .update({
           last_seen: new Date().toISOString(),
-          // Note: In a real implementation, we might also store metrics
-          // in a separate time-series table for monitoring
+          status: data.status === 'healthy' ? 'active' : 'inactive',
+          metrics: data.metrics ?? null,
         })
         .eq('id', deviceId);
 
@@ -240,7 +259,7 @@ export const deviceAuthService = {
         return false;
       }
 
-      // Could also store metrics in Redis for real-time monitoring
+      // Also store metrics in Redis for real-time monitoring
       if (data.metrics) {
         const redis = getRedisClient();
         const metricsKey = `device:metrics:${deviceId}`;
