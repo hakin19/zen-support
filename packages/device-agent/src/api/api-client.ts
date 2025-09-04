@@ -277,7 +277,10 @@ export class ApiClient extends EventEmitter {
       true
     );
     this.#lastError = normalized;
-    this.emit('error', normalized);
+    // Only emit if there is an error listener to avoid unhandled 'error' event
+    if (this.listenerCount('error') > 0) {
+      this.emit('error', normalized);
+    }
   }
 
   async authenticate(): Promise<boolean> {
@@ -304,15 +307,8 @@ export class ApiClient extends EventEmitter {
       return true;
     } catch (error) {
       this.setConnectionState('disconnected');
-
-      // Do not emit in authenticate; just store normalized error
-      this.#lastError = this.normalizeError(
-        error,
-        'Authentication failed',
-        'AUTH_FAILED',
-        true
-      );
-
+      // Store and emit (if listeners) using consistent normalization
+      this.handleError(error);
       return false;
     }
   }
@@ -499,40 +495,53 @@ export class ApiClient extends EventEmitter {
     this.setConnectionState('reconnecting');
 
     try {
-      if (this.#stopped) {
-        this.#isReconnecting = false;
-        this.setConnectionState('disconnected');
-        return;
-      }
-      this.#reconnectAttempts++;
+      while (!this.#stopped) {
+        // Enforce max attempts
+        this.#reconnectAttempts++;
+        if (this.#reconnectAttempts > this.#maxReconnectAttempts) {
+          throw new ApiClientError(
+            'Max reconnection attempts exceeded',
+            'MAX_RECONNECT_EXCEEDED',
+            undefined,
+            false
+          );
+        }
 
-      if (this.#reconnectAttempts > this.#maxReconnectAttempts) {
-        throw new ApiClientError(
-          'Max reconnection attempts exceeded',
-          'MAX_RECONNECT_EXCEEDED',
-          undefined,
-          false
+        // Exponential backoff per attempt (cap at 30s)
+        const backoffDelay = Math.min(
+          1000 * Math.pow(2, this.#reconnectAttempts - 1),
+          30000
         );
+        await this.delay(backoffDelay);
+        if (this.#stopped) {
+          this.#isReconnecting = false;
+          this.setConnectionState('disconnected');
+          return;
+        }
+
+        const success = await this.authenticate();
+        if (success) {
+          // authenticate() sets state to 'connected' and resets attempts
+          this.#isReconnecting = false;
+          return;
+        }
+
+        // Authentication returned false; use last error to decide retry
+        const retryable = this.#lastError?.retryable ?? true;
+        if (!retryable) {
+          throw new ApiClientError(
+            'Reconnection failed',
+            'RECONNECT_FAILED',
+            this.#lastError ?? undefined,
+            false
+          );
+        }
+        // Otherwise loop for another attempt
       }
 
-      // Exponential backoff for reconnection
-      const backoffDelay = Math.min(
-        1000 * Math.pow(2, this.#reconnectAttempts - 1),
-        30000 // Max 30 seconds
-      );
-
-      await this.delay(backoffDelay);
-      if (this.#stopped) {
-        this.#isReconnecting = false;
-        this.setConnectionState('disconnected');
-        return;
-      }
-      const success = await this.authenticate();
-      if (!success) {
-        throw new ApiClientError('Reconnection failed', 'RECONNECT_FAILED');
-      }
-
+      // Stopped while reconnecting; mark as disconnected
       this.#isReconnecting = false;
+      this.setConnectionState('disconnected');
     } catch (error) {
       this.#isReconnecting = false;
       this.setConnectionState('error');

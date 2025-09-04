@@ -35,6 +35,7 @@ describe('ApiClient', () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    vi.clearAllMocks();
     apiClient.stop();
   });
 
@@ -477,19 +478,15 @@ describe('ApiClient', () => {
       // All attempts fail
       mockFetch.mockRejectedValue(new Error('Network error'));
 
-      // Catch the promise to prevent unhandled rejection
-      const resultPromise = apiClient
-        .submitDiagnosticResult(diagnosticResult)
-        .catch(e => {
-          throw e;
-        });
+      // Start the async operation
+      const resultPromise = apiClient.submitDiagnosticResult(diagnosticResult);
 
       // Advance through all retry delays
       await vi.advanceTimersByTimeAsync(1000); // First retry
       await vi.advanceTimersByTimeAsync(2000); // Second retry
       await vi.advanceTimersByTimeAsync(4000); // Third retry
 
-      // Ensure the promise rejection is properly handled
+      // Now await and check the rejection
       await expect(resultPromise).rejects.toThrow(
         'Failed to submit diagnostic result after 3 attempts'
       );
@@ -682,6 +679,10 @@ describe('ApiClient', () => {
   });
 
   describe('error handling', () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+    });
+
     it('should emit detailed error events', async () => {
       // Create a new client to isolate this test
       const testClient = new ApiClient(config);
@@ -719,7 +720,8 @@ describe('ApiClient', () => {
       const testClient = new ApiClient(config);
       mockFetch.mockRejectedValueOnce(new Error('DNS resolution failed'));
 
-      await testClient.authenticate();
+      const result = await testClient.authenticate();
+      expect(result).toBe(false);
 
       const lastError = testClient.getLastError();
       expect(lastError).toBeDefined();
