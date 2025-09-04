@@ -115,7 +115,8 @@ describe('Customer Device Routes', () => {
       expect(body.device.expiresAt).toBeDefined();
       expect(body.instructions).toContain(mockActivationCode);
       expect(deviceAuthService.createActivationCode).toHaveBeenCalledWith(
-        'test-customer-123'
+        'test-customer-123',
+        'device-001'
       );
     });
 
