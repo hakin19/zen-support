@@ -4,6 +4,7 @@ import fastify from 'fastify';
 
 import { config } from './config';
 import { registerCustomerDeviceRoutes } from './routes/customer-devices';
+import { registerCustomerSessionRoutes } from './routes/customer-sessions';
 import { registerDeviceAuthRoutes } from './routes/device-auth';
 import { registerDeviceCommandRoutes } from './routes/device-commands';
 import { registerHealthRoutes } from './routes/health';
@@ -41,6 +42,7 @@ export async function createApp(): Promise<FastifyInstance> {
   registerDeviceAuthRoutes(app);
   registerDeviceCommandRoutes(app);
   registerCustomerDeviceRoutes(app);
+  registerCustomerSessionRoutes(app);
 
   // Start background processes
   startVisibilityCheck();
