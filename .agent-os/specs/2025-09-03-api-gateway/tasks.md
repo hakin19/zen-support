@@ -40,12 +40,12 @@
   - [x] 4.7 Implement system info endpoint for authenticated users
   - [x] 4.8 Verify all customer API tests pass
 
-- [ ] 5. Add WebSocket support and correlation tracking
-  - [ ] 5.1 Write tests for WebSocket connections and message handling
-  - [ ] 5.2 Install and configure @fastify/websocket plugin
-  - [ ] 5.3 Implement device WebSocket endpoint with authentication
-  - [ ] 5.4 Implement customer WebSocket endpoint with room management
-  - [ ] 5.5 Add correlation ID (X-Request-ID) propagation system
-  - [ ] 5.6 Implement WebSocket connection tracking and graceful close
-  - [ ] 5.7 Add heartbeat/ping-pong for connection health
-  - [ ] 5.8 Verify all WebSocket tests pass
+- [x] 5. Add WebSocket support and correlation tracking
+  - [x] 5.1 Write tests for WebSocket connections and message handling
+  - [x] 5.2 Install and configure @fastify/websocket plugin
+  - [x] 5.3 Implement device WebSocket endpoint with authentication
+  - [x] 5.4 Implement customer WebSocket endpoint with room management
+  - [x] 5.5 Add correlation ID (X-Request-ID) propagation system
+  - [x] 5.6 Implement WebSocket connection tracking and graceful close
+  - [x] 5.7 Add heartbeat/ping-pong for connection health
+  - [x] 5.8 Verify all WebSocket tests pass
