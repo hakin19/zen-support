@@ -125,78 +125,84 @@ export async function registerWebSocketRoutes(
           }
 
           // Handle incoming messages from device
-          ws.on('message', async (data: Buffer) => {
-            try {
-              const message = JSON.parse(data.toString()) as Record<
-                string,
-                unknown
-              >;
-              const requestId = extractCorrelationIdFromMessage(message);
+          ws.on('message', (data: Buffer): void => {
+            void (async (): Promise<void> => {
+              let requestId: string | undefined;
+              try {
+                const message = JSON.parse(data.toString()) as Record<
+                  string,
+                  unknown
+                >;
+                requestId = extractCorrelationIdFromMessage(message);
 
-              switch (message.type) {
-                case 'claim_command':
-                  await handleDeviceClaimCommand(
-                    deviceId as string,
-                    connectionId,
-                    requestId,
-                    manager
-                  );
-                  break;
+                switch (message.type) {
+                  case 'claim_command':
+                    await handleDeviceClaimCommand(
+                      deviceId as string,
+                      connectionId,
+                      requestId,
+                      manager
+                    );
+                    break;
 
-                case 'command_result':
-                  await handleDeviceCommandResult(
-                    deviceId as string,
-                    message,
-                    connectionId,
-                    requestId,
-                    manager,
-                    redis
-                  );
-                  break;
+                  case 'command_result':
+                    await handleDeviceCommandResult(
+                      deviceId as string,
+                      message,
+                      connectionId,
+                      requestId,
+                      manager,
+                      redis
+                    );
+                    break;
 
-                case 'heartbeat':
-                  await manager.sendToConnection(
-                    connectionId,
-                    addCorrelationIdToMessage(
-                      {
-                        type: 'heartbeat_ack',
-                        timestamp: new Date().toISOString(),
-                      },
-                      requestId
-                    )
-                  );
-                  break;
+                  case 'heartbeat':
+                    await manager.sendToConnection(
+                      connectionId,
+                      addCorrelationIdToMessage(
+                        {
+                          type: 'heartbeat_ack',
+                          timestamp: new Date().toISOString(),
+                        },
+                        requestId
+                      )
+                    );
+                    break;
 
-                case 'status_update':
-                  await handleDeviceStatusUpdate(
-                    deviceId as string,
-                    message,
-                    redis
-                  );
-                  break;
+                  case 'status_update':
+                    await handleDeviceStatusUpdate(
+                      deviceId as string,
+                      message,
+                      redis
+                    );
+                    break;
 
-                default:
-                  await manager.sendToConnection(
-                    connectionId,
-                    addCorrelationIdToMessage(
-                      {
-                        type: 'error',
-                        error: 'Unknown message type',
-                      },
-                      requestId
-                    )
-                  );
+                  default:
+                    await manager.sendToConnection(
+                      connectionId,
+                      addCorrelationIdToMessage(
+                        {
+                          type: 'error',
+                          error: 'Unknown message type',
+                        },
+                        requestId
+                      )
+                    );
+                }
+              } catch (error) {
+                request.log.error(error, 'Failed to process WebSocket message');
+                await manager.sendToConnection(
+                  connectionId,
+                  addCorrelationIdToMessage(
+                    {
+                      type: 'error',
+                      error: 'Invalid message format',
+                    },
+                    requestId
+                  )
+                );
               }
-            } catch (error) {
-              request.log.error(error, 'Failed to process WebSocket message');
-              await manager.sendToConnection(
-                connectionId,
-                addCorrelationIdToMessage({
-                  type: 'error',
-                  error: 'Invalid message format',
-                })
-              );
-            }
+            })();
           });
 
           // Handle connection close
@@ -339,88 +345,94 @@ export async function registerWebSocketRoutes(
           }
 
           // Handle incoming messages from customer
-          ws.on('message', async (data: Buffer) => {
-            try {
-              const message = JSON.parse(data.toString()) as Record<
-                string,
-                unknown
-              >;
-              const requestId = extractCorrelationIdFromMessage(message);
+          ws.on('message', (data: Buffer): void => {
+            void (async (): Promise<void> => {
+              let requestId: string | undefined;
+              try {
+                const message = JSON.parse(data.toString()) as Record<
+                  string,
+                  unknown
+                >;
+                requestId = extractCorrelationIdFromMessage(message);
 
-              switch (message.type) {
-                case 'approve_session':
-                  await handleSessionApproval(
-                    customerId as string,
-                    message,
-                    requestId,
-                    connectionId,
-                    manager,
-                    redis,
-                    supabase
-                  );
-                  break;
+                switch (message.type) {
+                  case 'approve_session':
+                    await handleSessionApproval(
+                      customerId as string,
+                      message,
+                      requestId,
+                      connectionId,
+                      manager,
+                      redis,
+                      supabase
+                    );
+                    break;
 
-                case 'get_system_info':
-                  await handleGetSystemInfo(
-                    customerId as string,
-                    message,
-                    requestId,
-                    connectionId,
-                    manager,
-                    redis,
-                    supabase
-                  );
-                  break;
+                  case 'get_system_info':
+                    await handleGetSystemInfo(
+                      customerId as string,
+                      message,
+                      requestId,
+                      connectionId,
+                      manager,
+                      redis,
+                      supabase
+                    );
+                    break;
 
-                case 'send_command':
-                  await handleSendCommand(
-                    customerId as string,
-                    message,
-                    requestId,
-                    connectionId,
-                    manager,
-                    redis,
-                    supabase
-                  );
-                  break;
+                  case 'send_command':
+                    await handleSendCommand(
+                      customerId as string,
+                      message,
+                      requestId,
+                      connectionId,
+                      manager,
+                      redis,
+                      supabase
+                    );
+                    break;
 
-                case 'join_rooms':
-                  // Already handled during connection
-                  await manager.sendToConnection(
-                    connectionId,
-                    addCorrelationIdToMessage(
-                      {
-                        type: 'rooms_joined',
-                        deviceIds:
-                          devices?.map((d: { id: string }) => d.id) ?? [],
-                      },
-                      requestId
-                    )
-                  );
-                  break;
+                  case 'join_rooms':
+                    // Already handled during connection
+                    await manager.sendToConnection(
+                      connectionId,
+                      addCorrelationIdToMessage(
+                        {
+                          type: 'rooms_joined',
+                          deviceIds:
+                            devices?.map((d: { id: string }) => d.id) ?? [],
+                        },
+                        requestId
+                      )
+                    );
+                    break;
 
-                default:
-                  await manager.sendToConnection(
-                    connectionId,
-                    addCorrelationIdToMessage(
-                      {
-                        type: 'error',
-                        error: 'Unknown message type',
-                      },
-                      requestId
-                    )
-                  );
+                  default:
+                    await manager.sendToConnection(
+                      connectionId,
+                      addCorrelationIdToMessage(
+                        {
+                          type: 'error',
+                          error: 'Unknown message type',
+                        },
+                        requestId
+                      )
+                    );
+                }
+              } catch (error) {
+                request.log.error(error, 'Failed to process WebSocket message');
+                await manager.sendToConnection(
+                  connectionId,
+                  addCorrelationIdToMessage(
+                    {
+                      type: 'error',
+                      error: 'Invalid message format',
+                    },
+                    requestId
+                  )
+                );
               }
-            } catch (error) {
-              request.log.error(error, 'Failed to process WebSocket message');
-              await manager.sendToConnection(
-                connectionId,
-                addCorrelationIdToMessage({
-                  type: 'error',
-                  error: 'Invalid message format',
-                })
-              );
-            }
+            })();
           });
 
           // Handle connection close
