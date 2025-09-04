@@ -17,7 +17,6 @@ import {
   type DeviceControlMessage,
 } from '../utils/redis-pubsub';
 
-import type { SocketStream } from '@fastify/websocket';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { WebSocket } from 'ws';
 
@@ -61,12 +60,12 @@ export async function registerWebSocketRoutes(
   app.decorate('websocketConnections', manager);
 
   // Device WebSocket endpoint
-  app.register((fastify): Promise<void> => {
+  app.register(async fastify => {
     fastify.get(
       '/api/v1/device/ws',
       { websocket: true },
-      async (connection: SocketStream, request: FastifyRequest) => {
-        const ws = connection.socket;
+      async (socket: WebSocket, request: FastifyRequest) => {
+        const ws = socket;
         const connectionId = generateCorrelationId();
         let deviceId: string | null = null;
 
@@ -258,12 +257,12 @@ export async function registerWebSocketRoutes(
   });
 
   // Customer WebSocket endpoint
-  app.register((fastify): Promise<void> => {
+  app.register(async fastify => {
     fastify.get(
       '/api/v1/customer/ws',
       { websocket: true },
-      async (connection: SocketStream, request: FastifyRequest) => {
-        const ws = connection.socket;
+      async (socket: WebSocket, request: FastifyRequest) => {
+        const ws = socket;
         const connectionId = generateCorrelationId();
         let customerId: string | null = null;
         let customerEmail: string | null = null;
