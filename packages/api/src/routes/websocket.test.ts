@@ -21,6 +21,8 @@ vi.mock('../services/command-queue.service', () => ({
     addCommand: vi.fn(),
     getCommand: vi.fn(),
   },
+  startVisibilityCheck: vi.fn(),
+  stopVisibilityCheck: vi.fn(),
 }));
 
 // Mock WebSocket module

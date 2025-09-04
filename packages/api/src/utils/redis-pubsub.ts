@@ -1,6 +1,7 @@
 import type {
   RedisClient,
   SubscriptionHandle,
+  MultiChannelSubscriptionHandle,
 } from '@aizen/shared/utils/redis-client';
 import type { RedisClientType } from 'redis';
 
@@ -134,10 +135,55 @@ export async function setInRedis<T = unknown>(
   }
 }
 
+/**
+ * Create a multi-channel subscription handler for efficiently subscribing
+ * to multiple channels with a single Redis connection.
+ * This is recommended when you need to subscribe to many channels
+ * from the same logical client (e.g., a WebSocket connection).
+ *
+ * @param redis - Redis client instance (wrapper only, as raw client doesn't support this)
+ * @returns MultiChannelSubscriptionHandle for managing multiple subscriptions
+ */
+export async function createMultiChannelSubscription(
+  redis: RedisClient
+): Promise<MultiChannelSubscriptionHandle> {
+  return await redis.createMultiChannelSubscription();
+}
+
+/**
+ * Subscribe to multiple channels using a single Redis connection.
+ * More efficient than multiple individual subscriptions.
+ *
+ * @param redis - Redis client instance (wrapper only)
+ * @param channels - Array of channel configurations
+ * @returns MultiChannelSubscriptionHandle for cleanup
+ */
+export async function subscribeToMultipleChannels<T = unknown>(
+  redis: RedisClient,
+  channels: Array<{
+    channel: string;
+    handler: (data: T, rawMessage: string) => void | Promise<void>;
+  }>
+): Promise<MultiChannelSubscriptionHandle> {
+  const multiSub = await redis.createMultiChannelSubscription();
+
+  // Subscribe to all channels
+  for (const { channel, handler } of channels) {
+    await multiSub.subscribe(channel, (data: unknown) => {
+      void handler(data as T, JSON.stringify(data));
+    });
+  }
+
+  return multiSub;
+}
+
 // Type definitions for common message structures
 export interface DeviceStatusMessage {
-  type: 'status_update';
-  status: Record<string, unknown>;
+  type: 'status_update' | 'command_completed';
+  status?: Record<string, unknown>;
+  commandId?: string;
+  result?: Record<string, unknown>;
+  requestId?: string;
   timestamp: string;
 }
 

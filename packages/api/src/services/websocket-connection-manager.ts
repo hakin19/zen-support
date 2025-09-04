@@ -6,8 +6,13 @@ export interface WebSocketConnection {
   metadata?: Record<string, any>;
   alive: boolean;
   connectedAt: Date;
-  messageQueue?: Array<{ message: string; resolve: (value: boolean) => void }>;
+  messageQueue?: Array<{
+    message: string;
+    resolve: (value: boolean) => void;
+    size: number;
+  }>;
   isProcessingQueue?: boolean;
+  queuedBytes?: number;
 }
 
 export interface ConnectionStats {
@@ -21,9 +26,11 @@ export interface ConnectionStats {
 export class WebSocketConnectionManager {
   private connections: Map<string, WebSocketConnection>;
   private heartbeatInterval?: NodeJS.Timeout;
-  // Backpressure thresholds
-  private readonly HIGH_WATER_MARK = 1024 * 1024; // 1MB buffered amount threshold
-  private readonly MAX_QUEUE_SIZE = 100; // Maximum queued messages per connection
+  // Backpressure thresholds - reduced to prevent memory exhaustion
+  private readonly HIGH_WATER_MARK = 256 * 1024; // 256KB buffered amount threshold
+  private readonly MAX_QUEUE_SIZE = 10; // Maximum queued messages per connection
+  private readonly MAX_MESSAGE_SIZE = 100 * 1024; // 100KB max per message
+  private readonly MAX_QUEUE_BYTES = 512 * 1024; // 512KB max queued bytes per connection
 
   constructor() {
     this.connections = new Map();
@@ -40,7 +47,7 @@ export class WebSocketConnectionManager {
     this.connections.set(connectionId, {
       id: connectionId,
       ws,
-      metadata: metadata || {},
+      metadata: metadata ?? {},
       alive: true,
       connectedAt: new Date(),
     });
@@ -63,6 +70,7 @@ export class WebSocketConnectionManager {
           item.resolve(false);
         });
         connection.messageQueue = [];
+        connection.queuedBytes = 0;
       }
       this.connections.delete(connectionId);
     }
@@ -160,26 +168,70 @@ export class WebSocketConnectionManager {
     }
 
     const messageString = JSON.stringify(message);
+    const messageSize = Buffer.byteLength(messageString, 'utf8');
+
+    // Reject messages that are too large
+    if (messageSize > this.MAX_MESSAGE_SIZE) {
+      console.warn(
+        `Message too large (${messageSize} bytes) for connection ${connectionId}, dropping`
+      );
+      return false;
+    }
 
     // Check buffered amount for backpressure
     if (connection.ws.bufferedAmount > this.HIGH_WATER_MARK) {
       // Initialize queue if needed
       if (!connection.messageQueue) {
         connection.messageQueue = [];
+        connection.queuedBytes = 0;
       }
 
-      // Check queue size limit
+      // Check total queued bytes limit
+      let currentQueuedBytes = connection.queuedBytes ?? 0;
+      if (currentQueuedBytes + messageSize > this.MAX_QUEUE_BYTES) {
+        // Drop oldest messages until we have space or queue is empty
+        while (
+          connection.messageQueue.length > 0 &&
+          currentQueuedBytes + messageSize > this.MAX_QUEUE_BYTES
+        ) {
+          const dropped = connection.messageQueue.shift();
+          if (dropped) {
+            currentQueuedBytes -= dropped.size;
+            connection.queuedBytes = currentQueuedBytes;
+            dropped.resolve(false);
+            console.warn(
+              `Dropping oldest queued message for connection ${connectionId} (queue memory limit)`
+            );
+          }
+        }
+      }
+
+      // Check queue size limit (message count)
       if (connection.messageQueue.length >= this.MAX_QUEUE_SIZE) {
-        console.warn(
-          `Message queue full for connection ${connectionId}, dropping message`
-        );
-        return false;
+        // Drop oldest message
+        const dropped = connection.messageQueue.shift();
+        if (dropped) {
+          connection.queuedBytes = (connection.queuedBytes ?? 0) - dropped.size;
+          dropped.resolve(false);
+          console.warn(
+            `Dropping oldest queued message for connection ${connectionId} (queue size limit)`
+          );
+        }
       }
 
       // Queue the message
       return new Promise<boolean>(resolve => {
-        connection.messageQueue!.push({ message: messageString, resolve });
-        this.processMessageQueue(connectionId);
+        if (connection.messageQueue) {
+          connection.messageQueue.push({
+            message: messageString,
+            resolve,
+            size: messageSize,
+          });
+          connection.queuedBytes = (connection.queuedBytes ?? 0) + messageSize;
+          void this.processMessageQueue(connectionId);
+        } else {
+          resolve(false);
+        }
       });
     }
 
@@ -193,7 +245,7 @@ export class WebSocketConnectionManager {
           } else {
             resolve(true);
             // Process any queued messages
-            this.processMessageQueue(connectionId);
+            void this.processMessageQueue(connectionId);
           }
         });
       } catch (error) {
@@ -239,6 +291,8 @@ export class WebSocketConnectionManager {
             } else {
               item.resolve(true);
             }
+            // Update queued bytes
+            connection.queuedBytes = (connection.queuedBytes ?? 0) - item.size;
             resolve();
           });
         });
@@ -343,8 +397,8 @@ export class WebSocketConnectionManager {
     };
 
     this.connections.forEach(conn => {
-      const type = conn.metadata?.type || 'unknown';
-      stats.byType[type] = (stats.byType[type] || 0) + 1;
+      const type = String(conn.metadata?.type ?? 'unknown');
+      stats.byType[type] = (stats.byType[type] ?? 0) + 1;
     });
 
     return stats;

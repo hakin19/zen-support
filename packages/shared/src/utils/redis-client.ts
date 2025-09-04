@@ -16,6 +16,18 @@ export interface SubscriptionHandle {
   disconnect: () => Promise<void>;
 }
 
+export interface MultiChannelSubscriptionHandle {
+  channels: string[];
+  subscriber: RedisClientType;
+  subscribe: (
+    channel: string,
+    callback: (message: unknown) => void
+  ) => Promise<void>;
+  unsubscribe: (channel: string) => Promise<void>;
+  unsubscribeAll: () => Promise<void>;
+  disconnect: () => Promise<void>;
+}
+
 export class RedisClient {
   private client: RedisClientType;
   private config: RedisConfig;
@@ -239,6 +251,101 @@ export class RedisClient {
   }
 
   /**
+   * Create a multi-channel subscription with a single Redis connection.
+   * This is more efficient than creating separate connections for each channel.
+   * Ideal for scenarios where you need to subscribe to multiple channels
+   * from the same logical client (e.g., WebSocket connection).
+   */
+  async createMultiChannelSubscription(): Promise<MultiChannelSubscriptionHandle> {
+    // Create a single dedicated subscriber for all channels
+    const subscriber = this.client.duplicate();
+    await subscriber.connect();
+
+    const subscribedChannels = new Set<string>();
+    const callbacks = new Map<string, Array<(message: unknown) => void>>();
+
+    // Message handler that will route to appropriate callbacks
+    const messageHandler = (message: string, channel: string): void => {
+      try {
+        const data = JSON.parse(message) as unknown;
+        const channelCallbacks = callbacks.get(channel);
+        if (channelCallbacks) {
+          for (const callback of channelCallbacks) {
+            try {
+              callback(data);
+            } catch (error) {
+              console.error(`Error in callback for channel ${channel}:`, error);
+            }
+          }
+        }
+      } catch (error) {
+        console.error(
+          `Failed to parse message from channel ${channel}:`,
+          error
+        );
+      }
+    };
+
+    return {
+      channels: Array.from(subscribedChannels),
+      subscriber,
+      subscribe: async (
+        channel: string,
+        callback: (message: unknown) => void
+      ): Promise<void> => {
+        // Add callback to the list for this channel
+        if (!callbacks.has(channel)) {
+          callbacks.set(channel, []);
+        }
+        callbacks.get(channel)!.push(callback);
+
+        // Subscribe to the channel if not already subscribed
+        if (!subscribedChannels.has(channel)) {
+          await subscriber.subscribe(channel, messageHandler);
+          subscribedChannels.add(channel);
+        }
+      },
+      unsubscribe: async (channel: string): Promise<void> => {
+        try {
+          if (subscribedChannels.has(channel)) {
+            await subscriber.unsubscribe(channel);
+            subscribedChannels.delete(channel);
+            callbacks.delete(channel);
+          }
+        } catch (error) {
+          console.error(
+            `Failed to unsubscribe from channel ${channel}:`,
+            error
+          );
+        }
+      },
+      unsubscribeAll: async (): Promise<void> => {
+        try {
+          if (subscribedChannels.size > 0) {
+            await subscriber.unsubscribe(...Array.from(subscribedChannels));
+            subscribedChannels.clear();
+            callbacks.clear();
+          }
+        } catch (error) {
+          console.error('Failed to unsubscribe from all channels:', error);
+        }
+      },
+      disconnect: async (): Promise<void> => {
+        try {
+          await subscriber.disconnect();
+          subscribedChannels.clear();
+          callbacks.clear();
+        } catch (error) {
+          console.error(
+            'Failed to disconnect multi-channel subscriber:',
+            error
+          );
+        }
+      },
+    };
+  }
+
+  /**
    * @deprecated Use createSubscription() instead for proper lifecycle management.
    * This method should only be called on a duplicate client instance
    * that is dedicated to subscriptions.
@@ -300,20 +407,12 @@ export class RedisClient {
   }
 
   duplicate(): RedisClient {
-    const duplicateClient = this.client.duplicate();
-    // Create a new RedisClient instance wrapping the duplicate
-    const wrapper = Object.create(RedisClient.prototype) as RedisClient & {
-      client: RedisClientType;
-      config: RedisConfig;
-      isConnected: boolean;
-      setupEventHandlers: () => void;
-    };
-    wrapper.client = duplicateClient;
-    wrapper.config = this.config;
-    wrapper.isConnected = false;
-    wrapper.setupEventHandlers = this.setupEventHandlers.bind(wrapper);
-    (wrapper.setupEventHandlers as () => void)();
-    return wrapper;
+    // Create a new RedisClient instance with the same config
+    // but using a duplicate of the internal Redis client
+    const duplicateInstance = new RedisClient(this.config);
+    // Replace the internal client with a duplicate
+    (duplicateInstance as any).client = this.client.duplicate();
+    return duplicateInstance;
   }
 
   isReady(): boolean {

@@ -11,12 +11,14 @@ import {
 import {
   publishToChannel,
   subscribeToChannel,
+  subscribeToMultipleChannels,
   getFromRedis,
   setInRedis,
   type DeviceStatusMessage,
   type DeviceControlMessage,
 } from '../utils/redis-pubsub';
 
+import type { MultiChannelSubscriptionHandle } from '@aizen/shared/utils/redis-client';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { WebSocket } from 'ws';
 
@@ -42,7 +44,7 @@ export async function registerWebSocketRoutes(
   app: FastifyInstance
 ): Promise<void> {
   // Register WebSocket plugin with security limits
-  await app.register(import('@fastify/websocket'), {
+  await app.register((await import('@fastify/websocket')) as any, {
     options: {
       maxPayload: 1048576, // 1MB limit - sufficient for diagnostic data
       // Additional security options
@@ -311,43 +313,50 @@ export async function registerWebSocketRoutes(
           );
 
           // Get customer's devices for room subscription
+          // TODO: Add pagination or limit for customers with many devices
+          // This unbounded query could cause performance issues at scale (1000+ devices)
+          // Consider: .limit(100) with pagination, lazy loading, or filtering by status
           const { data: devices } = await supabase
             .from('devices')
             .select('id, name, status')
             .eq('customer_id', customerId);
 
-          const subscriptionHandles: Array<
-            Awaited<ReturnType<typeof subscribeToChannel>>
-          > = [];
+          let multiChannelHandle: MultiChannelSubscriptionHandle | null = null;
 
           if (devices && devices.length > 0) {
-            // Subscribe to device update channels with type-safe wrapper
+            // Use a single Redis connection for all device channels
+            // This is much more efficient than creating N connections for N devices
             try {
-              for (const device of devices) {
-                const channel = `device:${device.id}:updates`;
-                subscribedChannels.push(channel);
-                const handle = await subscribeToChannel<DeviceStatusMessage>(
-                  redis,
-                  channel,
-                  async data => {
-                    await manager.sendToConnection(
-                      connectionId,
-                      addCorrelationIdToMessage({
-                        ...data,
-                        deviceId: device.id,
-                      })
-                    );
-                  }
-                );
-                if (handle) {
-                  subscriptionHandles.push(handle);
-                }
-              }
+              // Build channel configurations
+              const channelConfigs = devices.map(device => ({
+                channel: `device:${device.id}:updates`,
+                handler: async (data: DeviceStatusMessage) => {
+                  await manager.sendToConnection(
+                    connectionId,
+                    addCorrelationIdToMessage({
+                      ...data,
+                      deviceId: device.id,
+                    })
+                  );
+                },
+              }));
 
-              // Store handles for cleanup
+              // Subscribe to all channels with a single connection
+              multiChannelHandle =
+                await subscribeToMultipleChannels<DeviceStatusMessage>(
+                  redis,
+                  channelConfigs
+                );
+
+              // Store handle for cleanup
               (
-                ws as { subscriptionHandles?: typeof subscriptionHandles }
-              ).subscriptionHandles = subscriptionHandles;
+                ws as { multiChannelHandle?: MultiChannelSubscriptionHandle }
+              ).multiChannelHandle = multiChannelHandle;
+
+              // Track subscribed channels for logging
+              subscribedChannels.push(
+                ...devices.map(d => `device:${d.id}:updates`)
+              );
             } catch (redisError) {
               request.log.error(
                 redisError,
@@ -451,17 +460,13 @@ export async function registerWebSocketRoutes(
 
           // Handle connection close
           ws.on('close', (): void => {
-            const handles = (
-              ws as { subscriptionHandles?: typeof subscriptionHandles }
-            ).subscriptionHandles;
+            const handle = (
+              ws as { multiChannelHandle?: MultiChannelSubscriptionHandle }
+            ).multiChannelHandle;
             void (async (): Promise<void> => {
               try {
-                if (handles) {
-                  for (const handle of handles) {
-                    if (handle && 'unsubscribe' in handle) {
-                      await handle.unsubscribe();
-                    }
-                  }
+                if (handle) {
+                  await handle.disconnect();
                 }
                 manager.removeConnection(connectionId);
                 request.log.info(`Customer ${String(customerId)} disconnected`);
@@ -478,17 +483,13 @@ export async function registerWebSocketRoutes(
           ws.on('error', (error): void => {
             request.log.error(error, 'WebSocket error');
             // Clean up Redis subscriber to prevent leaks
-            const handles = (
-              ws as { subscriptionHandles?: typeof subscriptionHandles }
-            ).subscriptionHandles;
+            const handle = (
+              ws as { multiChannelHandle?: MultiChannelSubscriptionHandle }
+            ).multiChannelHandle;
             void (async (): Promise<void> => {
               try {
-                if (handles) {
-                  for (const handle of handles) {
-                    if (handle && 'unsubscribe' in handle) {
-                      await handle.unsubscribe();
-                    }
-                  }
+                if (handle) {
+                  await handle.disconnect();
                 }
                 manager.removeConnection(connectionId);
               } catch (cleanupError) {
@@ -506,11 +507,6 @@ export async function registerWebSocketRoutes(
       }
     );
     return Promise.resolve();
-  });
-
-  // Add graceful shutdown handler for WebSocket connections
-  app.addHook('onClose', async () => {
-    await manager.cleanup();
   });
 }
 
@@ -643,6 +639,7 @@ async function handleDeviceCommandResult(
       type: 'command_completed',
       commandId: message.commandId as string,
       result, // Use 'result' field for backward compatibility
+      requestId,
       timestamp: new Date().toISOString(),
     });
 
@@ -851,6 +848,7 @@ async function handleSendCommand(
       {
         type: 'new_command',
         commandId: command.id,
+        requestId,
         timestamp: new Date().toISOString(),
       }
     );
