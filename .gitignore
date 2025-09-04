@@ -66,9 +66,14 @@ ENV/
 # Worktrees
 worktrees/
 
-# Claude agents and logs
-.claude/agents/
-.claude/logs/
+# Claude - track most content but exclude sensitive/temporary files
+# .claude/agents/  # Now tracked
+.claude/logs/      # Still exclude logs
+.claude/cache/     # Exclude cache if it exists
+.claude/temp/      # Exclude temporary files
+
+# Agent OS - track all content for version control
+# .agent-os/       # Now tracked - includes specs, tasks, recaps, etc.
 
 # Taskmaster files
 .taskmaster
