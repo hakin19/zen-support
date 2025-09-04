@@ -2,6 +2,8 @@ import { randomUUID } from 'crypto';
 
 import { getRedisClient } from '@aizen/shared/utils/redis-client';
 
+import type { RedisArgument } from '@redis/client/dist/lib/RESP/types';
+
 export interface Session {
   token: string;
   expiresAt: Date;
@@ -96,26 +98,52 @@ export const sessionService = {
 
   async revokeDeviceAllSessions(deviceId: string): Promise<number> {
     const redis = getRedisClient();
-
-    // This would need to scan all sessions and delete matching ones
-    // In production, we might maintain a secondary index for this
-    const keys = await redis.getClient().keys(`${SESSION_PREFIX}*`);
+    const client = redis.getClient();
     let revokedCount = 0;
 
-    for (const key of keys) {
-      const data = await redis.getClient().get(key);
-      if (data) {
-        try {
-          const session = JSON.parse(data) as StoredSession;
-          if (session.deviceId === deviceId) {
-            await redis.getClient().del(key);
-            revokedCount++;
+    // Use SCAN instead of KEYS to avoid blocking Redis
+    // Use string-based cursor as required by node-redis v4+
+    let cursor = '0';
+    const match = `${SESSION_PREFIX}*`;
+
+    do {
+      // SCAN returns {cursor: string, keys: string[]}
+      const result = await client.scan(cursor as unknown as RedisArgument, {
+        MATCH: match,
+        COUNT: 100, // Process 100 keys at a time
+      });
+
+      cursor = result.cursor;
+      const keys = result.keys;
+
+      if (keys.length > 0) {
+        // Batch fetch session data
+        const values = await client.mGet(keys);
+
+        // Process each session and collect keys to delete
+        const keysToDelete: string[] = [];
+        for (let i = 0; i < keys.length; i++) {
+          const value = values[i];
+          const key = keys[i];
+          if (value && typeof value === 'string' && key) {
+            try {
+              const session = JSON.parse(value) as StoredSession;
+              if (session.deviceId === deviceId) {
+                keysToDelete.push(key);
+              }
+            } catch {
+              // Skip invalid session data
+            }
           }
-        } catch {
-          // Skip invalid session data
+        }
+
+        // Batch delete matching sessions
+        if (keysToDelete.length > 0) {
+          await client.del(keysToDelete);
+          revokedCount += keysToDelete.length;
         }
       }
-    }
+    } while (cursor !== '0');
 
     return revokedCount;
   },
