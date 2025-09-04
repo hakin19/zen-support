@@ -58,16 +58,13 @@ export function registerDeviceAuthRoutes(app: FastifyInstance): void {
         });
       }
 
-      // Check device status
-      if (
-        result.device?.status === 'offline' ||
-        result.device?.status === 'error' ||
-        result.device?.status === 'maintenance'
-      ) {
+      // Check device status - only block maintenance devices
+      // Allow offline and error devices to authenticate so they can recover
+      if (result.device?.status === 'maintenance') {
         return reply.status(403).send({
           error: {
-            code: 'DEVICE_INACTIVE',
-            message: 'Device is not active',
+            code: 'DEVICE_MAINTENANCE',
+            message: 'Device is under maintenance',
           },
         });
       }

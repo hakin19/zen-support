@@ -74,6 +74,7 @@ export interface Database {
           status: 'online' | 'offline' | 'error';
           last_seen: string | null;
           config: Record<string, any>;
+          metrics: Record<string, any> | null;
           created_at: string;
           updated_at: string;
         };
@@ -88,6 +89,7 @@ export interface Database {
           status: 'online' | 'offline' | 'error';
           last_seen?: string | null;
           config?: Record<string, any>;
+          metrics?: Record<string, any> | null;
           created_at?: string;
           updated_at?: string;
         };
