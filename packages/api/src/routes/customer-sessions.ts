@@ -317,13 +317,27 @@ export function registerCustomerSessionRoutes(app: FastifyInstance): void {
         );
 
         // Update session with new command status
-        const { error: updateError } = await supabase
+        // Include customer_id in update to prevent race conditions
+        const { data: updateData, error: updateError } = await supabase
           .from('diagnostic_sessions')
           .update({ commands: updatedCommands })
-          .eq('id', sessionId);
+          .eq('id', sessionId)
+          .eq('customer_id', customerId)
+          .select('id');
 
         if (updateError) {
           throw updateError;
+        }
+
+        // Verify that a row was actually updated
+        if (!updateData || updateData.length === 0) {
+          return reply.status(404).send({
+            error: {
+              code: 'SESSION_NOT_FOUND',
+              message: 'Session no longer exists or access denied',
+              requestId: request.id,
+            },
+          });
         }
 
         return {

@@ -359,9 +359,13 @@ describe('Customer Session Routes', () => {
               }),
             }),
             update: vi.fn().mockReturnValue({
-              eq: vi.fn().mockResolvedValue({
-                data: null,
-                error: null,
+              eq: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  select: vi.fn().mockResolvedValue({
+                    data: [{ id: 'session-123' }],
+                    error: null,
+                  }),
+                }),
               }),
             }),
           };
@@ -416,9 +420,13 @@ describe('Customer Session Routes', () => {
               }),
             }),
             update: vi.fn().mockReturnValue({
-              eq: vi.fn().mockResolvedValue({
-                data: null,
-                error: null,
+              eq: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  select: vi.fn().mockResolvedValue({
+                    data: [{ id: 'session-123' }],
+                    error: null,
+                  }),
+                }),
               }),
             }),
           };
@@ -481,6 +489,64 @@ describe('Customer Session Routes', () => {
       expect(response.statusCode).toBe(404);
       const body = JSON.parse(response.body);
       expect(body.error.code).toBe('COMMAND_NOT_FOUND');
+    });
+
+    it('should return 404 when session no longer exists during update', async () => {
+      mockSupabase.from.mockImplementation((table: string) => {
+        if (table === 'diagnostic_sessions') {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  single: vi.fn().mockResolvedValue({
+                    data: {
+                      id: 'session-123',
+                      customer_id: 'test-customer-123',
+                      commands: [
+                        {
+                          id: 'cmd-1',
+                          type: 'config_change',
+                          status: 'pending_approval',
+                        },
+                      ],
+                    },
+                    error: null,
+                  }),
+                }),
+              }),
+            }),
+            update: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  select: vi.fn().mockResolvedValue({
+                    data: [], // Session was deleted/reassigned
+                    error: null,
+                  }),
+                }),
+              }),
+            }),
+          };
+        }
+      });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/customer/sessions/session-123/approve',
+        headers: {
+          authorization: 'Bearer test-token',
+        },
+        payload: {
+          commandId: 'cmd-1',
+          approved: true,
+        },
+      });
+
+      expect(response.statusCode).toBe(404);
+      const body = JSON.parse(response.body);
+      expect(body.error.code).toBe('SESSION_NOT_FOUND');
+      expect(body.error.message).toBe(
+        'Session no longer exists or access denied'
+      );
     });
 
     it('should reject approval for already processed command', async () => {
