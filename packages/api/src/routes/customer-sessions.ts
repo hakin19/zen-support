@@ -19,11 +19,14 @@ interface SessionRecord {
   id: string;
   device_id: string;
   customer_id: string;
+  user_id?: string;
   status: string;
+  issue_description?: string | null;
+  started_at?: string;
   created_at: string;
   updated_at: string;
-  expires_at: string;
-  commands?: Command[];
+  expires_at?: string | null;
+  commands?: Command[] | null;
 }
 
 interface Command {
@@ -116,9 +119,10 @@ export function registerCustomerSessionRoutes(app: FastifyInstance): void {
           customer_id: customerId,
           user_id: request.userId, // Track which user created the session
           session_type: 'web', // This is a web-initiated session
-          status: 'pending', // Use proper enum value
+          status: 'pending' as const, // Use proper enum value
           issue_description: reason,
           expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(), // 1 hour
+          started_at: new Date().toISOString(), // Add started_at timestamp
         };
 
         const { data: session, error: sessionError } = (await supabase
