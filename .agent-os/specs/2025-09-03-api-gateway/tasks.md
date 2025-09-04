@@ -20,15 +20,15 @@
   - [x] 2.6 Add session token validation and TTL refresh logic
   - [x] 2.7 Verify all device auth tests pass
 
-- [ ] 3. Build command queue system with claim semantics
-  - [ ] 3.1 Write tests for command claim/extend/result endpoints
-  - [ ] 3.2 Design Redis data structures for command queue
-  - [ ] 3.3 Implement POST /api/v1/device/commands/claim with visibility timeout
-  - [ ] 3.4 Implement POST /api/v1/device/commands/:id/extend for long operations
-  - [ ] 3.5 Implement POST /api/v1/device/commands/:id/result with claim validation
-  - [ ] 3.6 Add atomic Redis operations for claim management
-  - [ ] 3.7 Implement automatic visibility timeout expiry
-  - [ ] 3.8 Verify all command queue tests pass
+- [x] 3. Build command queue system with claim semantics
+  - [x] 3.1 Write tests for command claim/extend/result endpoints
+  - [x] 3.2 Design Redis data structures for command queue
+  - [x] 3.3 Implement POST /api/v1/device/commands/claim with visibility timeout
+  - [x] 3.4 Implement POST /api/v1/device/commands/:id/extend for long operations
+  - [x] 3.5 Implement POST /api/v1/device/commands/:id/result with claim validation
+  - [x] 3.6 Add atomic Redis operations for claim management
+  - [x] 3.7 Implement automatic visibility timeout expiry
+  - [x] 3.8 Verify all command queue tests pass
 
 - [ ] 4. Develop customer API endpoints and authentication
   - [ ] 4.1 Write tests for customer endpoints and Supabase JWT validation

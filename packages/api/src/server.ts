@@ -5,7 +5,9 @@ import fastify from 'fastify';
 import { config } from './config';
 import { registerCustomerDeviceRoutes } from './routes/customer-devices';
 import { registerDeviceAuthRoutes } from './routes/device-auth';
+import { registerDeviceCommandRoutes } from './routes/device-commands';
 import { registerHealthRoutes } from './routes/health';
+import { startVisibilityCheck } from './services/command-queue.service';
 
 import type { FastifyInstance } from 'fastify';
 
@@ -37,7 +39,11 @@ export async function createApp(): Promise<FastifyInstance> {
   // Register routes
   registerHealthRoutes(app);
   registerDeviceAuthRoutes(app);
+  registerDeviceCommandRoutes(app);
   registerCustomerDeviceRoutes(app);
+
+  // Start background processes
+  startVisibilityCheck();
 
   // Global error handler
   app.setErrorHandler((error, request, reply) => {
@@ -76,6 +82,13 @@ export async function startServer(
 export async function gracefulShutdown(app: FastifyInstance): Promise<void> {
   try {
     app.log.info('Starting graceful shutdown...');
+
+    // Stop background processes
+    const { stopVisibilityCheck } = await import(
+      './services/command-queue.service'
+    );
+    stopVisibilityCheck();
+    app.log.info('Background processes stopped');
 
     // Close Fastify server
     await app.close();
