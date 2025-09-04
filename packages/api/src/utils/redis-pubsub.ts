@@ -56,7 +56,7 @@ export async function subscribeToChannel<T = unknown>(
     });
   } else {
     // For raw Redis client, caller manages the lifecycle
-    await redis.subscribe(channel, (rawMessage: string) => {
+    await redis.subscribe(channel, async (rawMessage: string) => {
       try {
         // Always deserialize from JSON string
         const data = JSON.parse(rawMessage) as T;

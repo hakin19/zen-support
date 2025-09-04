@@ -17,7 +17,8 @@ import {
   type DeviceControlMessage,
 } from '../utils/redis-pubsub';
 
-import type { FastifyInstance } from 'fastify';
+import type { SocketStream } from '@fastify/websocket';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { WebSocket } from 'ws';
 
 // Global connection manager instance
@@ -41,23 +42,31 @@ export function getConnectionManager(): WebSocketConnectionManager {
 export async function registerWebSocketRoutes(
   app: FastifyInstance
 ): Promise<void> {
-  // Register WebSocket plugin
-  await app.register(import('@fastify/websocket'));
+  // Register WebSocket plugin with security limits
+  await app.register(import('@fastify/websocket'), {
+    options: {
+      maxPayload: 1048576, // 1MB limit - sufficient for diagnostic data
+      // Additional security options
+      perMessageDeflate: false, // Disable compression to prevent zip bomb attacks
+      clientTracking: true, // Track connections for proper cleanup
+    },
+  });
 
   const manager = getConnectionManager();
   const redis = getRedisClient();
   const supabase = getSupabaseAdminClient();
 
   // Make connection manager available to server for graceful shutdown
-  app.websocketConnections = manager;
+  // Store in app decorators instead of direct assignment
+  app.decorate('websocketConnections', manager);
 
   // Device WebSocket endpoint
   app.register((fastify): Promise<void> => {
     fastify.get(
       '/api/v1/device/ws',
       { websocket: true },
-      async (socket, request) => {
-        const ws = socket as WebSocket;
+      async (connection: SocketStream, request: FastifyRequest) => {
+        const ws = connection.socket;
         const connectionId = generateCorrelationId();
         let deviceId: string | null = null;
 
@@ -104,12 +113,13 @@ export async function registerWebSocketRoutes(
 
           // Subscribe to device control channel with type-safe wrapper
           const controlChannel = `device:${deviceId}:control`;
-          const subscriber = redis.duplicate();
+          let subscriptionHandle: Awaited<
+            ReturnType<typeof subscribeToChannel>
+          > | null = null;
 
           try {
-            await subscriber.connect();
-            await subscribeToChannel<DeviceControlMessage>(
-              subscriber,
+            subscriptionHandle = await subscribeToChannel<DeviceControlMessage>(
+              redis,
               controlChannel,
               async data => {
                 await manager.sendToConnection(
@@ -209,8 +219,9 @@ export async function registerWebSocketRoutes(
           ws.on('close', () => {
             void (async (): Promise<void> => {
               try {
-                await subscriber.unsubscribe(controlChannel);
-                await subscriber.disconnect();
+                if (subscriptionHandle && 'unsubscribe' in subscriptionHandle) {
+                  await subscriptionHandle.unsubscribe();
+                }
                 manager.removeConnection(connectionId);
                 request.log.info(`Device ${String(deviceId)} disconnected`);
               } catch (error) {
@@ -225,8 +236,9 @@ export async function registerWebSocketRoutes(
             // Clean up Redis subscriber to prevent leaks
             void (async (): Promise<void> => {
               try {
-                await subscriber.unsubscribe(controlChannel);
-                await subscriber.disconnect();
+                if (subscriptionHandle && 'unsubscribe' in subscriptionHandle) {
+                  await subscriptionHandle.unsubscribe();
+                }
                 manager.removeConnection(connectionId);
               } catch (cleanupError) {
                 request.log.error(
@@ -250,15 +262,15 @@ export async function registerWebSocketRoutes(
     fastify.get(
       '/api/v1/customer/ws',
       { websocket: true },
-      async (socket, request) => {
-        const ws = socket as WebSocket;
+      async (connection: SocketStream, request: FastifyRequest) => {
+        const ws = connection.socket;
         const connectionId = generateCorrelationId();
         let customerId: string | null = null;
         let customerEmail: string | null = null;
         const subscribedChannels: string[] = [];
 
         // Extract JWT from headers
-        const authHeader = request.headers.authorization as string | undefined;
+        const authHeader = request.headers.authorization;
         if (!authHeader?.startsWith('Bearer ')) {
           ws.close(1008, 'Unauthorized');
           return;
@@ -305,18 +317,18 @@ export async function registerWebSocketRoutes(
             .select('id, name, status')
             .eq('customer_id', customerId);
 
+          const subscriptionHandles: Array<
+            Awaited<ReturnType<typeof subscribeToChannel>>
+          > = [];
+
           if (devices && devices.length > 0) {
             // Subscribe to device update channels with type-safe wrapper
-            const subscriber = redis.duplicate();
-
             try {
-              await subscriber.connect();
-
               for (const device of devices) {
                 const channel = `device:${device.id}:updates`;
                 subscribedChannels.push(channel);
-                await subscribeToChannel<DeviceStatusMessage>(
-                  subscriber,
+                const handle = await subscribeToChannel<DeviceStatusMessage>(
+                  redis,
                   channel,
                   async data => {
                     await manager.sendToConnection(
@@ -328,12 +340,15 @@ export async function registerWebSocketRoutes(
                     );
                   }
                 );
+                if (handle) {
+                  subscriptionHandles.push(handle);
+                }
               }
 
-              // Store subscriber for cleanup
+              // Store handles for cleanup
               (
-                ws as { redisSubscriber?: ReturnType<typeof redis.duplicate> }
-              ).redisSubscriber = subscriber;
+                ws as { subscriptionHandles?: typeof subscriptionHandles }
+              ).subscriptionHandles = subscriptionHandles;
             } catch (redisError) {
               request.log.error(
                 redisError,
@@ -437,16 +452,17 @@ export async function registerWebSocketRoutes(
 
           // Handle connection close
           ws.on('close', (): void => {
-            const subscriber = (
-              ws as { redisSubscriber?: ReturnType<typeof redis.duplicate> }
-            ).redisSubscriber;
+            const handles = (
+              ws as { subscriptionHandles?: typeof subscriptionHandles }
+            ).subscriptionHandles;
             void (async (): Promise<void> => {
               try {
-                if (subscriber) {
-                  for (const channel of subscribedChannels) {
-                    await subscriber.unsubscribe(channel);
+                if (handles) {
+                  for (const handle of handles) {
+                    if (handle && 'unsubscribe' in handle) {
+                      await handle.unsubscribe();
+                    }
                   }
-                  await subscriber.disconnect();
                 }
                 manager.removeConnection(connectionId);
                 request.log.info(`Customer ${String(customerId)} disconnected`);
@@ -463,16 +479,17 @@ export async function registerWebSocketRoutes(
           ws.on('error', (error): void => {
             request.log.error(error, 'WebSocket error');
             // Clean up Redis subscriber to prevent leaks
-            const subscriber = (
-              ws as { redisSubscriber?: ReturnType<typeof redis.duplicate> }
-            ).redisSubscriber;
+            const handles = (
+              ws as { subscriptionHandles?: typeof subscriptionHandles }
+            ).subscriptionHandles;
             void (async (): Promise<void> => {
               try {
-                if (subscriber) {
-                  for (const channel of subscribedChannels) {
-                    await subscriber.unsubscribe(channel);
+                if (handles) {
+                  for (const handle of handles) {
+                    if (handle && 'unsubscribe' in handle) {
+                      await handle.unsubscribe();
+                    }
                   }
-                  await subscriber.disconnect();
                 }
                 manager.removeConnection(connectionId);
               } catch (cleanupError) {
