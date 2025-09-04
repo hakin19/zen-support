@@ -1,12 +1,21 @@
 import { getRedisClient } from '@aizen/shared/utils/redis-client';
 import { getSupabaseAdminClient } from '@aizen/shared/utils/supabase-client';
 
+import { commandQueueService } from '../services/command-queue.service';
 import { WebSocketConnectionManager } from '../services/websocket-connection-manager';
 import {
   generateCorrelationId,
   extractCorrelationIdFromMessage,
   addCorrelationIdToMessage,
 } from '../utils/correlation-id';
+import {
+  publishToChannel,
+  subscribeToChannel,
+  getFromRedis,
+  setInRedis,
+  type DeviceStatusMessage,
+  type DeviceControlMessage,
+} from '../utils/redis-pubsub';
 
 import type { FastifyInstance } from 'fastify';
 import type { WebSocket } from 'ws';
@@ -40,10 +49,10 @@ export async function registerWebSocketRoutes(
   const supabase = getSupabaseAdminClient();
 
   // Make connection manager available to server for graceful shutdown
-  (app as any).websocketConnections = manager;
+  app.websocketConnections = manager;
 
   // Device WebSocket endpoint
-  app.register(async fastify => {
+  app.register((fastify): Promise<void> => {
     fastify.get(
       '/api/v1/device/ws',
       { websocket: true },
@@ -51,7 +60,6 @@ export async function registerWebSocketRoutes(
         const ws = socket as WebSocket;
         const connectionId = generateCorrelationId();
         let deviceId: string | null = null;
-        let authenticated = false;
 
         // Extract session token from headers
         const sessionToken = request.headers['x-device-session'] as string;
@@ -62,18 +70,19 @@ export async function registerWebSocketRoutes(
         }
 
         try {
-          // Validate session token
+          // Validate session token with type-safe wrapper
           const sessionKey = `device:session:${sessionToken}`;
-          const sessionData = await redis.get(sessionKey);
+          const session = await getFromRedis<{ deviceId: string }>(
+            redis,
+            sessionKey
+          );
 
-          if (!sessionData) {
+          if (!session) {
             ws.close(1008, 'Unauthorized');
             return;
           }
 
-          const session = JSON.parse(sessionData);
           deviceId = session.deviceId;
-          authenticated = true;
 
           // Add connection to manager
           manager.addConnection(connectionId, ws, {
@@ -93,42 +102,50 @@ export async function registerWebSocketRoutes(
             })
           );
 
-          // Subscribe to device control channel
+          // Subscribe to device control channel with type-safe wrapper
           const controlChannel = `device:${deviceId}:control`;
           const subscriber = redis.duplicate();
-          await subscriber.connect();
-          await subscriber.subscribe(controlChannel, (message: string) => {
-            try {
-              const data = JSON.parse(message);
-              manager.sendToConnection(
-                connectionId,
-                addCorrelationIdToMessage(data)
-              );
-            } catch (error) {
-              request.log.error(error, 'Failed to handle Redis message');
-            }
-          });
+
+          try {
+            await subscriber.connect();
+            await subscribeToChannel<DeviceControlMessage>(
+              subscriber,
+              controlChannel,
+              async data => {
+                await manager.sendToConnection(
+                  connectionId,
+                  addCorrelationIdToMessage(data)
+                );
+              }
+            );
+          } catch (redisError) {
+            request.log.error(redisError, 'Failed to setup Redis subscription');
+            ws.close(1011, 'Server error');
+            return;
+          }
 
           // Handle incoming messages from device
           ws.on('message', async (data: Buffer) => {
             try {
-              const message = JSON.parse(data.toString());
+              const message = JSON.parse(data.toString()) as Record<
+                string,
+                unknown
+              >;
               const requestId = extractCorrelationIdFromMessage(message);
 
               switch (message.type) {
                 case 'claim_command':
                   await handleDeviceClaimCommand(
-                    deviceId!,
+                    deviceId as string,
                     connectionId,
                     requestId,
-                    manager,
-                    redis
+                    manager
                   );
                   break;
 
                 case 'command_result':
                   await handleDeviceCommandResult(
-                    deviceId!,
+                    deviceId as string,
                     message,
                     connectionId,
                     requestId,
@@ -151,7 +168,11 @@ export async function registerWebSocketRoutes(
                   break;
 
                 case 'status_update':
-                  await handleDeviceStatusUpdate(deviceId!, message, redis);
+                  await handleDeviceStatusUpdate(
+                    deviceId as string,
+                    message,
+                    redis
+                  );
                   break;
 
                 default:
@@ -179,17 +200,35 @@ export async function registerWebSocketRoutes(
           });
 
           // Handle connection close
-          ws.on('close', async () => {
-            await subscriber.unsubscribe(controlChannel);
-            await subscriber.disconnect();
-            manager.removeConnection(connectionId);
-            request.log.info(`Device ${deviceId} disconnected`);
+          ws.on('close', () => {
+            void (async (): Promise<void> => {
+              try {
+                await subscriber.unsubscribe(controlChannel);
+                await subscriber.disconnect();
+                manager.removeConnection(connectionId);
+                request.log.info(`Device ${String(deviceId)} disconnected`);
+              } catch (error) {
+                request.log.error(error, 'Error during connection close');
+              }
+            })();
           });
 
           // Handle errors
           ws.on('error', error => {
             request.log.error(error, 'WebSocket error');
-            manager.removeConnection(connectionId);
+            // Clean up Redis subscriber to prevent leaks
+            void (async (): Promise<void> => {
+              try {
+                await subscriber.unsubscribe(controlChannel);
+                await subscriber.disconnect();
+                manager.removeConnection(connectionId);
+              } catch (cleanupError) {
+                request.log.error(
+                  cleanupError,
+                  'Failed to cleanup Redis subscriber'
+                );
+              }
+            })();
           });
         } catch (error) {
           request.log.error(error, 'Failed to authenticate device');
@@ -197,10 +236,11 @@ export async function registerWebSocketRoutes(
         }
       }
     );
+    return Promise.resolve();
   });
 
   // Customer WebSocket endpoint
-  app.register(async fastify => {
+  app.register((fastify): Promise<void> => {
     fastify.get(
       '/api/v1/customer/ws',
       { websocket: true },
@@ -212,7 +252,7 @@ export async function registerWebSocketRoutes(
         const subscribedChannels: string[] = [];
 
         // Extract JWT from headers
-        const authHeader = request.headers.authorization;
+        const authHeader = request.headers.authorization as string | undefined;
         if (!authHeader?.startsWith('Bearer ')) {
           ws.close(1008, 'Unauthorized');
           return;
@@ -233,7 +273,7 @@ export async function registerWebSocketRoutes(
           }
 
           customerId = user.id;
-          customerEmail = user.email || null;
+          customerEmail = user.email ?? null;
 
           // Add connection to manager
           manager.addConnection(connectionId, ws, {
@@ -260,45 +300,60 @@ export async function registerWebSocketRoutes(
             .eq('customer_id', customerId);
 
           if (devices && devices.length > 0) {
-            // Subscribe to device update channels
+            // Subscribe to device update channels with type-safe wrapper
             const subscriber = redis.duplicate();
-            await subscriber.connect();
 
-            for (const device of devices) {
-              const channel = `device:${device.id}:updates`;
-              subscribedChannels.push(channel);
-              await subscriber.subscribe(channel, (message: string) => {
-                try {
-                  const data = JSON.parse(message);
-                  manager.sendToConnection(
-                    connectionId,
-                    addCorrelationIdToMessage({
-                      ...data,
-                      deviceId: device.id,
-                    })
-                  );
-                } catch (error) {
-                  request.log.error(error, 'Failed to handle Redis message');
-                }
-              });
+            try {
+              await subscriber.connect();
+
+              for (const device of devices) {
+                const channel = `device:${device.id}:updates`;
+                subscribedChannels.push(channel);
+                await subscribeToChannel<DeviceStatusMessage>(
+                  subscriber,
+                  channel,
+                  async data => {
+                    await manager.sendToConnection(
+                      connectionId,
+                      addCorrelationIdToMessage({
+                        ...data,
+                        deviceId: device.id,
+                      })
+                    );
+                  }
+                );
+              }
+
+              // Store subscriber for cleanup
+              (
+                ws as { redisSubscriber?: ReturnType<typeof redis.duplicate> }
+              ).redisSubscriber = subscriber;
+            } catch (redisError) {
+              request.log.error(
+                redisError,
+                'Failed to setup Redis subscription'
+              );
+              ws.close(1011, 'Server error');
+              return;
             }
-
-            // Store subscriber for cleanup
-            (ws as any).redisSubscriber = subscriber;
           }
 
           // Handle incoming messages from customer
           ws.on('message', async (data: Buffer) => {
             try {
-              const message = JSON.parse(data.toString());
+              const message = JSON.parse(data.toString()) as Record<
+                string,
+                unknown
+              >;
               const requestId = extractCorrelationIdFromMessage(message);
 
               switch (message.type) {
                 case 'approve_session':
                   await handleSessionApproval(
-                    customerId!,
+                    customerId as string,
                     message,
                     requestId,
+                    connectionId,
                     manager,
                     redis,
                     supabase
@@ -307,7 +362,7 @@ export async function registerWebSocketRoutes(
 
                 case 'get_system_info':
                   await handleGetSystemInfo(
-                    customerId!,
+                    customerId as string,
                     message,
                     requestId,
                     connectionId,
@@ -319,7 +374,7 @@ export async function registerWebSocketRoutes(
 
                 case 'send_command':
                   await handleSendCommand(
-                    customerId!,
+                    customerId as string,
                     message,
                     requestId,
                     connectionId,
@@ -336,7 +391,8 @@ export async function registerWebSocketRoutes(
                     addCorrelationIdToMessage(
                       {
                         type: 'rooms_joined',
-                        deviceIds: devices?.map(d => d.id) || [],
+                        deviceIds:
+                          devices?.map((d: { id: string }) => d.id) ?? [],
                       },
                       requestId
                     )
@@ -368,22 +424,52 @@ export async function registerWebSocketRoutes(
           });
 
           // Handle connection close
-          ws.on('close', async () => {
-            const subscriber = (ws as any).redisSubscriber;
-            if (subscriber) {
-              for (const channel of subscribedChannels) {
-                await subscriber.unsubscribe(channel);
+          ws.on('close', (): void => {
+            const subscriber = (
+              ws as { redisSubscriber?: ReturnType<typeof redis.duplicate> }
+            ).redisSubscriber;
+            void (async (): Promise<void> => {
+              try {
+                if (subscriber) {
+                  for (const channel of subscribedChannels) {
+                    await subscriber.unsubscribe(channel);
+                  }
+                  await subscriber.disconnect();
+                }
+                manager.removeConnection(connectionId);
+                request.log.info(`Customer ${String(customerId)} disconnected`);
+              } catch (error) {
+                request.log.error(
+                  error,
+                  'Error during customer connection close'
+                );
               }
-              await subscriber.disconnect();
-            }
-            manager.removeConnection(connectionId);
-            request.log.info(`Customer ${customerId} disconnected`);
+            })();
           });
 
           // Handle errors
-          ws.on('error', error => {
+          ws.on('error', (error): void => {
             request.log.error(error, 'WebSocket error');
-            manager.removeConnection(connectionId);
+            // Clean up Redis subscriber to prevent leaks
+            const subscriber = (
+              ws as { redisSubscriber?: ReturnType<typeof redis.duplicate> }
+            ).redisSubscriber;
+            void (async (): Promise<void> => {
+              try {
+                if (subscriber) {
+                  for (const channel of subscribedChannels) {
+                    await subscriber.unsubscribe(channel);
+                  }
+                  await subscriber.disconnect();
+                }
+                manager.removeConnection(connectionId);
+              } catch (cleanupError) {
+                request.log.error(
+                  cleanupError,
+                  'Failed to cleanup Redis subscriber'
+                );
+              }
+            })();
           });
         } catch (error) {
           request.log.error(error, 'Failed to authenticate customer');
@@ -391,6 +477,7 @@ export async function registerWebSocketRoutes(
         }
       }
     );
+    return Promise.resolve();
   });
 
   // Add graceful shutdown handler for WebSocket connections
@@ -405,32 +492,53 @@ async function handleDeviceClaimCommand(
   deviceId: string,
   connectionId: string,
   requestId: string,
-  manager: WebSocketConnectionManager,
-  redis: any
+  manager: WebSocketConnectionManager
 ): Promise<void> {
-  // Implementation would claim a command from the queue
-  // This is a simplified version
-  const commandKey = `device:${deviceId}:commands:pending`;
-  const command = await redis.lpop(commandKey);
-
-  if (command) {
-    const commandData = JSON.parse(command);
-    await manager.sendToConnection(
-      connectionId,
-      addCorrelationIdToMessage(
-        {
-          type: 'command',
-          command: commandData,
-        },
-        requestId
-      )
+  try {
+    // Use the secure command queue service to claim commands
+    const claimedCommands = await commandQueueService.claimCommands(
+      deviceId,
+      1, // Claim one command at a time via WebSocket
+      300000 // 5 minutes visibility timeout
     );
-  } else {
+
+    if (claimedCommands.length > 0) {
+      const command = claimedCommands[0];
+      await manager.sendToConnection(
+        connectionId,
+        addCorrelationIdToMessage(
+          {
+            type: 'command',
+            command: {
+              id: command.id,
+              type: command.type,
+              parameters: command.parameters,
+              claimToken: command.claimToken, // Include claim token for result submission
+              visibleUntil: command.visibleUntil,
+            },
+          },
+          requestId
+        )
+      );
+    } else {
+      await manager.sendToConnection(
+        connectionId,
+        addCorrelationIdToMessage(
+          {
+            type: 'no_commands',
+          },
+          requestId
+        )
+      );
+    }
+  } catch (error) {
+    console.error('Failed to claim command:', error);
     await manager.sendToConnection(
       connectionId,
       addCorrelationIdToMessage(
         {
-          type: 'no_commands',
+          type: 'error',
+          error: 'Failed to claim command',
         },
         requestId
       )
@@ -440,93 +548,150 @@ async function handleDeviceClaimCommand(
 
 async function handleDeviceCommandResult(
   deviceId: string,
-  message: any,
+  message: Record<string, unknown>,
   connectionId: string,
   requestId: string,
   manager: WebSocketConnectionManager,
-  redis: any
+  redis: ReturnType<typeof getRedisClient>
 ): Promise<void> {
-  // Store command result
-  const resultKey = `command:${message.commandId}:result`;
-  await redis.setex(
-    resultKey,
-    86400, // 24 hours TTL
-    JSON.stringify({
-      ...message.result,
-      completedAt: new Date().toISOString(),
+  try {
+    // Validate required fields
+    if (!message.commandId || !message.claimToken) {
+      await manager.sendToConnection(
+        connectionId,
+        addCorrelationIdToMessage(
+          {
+            type: 'error',
+            error: 'Missing commandId or claimToken',
+          },
+          requestId
+        )
+      );
+      return;
+    }
+
+    // Build result object
+    const result = {
+      status: (message.status as string) ?? 'success',
+      output: message.output,
+      error: message.error,
+      executedAt: (message.executedAt as string) ?? new Date().toISOString(),
+      duration: (message.duration as number) ?? 0,
+    };
+
+    // Use the secure command queue service to submit result with claim token validation
+    const submitResult = await commandQueueService.submitResult(
+      message.commandId,
+      message.claimToken,
       deviceId,
-    })
-  );
+      result
+    );
 
-  // Notify customer via pub/sub
-  await redis.publish(
-    `device:${deviceId}:updates`,
-    JSON.stringify({
+    if (!submitResult.success) {
+      let errorMessage = 'Failed to submit command result';
+      if (submitResult.error === 'NOT_FOUND') {
+        errorMessage = 'Command not found';
+      } else if (submitResult.error === 'INVALID_CLAIM') {
+        errorMessage = 'Invalid or expired claim token';
+      } else if (submitResult.error === 'ALREADY_COMPLETED') {
+        errorMessage = 'Command already completed';
+      }
+
+      await manager.sendToConnection(
+        connectionId,
+        addCorrelationIdToMessage(
+          {
+            type: 'error',
+            error: errorMessage,
+          },
+          requestId
+        )
+      );
+      return;
+    }
+
+    // Notify customer via pub/sub with type-safe wrapper
+    await publishToChannel(redis, `device:${deviceId}:updates`, {
       type: 'command_completed',
-      commandId: message.commandId,
-      result: message.result,
+      commandId: message.commandId as string,
+      result, // Use 'result' field for backward compatibility
       timestamp: new Date().toISOString(),
-    })
-  );
+    });
 
-  // Send acknowledgment
-  await manager.sendToConnection(
-    connectionId,
-    addCorrelationIdToMessage(
-      {
-        type: 'ack',
-      },
-      requestId
-    )
-  );
+    // Send acknowledgment
+    await manager.sendToConnection(
+      connectionId,
+      addCorrelationIdToMessage(
+        {
+          type: 'ack',
+        },
+        requestId
+      )
+    );
+  } catch (error) {
+    console.error('Failed to submit command result:', error);
+    await manager.sendToConnection(
+      connectionId,
+      addCorrelationIdToMessage(
+        {
+          type: 'error',
+          error: 'Internal error processing command result',
+        },
+        requestId
+      )
+    );
+  }
 }
 
 async function handleDeviceStatusUpdate(
   deviceId: string,
-  message: any,
-  redis: any
+  message: Record<string, unknown>,
+  redis: ReturnType<typeof getRedisClient>
 ): Promise<void> {
-  // Update device status in Redis
+  // Update device status in Redis with type-safe wrapper
   const statusKey = `device:${deviceId}:status`;
-  await redis.setex(
+  await setInRedis(
+    redis,
     statusKey,
-    300, // 5 minutes TTL
-    JSON.stringify({
-      ...message.status,
+    {
+      ...(message.status as Record<string, unknown>),
       lastUpdated: new Date().toISOString(),
-    })
+    },
+    300 // 5 minutes TTL
   );
 
-  // Broadcast to customers
-  await redis.publish(
+  // Broadcast to customers with type-safe wrapper
+  await publishToChannel<DeviceStatusMessage>(
+    redis,
     `device:${deviceId}:updates`,
-    JSON.stringify({
+    {
       type: 'status_update',
-      status: message.status,
+      status: message.status as Record<string, unknown>,
       timestamp: new Date().toISOString(),
-    })
+    }
   );
 }
 
 async function handleSessionApproval(
   customerId: string,
-  message: any,
+  message: Record<string, unknown>,
   requestId: string,
+  connectionId: string,
   manager: WebSocketConnectionManager,
-  redis: any,
-  supabase: any
+  redis: ReturnType<typeof getRedisClient>,
+  supabase: ReturnType<typeof getSupabaseAdminClient>
 ): Promise<void> {
   // Verify customer owns the device
   const { data: device } = await supabase
     .from('devices')
     .select('id')
-    .eq('id', message.deviceId)
+    .eq('id', String(message.deviceId))
     .eq('customer_id', customerId)
     .single();
 
   if (!device) {
     await manager.sendToConnection(
-      message.connectionId,
+      connectionId,
       addCorrelationIdToMessage(
         {
           type: 'error',
@@ -538,15 +703,16 @@ async function handleSessionApproval(
     return;
   }
 
-  // Notify device via pub/sub
-  await redis.publish(
-    `device:${message.deviceId}:control`,
-    JSON.stringify({
+  // Notify device via pub/sub with type-safe wrapper
+  await publishToChannel<DeviceControlMessage>(
+    redis,
+    `device:${String(message.deviceId)}:control`,
+    {
       type: 'session_approved',
-      sessionId: message.sessionId,
+      sessionId: message.sessionId as string,
       requestId,
       timestamp: new Date().toISOString(),
-    })
+    }
   );
 
   // Update session status
@@ -556,25 +722,27 @@ async function handleSessionApproval(
       status: 'approved',
       approved_at: new Date().toISOString(),
     })
-    .eq('id', message.sessionId);
+    .eq('id', message.sessionId as string);
 }
 
 async function handleGetSystemInfo(
   customerId: string,
-  message: any,
+  message: Record<string, unknown>,
   requestId: string,
   connectionId: string,
   manager: WebSocketConnectionManager,
-  redis: any,
-  supabase: any
+  redis: ReturnType<typeof getRedisClient>,
+  supabase: ReturnType<typeof getSupabaseAdminClient>
 ): Promise<void> {
   // Verify customer owns the device
-  const { data: device } = await supabase
+  const result = await supabase
     .from('devices')
     .select('*')
-    .eq('id', message.deviceId)
+    .eq('id', String(message.deviceId))
     .eq('customer_id', customerId)
     .single();
+
+  const device = result.data;
 
   if (!device) {
     await manager.sendToConnection(
@@ -590,17 +758,17 @@ async function handleGetSystemInfo(
     return;
   }
 
-  // Get cached system info from Redis
-  const infoKey = `device:${message.deviceId}:system_info`;
-  const systemInfo = await redis.get(infoKey);
+  // Get cached system info from Redis with type-safe wrapper
+  const infoKey = `device:${String(message.deviceId)}:system_info`;
+  const systemInfo = await getFromRedis(redis, infoKey);
 
   await manager.sendToConnection(
     connectionId,
     addCorrelationIdToMessage(
       {
         type: 'system_info',
-        deviceId: message.deviceId,
-        info: systemInfo ? JSON.parse(systemInfo) : null,
+        deviceId: message.deviceId as string,
+        info: systemInfo,
       },
       requestId
     )
@@ -609,67 +777,78 @@ async function handleGetSystemInfo(
 
 async function handleSendCommand(
   customerId: string,
-  message: any,
+  message: Record<string, unknown>,
   requestId: string,
   connectionId: string,
   manager: WebSocketConnectionManager,
-  redis: any,
-  supabase: any
+  redis: ReturnType<typeof getRedisClient>,
+  supabase: ReturnType<typeof getSupabaseAdminClient>
 ): Promise<void> {
-  // Verify customer owns the device
-  const { data: device } = await supabase
-    .from('devices')
-    .select('id')
-    .eq('id', message.deviceId)
-    .eq('customer_id', customerId)
-    .single();
+  try {
+    // Verify customer owns the device
+    const { data: device } = await supabase
+      .from('devices')
+      .select('id')
+      .eq('id', String(message.deviceId))
+      .eq('customer_id', customerId)
+      .single();
 
-  if (!device) {
+    if (!device) {
+      await manager.sendToConnection(
+        connectionId,
+        addCorrelationIdToMessage(
+          {
+            type: 'error',
+            error: 'Unauthorized',
+          },
+          requestId
+        )
+      );
+      return;
+    }
+
+    // Use the command queue service to add command with proper atomicity and priority
+    const command = await commandQueueService.addCommand(
+      String(message.deviceId),
+      customerId,
+      message.commandType as string,
+      (message.payload as Record<string, unknown>) ?? {},
+      (message.priority as number) ?? 1 // Default priority
+    );
+
+    // Notify device if connected with type-safe wrapper
+    await publishToChannel<DeviceControlMessage>(
+      redis,
+      `device:${String(message.deviceId)}:control`,
+      {
+        type: 'new_command',
+        commandId: command.id,
+        timestamp: new Date().toISOString(),
+      }
+    );
+
+    await manager.sendToConnection(
+      connectionId,
+      addCorrelationIdToMessage(
+        {
+          type: 'command_queued',
+          commandId: command.id,
+          deviceId: message.deviceId as string,
+        },
+        requestId
+      )
+    );
+  } catch (error) {
+    console.error('Failed to queue command:', error);
     await manager.sendToConnection(
       connectionId,
       addCorrelationIdToMessage(
         {
           type: 'error',
-          error: 'Unauthorized',
+          error: 'Failed to queue command',
         },
         requestId
       )
     );
-    return;
   }
-
-  // Queue command for device
-  const commandId = generateCorrelationId();
-  const commandData = {
-    id: commandId,
-    type: message.commandType,
-    payload: message.payload,
-    createdAt: new Date().toISOString(),
-    customerId,
-    requestId,
-  };
-
-  const commandKey = `device:${message.deviceId}:commands:pending`;
-  await redis.rpush(commandKey, JSON.stringify(commandData));
-
-  // Notify device if connected
-  await redis.publish(
-    `device:${message.deviceId}:control`,
-    JSON.stringify({
-      type: 'new_command',
-      commandId,
-      timestamp: new Date().toISOString(),
-    })
-  );
-
-  await manager.sendToConnection(
-    connectionId,
-    addCorrelationIdToMessage(
-      {
-        type: 'command_queued',
-        commandId,
-      },
-      requestId
-    )
-  );
 }

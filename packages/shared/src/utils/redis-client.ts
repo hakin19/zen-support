@@ -10,6 +10,12 @@ export interface RedisConfig {
   retryStrategy?: (times: number) => number | false;
 }
 
+export interface SubscriptionHandle {
+  channel: string;
+  unsubscribe: () => Promise<void>;
+  disconnect: () => Promise<void>;
+}
+
 export class RedisClient {
   private client: RedisClientType;
   private config: RedisConfig;
@@ -179,13 +185,23 @@ export class RedisClient {
     return await this.client.publish(channel, data);
   }
 
-  async subscribe(
+  /**
+   * Creates a subscription to a Redis channel.
+   * Returns a SubscriptionHandle that must be used to properly clean up the subscription.
+   *
+   * @param channel - Channel to subscribe to
+   * @param callback - Callback to handle messages
+   * @returns SubscriptionHandle for managing the subscription lifecycle
+   */
+  async createSubscription(
     channel: string,
     callback: (message: unknown) => void
-  ): Promise<void> {
+  ): Promise<SubscriptionHandle> {
+    // Create a dedicated subscriber client for this subscription
     const subscriber = this.client.duplicate();
     await subscriber.connect();
 
+    // Subscribe to the channel
     await subscriber.subscribe(channel, message => {
       try {
         const data = JSON.parse(message) as unknown;
@@ -194,6 +210,76 @@ export class RedisClient {
         console.error('Failed to parse subscription message:', error);
       }
     });
+
+    // Return handle for cleanup
+    return {
+      channel,
+      unsubscribe: async (): Promise<void> => {
+        try {
+          await subscriber.unsubscribe(channel);
+          await subscriber.disconnect();
+        } catch (error) {
+          console.error(
+            `Failed to cleanup subscription for channel ${channel}:`,
+            error
+          );
+        }
+      },
+      disconnect: async (): Promise<void> => {
+        try {
+          await subscriber.disconnect();
+        } catch (error) {
+          console.error(
+            `Failed to disconnect subscriber for channel ${channel}:`,
+            error
+          );
+        }
+      },
+    };
+  }
+
+  /**
+   * @deprecated Use createSubscription() instead for proper lifecycle management.
+   * This method should only be called on a duplicate client instance
+   * that is dedicated to subscriptions.
+   */
+  async subscribe(
+    channel: string,
+    callback: (message: unknown) => void
+  ): Promise<void> {
+    await this.client.subscribe(channel, message => {
+      try {
+        const data = JSON.parse(message) as unknown;
+        callback(data);
+      } catch (error) {
+        console.error('Failed to parse subscription message:', error);
+      }
+    });
+  }
+
+  async unsubscribe(channel: string): Promise<void> {
+    await this.client.unsubscribe(channel);
+  }
+
+  // Direct Redis operations (for compatibility)
+  async get(key: string): Promise<string | null> {
+    return await this.client.get(key);
+  }
+
+  async set(key: string, value: string): Promise<string | null> {
+    return await this.client.set(key, value);
+  }
+
+  async setex(key: string, ttl: number, value: string): Promise<string> {
+    return await this.client.setEx(key, ttl, value);
+  }
+
+  async rpush(key: string, value: string): Promise<number> {
+    return await this.client.rPush(key, value);
+  }
+
+  async lpop(key: string): Promise<string | null> {
+    return await this.client.lPop(key);
   }
 
   // Utility methods
@@ -213,6 +299,23 @@ export class RedisClient {
     return this.client;
   }
 
+  duplicate(): RedisClient {
+    const duplicateClient = this.client.duplicate();
+    // Create a new RedisClient instance wrapping the duplicate
+    const wrapper = Object.create(RedisClient.prototype) as RedisClient & {
+      client: RedisClientType;
+      config: RedisConfig;
+      isConnected: boolean;
+      setupEventHandlers: () => void;
+    };
+    wrapper.client = duplicateClient;
+    wrapper.config = this.config;
+    wrapper.isConnected = false;
+    wrapper.setupEventHandlers = this.setupEventHandlers.bind(wrapper);
+    (wrapper.setupEventHandlers as () => void)();
+    return wrapper;
+  }
+
   isReady(): boolean {
     return this.isConnected;
   }
@@ -222,7 +325,7 @@ export class RedisClient {
 let redisClient: RedisClient | null = null;
 
 export function initializeRedis(config: RedisConfig): RedisClient {
-  redisClient ??= new RedisClient(config);
+  redisClient = redisClient ?? new RedisClient(config);
   return redisClient;
 }
 

@@ -1,0 +1,41 @@
+--- a/packages/api/src/routes/websocket.ts
++++ b/packages/api/src/routes/websocket.ts
+@@ -270,7 +270,9 @@ export async function registerWebSocketRoutes(
+ 
+           if (devices && devices.length > 0) {
+             // Subscribe to device update channels
+-            const subscriber = redis.duplicate();
++            let subscriber: any = null;
++            try {
++              subscriber = redis.duplicate();
+             await subscriber.connect();
+ 
+             for (const device of devices) {
+@@ -290,6 +292,23 @@ export async function registerWebSocketRoutes(
+ 
+             // Store subscriber for cleanup
+             (ws as any).redisSubscriber = subscriber;
++            } catch (subscriptionError) {
++              request.log.error(subscriptionError, 'Failed to setup device subscriptions');
++              // Clean up partial subscriptions if any
++              if (subscriber) {
++                try {
++                  for (const channel of subscribedChannels) {
++                    await subscriber.unsubscribe(channel).catch(() => {});
++                  }
++                  await subscriber.disconnect().catch(() => {});
++                } catch {}
++              }
++              // Notify client of subscription failure but don't close connection
++              await manager.sendToConnection(
++                connectionId,
++                addCorrelationIdToMessage({
++                  type: 'subscription_error',
++                  error: 'Failed to subscribe to device updates',
++                  details: 'Real-time updates may be unavailable',
++                })
++              );
++            }
+           }
+ 
+           // Handle incoming messages from customer

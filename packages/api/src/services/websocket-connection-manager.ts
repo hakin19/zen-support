@@ -6,6 +6,8 @@ export interface WebSocketConnection {
   metadata?: Record<string, any>;
   alive: boolean;
   connectedAt: Date;
+  messageQueue?: Array<{ message: string; resolve: (value: boolean) => void }>;
+  isProcessingQueue?: boolean;
 }
 
 export interface ConnectionStats {
@@ -19,6 +21,9 @@ export interface ConnectionStats {
 export class WebSocketConnectionManager {
   private connections: Map<string, WebSocketConnection>;
   private heartbeatInterval?: NodeJS.Timeout;
+  // Backpressure thresholds
+  private readonly HIGH_WATER_MARK = 1024 * 1024; // 1MB buffered amount threshold
+  private readonly MAX_QUEUE_SIZE = 100; // Maximum queued messages per connection
 
   constructor() {
     this.connections = new Map();
@@ -50,7 +55,17 @@ export class WebSocketConnectionManager {
    * Remove a connection from the manager
    */
   removeConnection(connectionId: string): void {
-    this.connections.delete(connectionId);
+    const connection = this.connections.get(connectionId);
+    if (connection) {
+      // Clear any pending messages
+      if (connection.messageQueue) {
+        connection.messageQueue.forEach(item => {
+          item.resolve(false);
+        });
+        connection.messageQueue = [];
+      }
+      this.connections.delete(connectionId);
+    }
   }
 
   /**
@@ -109,58 +124,34 @@ export class WebSocketConnectionManager {
   }
 
   /**
-   * Broadcast message to all connections
+   * Broadcast message to all connections with backpressure handling
    */
   async broadcastToAll(message: any): Promise<void> {
-    const messageString = JSON.stringify(message);
-    const promises: Promise<void>[] = [];
+    const promises: Promise<boolean>[] = [];
 
     this.connections.forEach(conn => {
-      if (conn.ws.readyState === WebSocket.OPEN) {
-        promises.push(
-          new Promise<void>(resolve => {
-            conn.ws.send(messageString, err => {
-              if (err) {
-                console.error(`Failed to send to ${conn.id}:`, err);
-              }
-              resolve();
-            });
-          })
-        );
-      }
+      promises.push(this.sendToConnection(conn.id, message));
     });
 
     await Promise.all(promises);
   }
 
   /**
-   * Broadcast message to connections of a specific type
+   * Broadcast message to connections of a specific type with backpressure handling
    */
   async broadcastToType(type: string, message: any): Promise<void> {
-    const messageString = JSON.stringify(message);
     const connections = this.getConnectionsByType(type);
-    const promises: Promise<void>[] = [];
+    const promises: Promise<boolean>[] = [];
 
     connections.forEach(conn => {
-      if (conn.ws.readyState === WebSocket.OPEN) {
-        promises.push(
-          new Promise<void>(resolve => {
-            conn.ws.send(messageString, err => {
-              if (err) {
-                console.error(`Failed to send to ${conn.id}:`, err);
-              }
-              resolve();
-            });
-          })
-        );
-      }
+      promises.push(this.sendToConnection(conn.id, message));
     });
 
     await Promise.all(promises);
   }
 
   /**
-   * Send message to a specific connection
+   * Send message to a specific connection with backpressure handling
    */
   async sendToConnection(connectionId: string, message: any): Promise<boolean> {
     const connection = this.connections.get(connectionId);
@@ -168,14 +159,41 @@ export class WebSocketConnectionManager {
       return false;
     }
 
+    const messageString = JSON.stringify(message);
+
+    // Check buffered amount for backpressure
+    if (connection.ws.bufferedAmount > this.HIGH_WATER_MARK) {
+      // Initialize queue if needed
+      if (!connection.messageQueue) {
+        connection.messageQueue = [];
+      }
+
+      // Check queue size limit
+      if (connection.messageQueue.length >= this.MAX_QUEUE_SIZE) {
+        console.warn(
+          `Message queue full for connection ${connectionId}, dropping message`
+        );
+        return false;
+      }
+
+      // Queue the message
+      return new Promise<boolean>(resolve => {
+        connection.messageQueue!.push({ message: messageString, resolve });
+        this.processMessageQueue(connectionId);
+      });
+    }
+
+    // Send immediately if under threshold
     return new Promise<boolean>(resolve => {
       try {
-        connection.ws.send(JSON.stringify(message), err => {
+        connection.ws.send(messageString, err => {
           if (err) {
             console.error(`Failed to send to ${connectionId}:`, err);
             resolve(false);
           } else {
             resolve(true);
+            // Process any queued messages
+            this.processMessageQueue(connectionId);
           }
         });
       } catch (error) {
@@ -183,6 +201,56 @@ export class WebSocketConnectionManager {
         resolve(false);
       }
     });
+  }
+
+  /**
+   * Process queued messages for a connection
+   */
+  private async processMessageQueue(connectionId: string): Promise<void> {
+    const connection = this.connections.get(connectionId);
+    if (
+      !connection?.messageQueue ||
+      connection.messageQueue.length === 0 ||
+      connection.isProcessingQueue
+    ) {
+      return;
+    }
+
+    // Prevent concurrent processing
+    connection.isProcessingQueue = true;
+
+    try {
+      while (
+        connection.messageQueue.length > 0 &&
+        connection.ws.readyState === WebSocket.OPEN &&
+        connection.ws.bufferedAmount < this.HIGH_WATER_MARK
+      ) {
+        const item = connection.messageQueue.shift();
+        if (!item) break;
+
+        await new Promise<void>(resolve => {
+          connection.ws.send(item.message, err => {
+            if (err) {
+              console.error(
+                `Failed to send queued message to ${connectionId}:`,
+                err
+              );
+              item.resolve(false);
+            } else {
+              item.resolve(true);
+            }
+            resolve();
+          });
+        });
+
+        // Small delay to prevent tight loop
+        if (connection.messageQueue.length > 0) {
+          await new Promise(resolve => setTimeout(resolve, 10));
+        }
+      }
+    } finally {
+      connection.isProcessingQueue = false;
+    }
   }
 
   /**

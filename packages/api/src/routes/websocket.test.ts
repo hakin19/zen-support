@@ -13,6 +13,16 @@ vi.mock('@aizen/shared/utils/supabase-client', () => ({
   getSupabaseAdminClient: vi.fn(),
 }));
 
+vi.mock('../services/command-queue.service', () => ({
+  commandQueueService: {
+    claimCommands: vi.fn(),
+    submitResult: vi.fn(),
+    extendVisibility: vi.fn(),
+    addCommand: vi.fn(),
+    getCommand: vi.fn(),
+  },
+}));
+
 // Mock WebSocket module
 vi.mock('ws', () => ({
   WebSocket: vi.fn(),

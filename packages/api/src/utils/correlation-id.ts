@@ -17,14 +17,14 @@ export function extractCorrelationId(request: FastifyRequest): string {
   const headers = request.headers;
 
   // Check for X-Request-ID header (preferred) - try multiple variations
-  const requestId = (headers['x-request-id'] ||
-    headers['X-Request-Id'] ||
+  const requestId = (headers['x-request-id'] ??
+    headers['X-Request-Id'] ??
     headers['X-Request-ID']) as string;
   if (requestId) return requestId;
 
   // Check for X-Correlation-ID header (alternative) - try multiple variations
-  const correlationId = (headers['x-correlation-id'] ||
-    headers['X-Correlation-Id'] ||
+  const correlationId = (headers['x-correlation-id'] ??
+    headers['X-Correlation-Id'] ??
     headers['X-Correlation-ID']) as string;
   if (correlationId) return correlationId;
 
@@ -53,7 +53,9 @@ export function attachCorrelationId(
 /**
  * Fastify plugin to automatically handle correlation IDs
  */
-export const correlationIdPlugin: FastifyPluginAsync = async fastify => {
+export const correlationIdPlugin: FastifyPluginAsync = (
+  fastify
+): Promise<void> => {
   // Decorate request with correlationId property
   fastify.decorateRequest('correlationId', '');
 
@@ -63,6 +65,8 @@ export const correlationIdPlugin: FastifyPluginAsync = async fastify => {
     request.correlationId = correlationId;
     attachCorrelationId(reply, correlationId);
   });
+
+  return Promise.resolve();
 };
 
 // Add type declarations
@@ -76,16 +80,16 @@ declare module 'fastify' {
  * Add correlation ID to WebSocket messages
  */
 export function addCorrelationIdToMessage(
-  message: Record<string, any>,
+  message: Record<string, unknown>,
   correlationId?: string
-): Record<string, any> {
+): Record<string, unknown> {
   if (message.requestId) {
     return message; // Already has a correlation ID
   }
 
   return {
     ...message,
-    requestId: correlationId || generateCorrelationId(),
+    requestId: correlationId ?? generateCorrelationId(),
   };
 }
 
@@ -93,9 +97,13 @@ export function addCorrelationIdToMessage(
  * Extract correlation ID from WebSocket message
  */
 export function extractCorrelationIdFromMessage(
-  message: Record<string, any>
+  message: Record<string, unknown>
 ): string {
-  return message.requestId || message.correlationId || generateCorrelationId();
+  return (
+    (message.requestId as string) ??
+    (message.correlationId as string) ??
+    generateCorrelationId()
+  );
 }
 
 /**
@@ -130,13 +138,13 @@ export function createCorrelatedError(
  * Helper to propagate correlation ID in Redis operations
  */
 export function addCorrelationToRedisData(
-  data: Record<string, any>,
+  data: Record<string, unknown>,
   correlationId: string
-): Record<string, any> {
+): Record<string, unknown> {
   return {
     ...data,
     metadata: {
-      ...(data.metadata || {}),
+      ...((data.metadata as Record<string, unknown>) ?? {}),
       correlationId,
       timestamp: new Date().toISOString(),
     },
@@ -148,10 +156,13 @@ export function addCorrelationToRedisData(
  */
 export function createSupabaseOptions(
   correlationId: string,
-  options: Record<string, any> = {}
-): Record<string, any> {
+  options: Record<string, unknown> = {}
+): Record<string, unknown> {
   return {
     ...options,
-    headers: createCorrelatedHeaders(correlationId, options.headers),
+    headers: createCorrelatedHeaders(
+      correlationId,
+      options.headers as Record<string, string>
+    ),
   };
 }
