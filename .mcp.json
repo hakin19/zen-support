@@ -37,6 +37,10 @@
       "env": {
         "SUPABASE_ACCESS_TOKEN": "${SUPABASE_ACCESS_TOKEN}"
       }
+    },
+    "codex": {
+      "command": "npx",
+      "args": ["-y", "codex-cli-mcp-tool"]
     }
   }
 }
