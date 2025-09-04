@@ -1,0 +1,291 @@
+import { WebSocket } from 'ws';
+
+export interface WebSocketConnection {
+  id: string;
+  ws: WebSocket;
+  metadata?: Record<string, any>;
+  alive: boolean;
+  connectedAt: Date;
+}
+
+export interface ConnectionStats {
+  total: number;
+  byType: Record<string, number>;
+}
+
+/**
+ * Manages WebSocket connections with tracking, heartbeat, and graceful shutdown
+ */
+export class WebSocketConnectionManager {
+  private connections: Map<string, WebSocketConnection>;
+  private heartbeatInterval?: NodeJS.Timeout;
+
+  constructor() {
+    this.connections = new Map();
+  }
+
+  /**
+   * Add a new connection to the manager
+   */
+  addConnection(
+    connectionId: string,
+    ws: WebSocket,
+    metadata?: Record<string, any>
+  ): void {
+    this.connections.set(connectionId, {
+      id: connectionId,
+      ws,
+      metadata: metadata || {},
+      alive: true,
+      connectedAt: new Date(),
+    });
+
+    // Setup pong handler for this connection
+    ws.on('pong', () => {
+      this.handlePong(connectionId);
+    });
+  }
+
+  /**
+   * Remove a connection from the manager
+   */
+  removeConnection(connectionId: string): void {
+    this.connections.delete(connectionId);
+  }
+
+  /**
+   * Get a specific connection
+   */
+  getConnection(connectionId: string): WebSocketConnection | undefined {
+    return this.connections.get(connectionId);
+  }
+
+  /**
+   * Get all connections
+   */
+  getAllConnections(): Map<string, WebSocketConnection> {
+    return this.connections;
+  }
+
+  /**
+   * Get connections by type (from metadata)
+   */
+  getConnectionsByType(type: string): WebSocketConnection[] {
+    const result: WebSocketConnection[] = [];
+    this.connections.forEach(conn => {
+      if (conn.metadata?.type === type) {
+        result.push(conn);
+      }
+    });
+    return result;
+  }
+
+  /**
+   * Get connections by metadata property
+   */
+  getConnectionsByMetadata(key: string, value: any): WebSocketConnection[] {
+    const result: WebSocketConnection[] = [];
+    this.connections.forEach(conn => {
+      if (conn.metadata?.[key] === value) {
+        result.push(conn);
+      }
+    });
+    return result;
+  }
+
+  /**
+   * Update connection metadata
+   */
+  updateConnectionMetadata(
+    connectionId: string,
+    metadata: Record<string, any>
+  ): boolean {
+    const connection = this.connections.get(connectionId);
+    if (!connection) {
+      return false;
+    }
+    connection.metadata = metadata;
+    return true;
+  }
+
+  /**
+   * Broadcast message to all connections
+   */
+  async broadcastToAll(message: any): Promise<void> {
+    const messageString = JSON.stringify(message);
+    const promises: Promise<void>[] = [];
+
+    this.connections.forEach(conn => {
+      if (conn.ws.readyState === WebSocket.OPEN) {
+        promises.push(
+          new Promise<void>(resolve => {
+            conn.ws.send(messageString, err => {
+              if (err) {
+                console.error(`Failed to send to ${conn.id}:`, err);
+              }
+              resolve();
+            });
+          })
+        );
+      }
+    });
+
+    await Promise.all(promises);
+  }
+
+  /**
+   * Broadcast message to connections of a specific type
+   */
+  async broadcastToType(type: string, message: any): Promise<void> {
+    const messageString = JSON.stringify(message);
+    const connections = this.getConnectionsByType(type);
+    const promises: Promise<void>[] = [];
+
+    connections.forEach(conn => {
+      if (conn.ws.readyState === WebSocket.OPEN) {
+        promises.push(
+          new Promise<void>(resolve => {
+            conn.ws.send(messageString, err => {
+              if (err) {
+                console.error(`Failed to send to ${conn.id}:`, err);
+              }
+              resolve();
+            });
+          })
+        );
+      }
+    });
+
+    await Promise.all(promises);
+  }
+
+  /**
+   * Send message to a specific connection
+   */
+  async sendToConnection(connectionId: string, message: any): Promise<boolean> {
+    const connection = this.connections.get(connectionId);
+    if (!connection || connection.ws.readyState !== WebSocket.OPEN) {
+      return false;
+    }
+
+    return new Promise<boolean>(resolve => {
+      try {
+        connection.ws.send(JSON.stringify(message), err => {
+          if (err) {
+            console.error(`Failed to send to ${connectionId}:`, err);
+            resolve(false);
+          } else {
+            resolve(true);
+          }
+        });
+      } catch (error) {
+        console.error(`Error sending to ${connectionId}:`, error);
+        resolve(false);
+      }
+    });
+  }
+
+  /**
+   * Start heartbeat mechanism for all connections
+   */
+  startHeartbeat(intervalMs = 30000): void {
+    // Clear existing interval if any
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+    }
+
+    this.heartbeatInterval = setInterval(() => {
+      this.connections.forEach(conn => {
+        if (conn.ws.readyState === WebSocket.OPEN) {
+          if (!conn.alive) {
+            // Connection didn't respond to last ping, terminate it
+            console.log(`Terminating dead connection: ${conn.id}`);
+            conn.ws.terminate();
+            this.removeConnection(conn.id);
+          } else {
+            // Mark as not alive and send ping
+            conn.alive = false;
+            conn.ws.ping();
+          }
+        }
+      });
+    }, intervalMs);
+  }
+
+  /**
+   * Stop heartbeat mechanism
+   */
+  stopHeartbeat(): void {
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+      this.heartbeatInterval = undefined;
+    }
+  }
+
+  /**
+   * Handle pong response from a connection
+   */
+  handlePong(connectionId: string): void {
+    const connection = this.connections.get(connectionId);
+    if (connection) {
+      connection.alive = true;
+    }
+  }
+
+  /**
+   * Gracefully close all connections
+   */
+  async closeAllConnections(): Promise<void> {
+    const promises: Promise<void>[] = [];
+
+    this.connections.forEach(conn => {
+      if (conn.ws.readyState === WebSocket.OPEN) {
+        promises.push(
+          new Promise<void>(resolve => {
+            try {
+              conn.ws.close(1001, 'Server shutting down');
+            } catch (error) {
+              console.error(`Error closing connection ${conn.id}:`, error);
+            }
+            resolve();
+          })
+        );
+      }
+    });
+
+    await Promise.all(promises);
+    this.connections.clear();
+    this.stopHeartbeat();
+  }
+
+  /**
+   * Get connection count
+   */
+  getConnectionCount(): number {
+    return this.connections.size;
+  }
+
+  /**
+   * Get connection statistics
+   */
+  getConnectionStats(): ConnectionStats {
+    const stats: ConnectionStats = {
+      total: this.connections.size,
+      byType: {},
+    };
+
+    this.connections.forEach(conn => {
+      const type = conn.metadata?.type || 'unknown';
+      stats.byType[type] = (stats.byType[type] || 0) + 1;
+    });
+
+    return stats;
+  }
+
+  /**
+   * Clean up manager (for graceful shutdown)
+   */
+  async cleanup(): Promise<void> {
+    await this.closeAllConnections();
+  }
+}
