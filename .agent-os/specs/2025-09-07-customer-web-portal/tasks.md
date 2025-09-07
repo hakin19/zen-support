@@ -10,15 +10,15 @@
   - [x] 1.5 Set up environment variables for Claude Code SDK configuration
   - [x] 1.6 Verify all tests pass
 
-- [ ] 2. Database Schema and Authentication Setup
-  - [ ] 2.1 Write tests for database migrations and RLS policies
-  - [ ] 2.2 Create database migration for user_roles table
-  - [ ] 2.3 Create migrations for chat_sessions and chat_messages tables
-  - [ ] 2.4 Create migrations for ai_prompts and device_actions tables
-  - [ ] 2.5 Implement Row Level Security policies
-  - [ ] 2.6 Update Supabase types generation
-  - [ ] 2.7 Implement authentication middleware with role checking
-  - [ ] 2.8 Verify all tests pass
+- [x] 2. Database Schema and Authentication Setup
+  - [x] 2.1 Write tests for database migrations and RLS policies
+  - [x] 2.2 Create database migration for user_roles table
+  - [x] 2.3 Create migrations for chat_sessions and chat_messages tables
+  - [x] 2.4 Create migrations for ai_prompts and device_actions tables
+  - [x] 2.5 Implement Row Level Security policies
+  - [x] 2.6 Update Supabase types generation
+  - [x] 2.7 Implement authentication middleware with role checking
+  - [x] 2.8 Verify all tests pass
 
 - [ ] 3. Next.js Web Portal Foundation
   - [ ] 3.1 Write tests for layout and navigation components
