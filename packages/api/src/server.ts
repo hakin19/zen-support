@@ -73,6 +73,21 @@ export async function createApp(): Promise<FastifyInstance> {
     return reply.status(statusCode).send(errorResponse);
   });
 
+  // Add cleanup hook for proper test teardown
+  app.addHook('onClose', async () => {
+    // Stop background processes
+    const { stopVisibilityCheck } = await import(
+      './services/command-queue.service'
+    );
+    stopVisibilityCheck();
+
+    // Close WebSocket connections
+    const connectionManager = getConnectionManager();
+    if (connectionManager) {
+      await connectionManager.closeAllConnections();
+    }
+  });
+
   return app;
 }
 
