@@ -3,11 +3,10 @@ import {
   getAuthenticatedSupabaseClient,
 } from '@aizen/shared/utils/supabase-client';
 
-import type { Database } from '@aizen/shared';
 import type { FastifyRequest, FastifyReply } from 'fastify';
 
 // Define role types based on database enum
-export type UserRole = Database['public']['Enums']['user_role'];
+export type UserRole = 'owner' | 'admin' | 'viewer';
 
 // Extend FastifyRequest interface
 declare module 'fastify' {
