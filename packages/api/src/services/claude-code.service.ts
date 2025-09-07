@@ -5,6 +5,8 @@ import {
   type Logger,
   type QueryBuilder,
   type ResponseParser,
+  type CLIMessage,
+  type ToolUseBlock,
 } from '@instantlyeasy/claude-code-sdk-ts';
 
 import { supabase } from '@aizen/shared';
@@ -49,7 +51,7 @@ export interface DeviceAction {
   action: string;
   deviceId?: string;
   command?: string;
-  parameters?: Record<string, any>;
+  parameters?: Record<string, unknown>;
 }
 
 type ApprovalHandler = (action: DeviceAction) => Promise<boolean>;
@@ -103,7 +105,8 @@ export class ClaudeCodeService {
 
     await this.trackUsage(parser);
 
-    return parser.asJSON<T>();
+    const result = await parser.asJSON<T>();
+    return result as T;
   }
 
   /**
@@ -133,21 +136,33 @@ export class ClaudeCodeService {
     const builder = this.buildQuery(options);
     const parser = builder.query(prompt);
 
-    await parser.stream(async message => {
-      // Handle device action approvals
-      if (message.type === 'tool_use' && message.name === 'device_action') {
-        if (this.approvalHandler) {
-          const approved = await this.approvalHandler(
-            message.input as DeviceAction
-          );
-          if (!approved) {
-            // Handle rejection
-            return;
+    await parser.stream(async (output: unknown) => {
+      // Check if it's a CLIMessage with tool_use
+      const cliMessage = output as CLIMessage;
+      if (cliMessage.type === 'message' && cliMessage.data) {
+        const messageData = cliMessage.data as {
+          content?: Array<{ type: string; name?: string; input?: unknown }>;
+        };
+        // Check for tool_use blocks in the message content
+        if (messageData.content && Array.isArray(messageData.content)) {
+          for (const block of messageData.content) {
+            if (block.type === 'tool_use' && block.name === 'device_action') {
+              const toolBlock = block as ToolUseBlock;
+              if (this.approvalHandler) {
+                const approved = await this.approvalHandler(
+                  toolBlock.input as unknown as DeviceAction
+                );
+                if (!approved) {
+                  // Handle rejection
+                  return;
+                }
+              }
+            }
           }
         }
       }
 
-      onMessage(message);
+      onMessage(output);
     });
 
     await this.trackUsage(parser);
@@ -200,13 +215,23 @@ export class ClaudeCodeService {
       return null;
     }
 
+    // Type assertion for the database row
+    const dbRow = data as {
+      name: string;
+      template: string;
+      variables?: string[];
+      category?: string;
+      description?: string;
+      is_active?: boolean;
+    };
+
     const template: PromptTemplate = {
-      name: data.name as string,
-      template: data.template as string,
-      variables: (data.variables ?? []) as string[],
-      category: data.category as string | undefined,
-      description: data.description as string | undefined,
-      is_active: data.is_active as boolean | undefined,
+      name: dbRow.name,
+      template: dbRow.template,
+      variables: dbRow.variables ?? [],
+      category: dbRow.category,
+      description: dbRow.description,
+      is_active: dbRow.is_active,
     };
 
     this.promptTemplates.set(name, template);
@@ -241,17 +266,26 @@ export class ClaudeCodeService {
    * Save a custom prompt template
    */
   async savePromptTemplate(template: PromptTemplate): Promise<void> {
-    const { error } = await supabase.from('ai_prompts').upsert({
-      name: template.name,
-      template: template.template,
-      variables: template.variables,
-      category: template.category,
-      description: template.description,
-      is_active: template.is_active !== false,
-    });
+    // Type-safe approach with explicit types
+    const dbClient = supabase.from('ai_prompts');
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call
+    const { error } = await (dbClient as ReturnType<typeof supabase.from>)
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      .upsert([
+        {
+          name: template.name,
+          template: template.template,
+          variables: template.variables,
+          category: template.category,
+          description: template.description,
+          is_active: template.is_active !== false,
+        },
+      ]);
 
     if (error) {
-      throw new Error(`Failed to save prompt template: ${error.message}`);
+      throw new Error(
+        `Failed to save prompt template: ${(error as { message: string }).message}`
+      );
     }
 
     this.promptTemplates.set(template.name, template);
@@ -342,15 +376,17 @@ export class ClaudeCodeService {
       );
     }
 
-    // Configure tools
+    // Configure tools - cast to unknown first for type safety
     if (this.readOnlyMode) {
       builder = builder.allowTools(); // No tools = read-only
     } else if (options?.allowedTools) {
-      builder = builder.allowTools(...options.allowedTools);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument
+      builder = builder.allowTools(...(options.allowedTools as any));
     }
 
     if (options?.deniedTools) {
-      builder = builder.denyTools(...options.deniedTools);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument
+      builder = builder.denyTools(...(options.deniedTools as any));
     }
 
     // Configure permissions
@@ -380,20 +416,22 @@ export class ClaudeCodeService {
     try {
       const usage = await parser.getUsage();
 
-      this.lastUsage = {
-        totalTokens: usage.totalTokens,
-        inputTokens: usage.inputTokens,
-        outputTokens: usage.outputTokens,
-        totalCost: usage.totalCost,
-        cacheReadTokens: usage.cacheReadTokens,
-        cacheCreationTokens: usage.cacheCreationTokens,
-      };
+      if (usage) {
+        this.lastUsage = {
+          totalTokens: usage.totalTokens,
+          inputTokens: usage.inputTokens,
+          outputTokens: usage.outputTokens,
+          totalCost: usage.totalCost,
+          cacheReadTokens: usage.cacheReadTokens,
+          cacheCreationTokens: usage.cacheCreationTokens,
+        };
 
-      // Accumulate total usage
-      this.totalUsage.totalTokens += usage.totalTokens;
-      this.totalUsage.inputTokens += usage.inputTokens;
-      this.totalUsage.outputTokens += usage.outputTokens;
-      this.totalUsage.totalCost += usage.totalCost;
+        // Accumulate total usage
+        this.totalUsage.totalTokens += usage.totalTokens;
+        this.totalUsage.inputTokens += usage.inputTokens;
+        this.totalUsage.outputTokens += usage.outputTokens;
+        this.totalUsage.totalCost += usage.totalCost;
+      }
     } catch (error) {
       // Usage tracking is optional, don't fail the request
       console.error('Failed to track usage:', error);

@@ -258,9 +258,16 @@ describe('ClaudeCodeService', () => {
 
       mockResponseParser.stream.mockImplementation(async (callback: any) => {
         await callback({
-          type: 'tool_use',
-          name: 'device_action',
-          input: { action: 'restart_router' },
+          type: 'message',
+          data: {
+            content: [
+              {
+                type: 'tool_use',
+                name: 'device_action',
+                input: { action: 'restart_router' },
+              },
+            ],
+          },
         });
       });
 
@@ -278,9 +285,16 @@ describe('ClaudeCodeService', () => {
       const onMessage = vi.fn();
       mockResponseParser.stream.mockImplementation(async (callback: any) => {
         await callback({
-          type: 'tool_use',
-          name: 'device_action',
-          input: { action: 'restart_router' },
+          type: 'message',
+          data: {
+            content: [
+              {
+                type: 'tool_use',
+                name: 'device_action',
+                input: { action: 'restart_router' },
+              },
+            ],
+          },
         });
       });
 
