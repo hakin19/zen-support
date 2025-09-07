@@ -1,0 +1,50 @@
+# Spec Tasks
+
+## Tasks
+
+- [ ] 1. Research and Setup Claude Code SDK Integration
+  - [ ] 1.1 Read full Claude Code SDK documentation via context7 MCP tool
+  - [ ] 1.2 Write tests for Claude Code SDK service wrapper
+  - [ ] 1.3 Create Claude Code SDK service class in @aizen/api
+  - [ ] 1.4 Implement prompt template management system
+  - [ ] 1.5 Set up environment variables for Claude Code SDK configuration
+  - [ ] 1.6 Verify all tests pass
+
+- [ ] 2. Database Schema and Authentication Setup
+  - [ ] 2.1 Write tests for database migrations and RLS policies
+  - [ ] 2.2 Create database migration for user_roles table
+  - [ ] 2.3 Create migrations for chat_sessions and chat_messages tables
+  - [ ] 2.4 Create migrations for ai_prompts and device_actions tables
+  - [ ] 2.5 Implement Row Level Security policies
+  - [ ] 2.6 Update Supabase types generation
+  - [ ] 2.7 Implement authentication middleware with role checking
+  - [ ] 2.8 Verify all tests pass
+
+- [ ] 3. Next.js Web Portal Foundation
+  - [ ] 3.1 Write tests for layout and navigation components
+  - [ ] 3.2 Initialize Next.js 14 app in packages/web
+  - [ ] 3.3 Configure Tailwind CSS and shadcn/ui
+  - [ ] 3.4 Create base layout with sidebar navigation (Chat, Settings)
+  - [ ] 3.5 Implement Supabase authentication integration
+  - [ ] 3.6 Create protected route middleware with role-based access
+  - [ ] 3.7 Set up Zustand store for client state management
+  - [ ] 3.8 Verify all tests pass
+
+- [ ] 4. Chat Interface Implementation
+  - [ ] 4.1 Write tests for chat components and WebSocket handling
+  - [ ] 4.2 Create chat UI components (message list, input, status indicators)
+  - [ ] 4.3 Implement WebSocket connection service with Socket.io
+  - [ ] 4.4 Create chat session management logic
+  - [ ] 4.5 Integrate Claude Code SDK API calls through backend
+  - [ ] 4.6 Implement device action modal (expandable/collapsible)
+  - [ ] 4.7 Add approval/rejection UI for AI-suggested actions
+  - [ ] 4.8 Verify all tests pass
+
+- [ ] 5. Settings and Admin Features
+  - [ ] 5.1 Write tests for settings components and user management
+  - [ ] 5.2 Create user management interface (list, invite, role assignment)
+  - [ ] 5.3 Implement device registration and configuration UI
+  - [ ] 5.4 Create AI prompt template editor (owner-only with Monaco editor)
+  - [ ] 5.5 Add organization settings management
+  - [ ] 5.6 Implement role-based visibility controls
+  - [ ] 5.7 Verify all tests pass
