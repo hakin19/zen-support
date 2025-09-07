@@ -2,13 +2,13 @@
 
 ## Tasks
 
-- [ ] 1. Research and Setup Claude Code SDK Integration
-  - [ ] 1.1 Read full Claude Code SDK documentation via context7 MCP tool
-  - [ ] 1.2 Write tests for Claude Code SDK service wrapper
-  - [ ] 1.3 Create Claude Code SDK service class in @aizen/api
-  - [ ] 1.4 Implement prompt template management system
-  - [ ] 1.5 Set up environment variables for Claude Code SDK configuration
-  - [ ] 1.6 Verify all tests pass
+- [x] 1. Research and Setup Claude Code SDK Integration
+  - [x] 1.1 Read full Claude Code SDK documentation via context7 MCP tool
+  - [x] 1.2 Write tests for Claude Code SDK service wrapper
+  - [x] 1.3 Create Claude Code SDK service class in @aizen/api
+  - [x] 1.4 Implement prompt template management system
+  - [x] 1.5 Set up environment variables for Claude Code SDK configuration
+  - [x] 1.6 Verify all tests pass
 
 - [ ] 2. Database Schema and Authentication Setup
   - [ ] 2.1 Write tests for database migrations and RLS policies
