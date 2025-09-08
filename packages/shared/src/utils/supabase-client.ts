@@ -83,7 +83,7 @@ export function getSupabaseAdminClient(): SupabaseClient {
 
 export function getAuthenticatedSupabaseClient(
   accessToken: string
-): SupabaseClient<Database, 'public', Database['public']> {
+): SupabaseClient<Database> {
   if (!supabaseConfig) {
     throw new Error(
       'Supabase client not initialized. Call initializeSupabase first.'
@@ -91,7 +91,7 @@ export function getAuthenticatedSupabaseClient(
   }
 
   // Create a new client with the provided access token
-  return createClient(supabaseConfig.url, supabaseConfig.anonKey, {
+  return createClient<Database>(supabaseConfig.url, supabaseConfig.anonKey, {
     auth: {
       persistSession: false,
       autoRefreshToken: false,
@@ -104,7 +104,7 @@ export function getAuthenticatedSupabaseClient(
         Authorization: `Bearer ${accessToken}`,
       },
     },
-  }) as SupabaseClient<any, 'public', any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+  }) as SupabaseClient<Database>;
 }
 
 /**
