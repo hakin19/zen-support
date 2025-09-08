@@ -159,6 +159,24 @@ export class WebSocketConnectionManager {
   }
 
   /**
+   * Broadcast message to connections of a specific customer with backpressure handling
+   */
+  async broadcastToCustomer(
+    customerId: string,
+    message: unknown
+  ): Promise<void> {
+    const promises: Promise<boolean>[] = [];
+
+    this.connections.forEach((conn, connId) => {
+      if (conn.metadata?.customerId === customerId) {
+        promises.push(this.sendToConnection(connId, message));
+      }
+    });
+
+    await Promise.all(promises);
+  }
+
+  /**
    * Send message to a specific connection with backpressure handling
    */
   async sendToConnection(

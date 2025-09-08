@@ -30,13 +30,13 @@
   - [x] 3.7 Set up Zustand store for client state management
   - [x] 3.8 Verify all tests pass
 
-- [ ] 4. Chat Realtime & Backend Integration
-  - [ ] 4.1 Write tests for WebSocket client and backend handlers
-  - [ ] 4.2 Implement native WebSocket client (reconnect, heartbeat, routing)
-  - [ ] 4.3 Add REST/SSE endpoints for chat sessions and messages (persist to Supabase)
-  - [ ] 4.4 Integrate Claude Code SDK streaming via API (SSE or WS)
-  - [ ] 4.5 Wire Redis pub/sub fanout for session channels
-  - [ ] 4.6 Verify all tests pass
+- [x] 4. Chat Realtime & Backend Integration
+  - [x] 4.1 Write tests for WebSocket client and backend handlers
+  - [x] 4.2 Implement native WebSocket client (reconnect, heartbeat, routing)
+  - [x] 4.3 Add REST/SSE endpoints for chat sessions and messages (persist to Supabase)
+  - [x] 4.4 Integrate Claude Code SDK streaming via API (SSE or WS)
+  - [x] 4.5 Wire Redis pub/sub fanout for session channels
+  - [x] 4.6 Verify all tests pass
 
 - [ ] 5. Chat UI & Device Actions
   - [ ] 5.1 Write tests for chat components and client state store
