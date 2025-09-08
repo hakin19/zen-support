@@ -108,3 +108,6 @@ infrastructure/ssl/*.key
 infrastructure/ssl/*.crt
 infrastructure/ssl/*.csr
 .env.ssl
+
+# Code workspace directories
+.code/
