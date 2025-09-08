@@ -128,7 +128,7 @@ export async function webPortalAuthMiddleware(
  */
 export async function optionalWebPortalAuthMiddleware(
   request: FastifyRequest,
-  reply: FastifyReply
+  _reply: FastifyReply
 ): Promise<void> {
   const token = request.headers.authorization?.replace('Bearer ', '');
 
@@ -139,13 +139,58 @@ export async function optionalWebPortalAuthMiddleware(
   }
 
   try {
-    // Try to authenticate
-    await webPortalAuthMiddleware(request, reply);
+    // Get authenticated client with user's token
+    const supabase = getAuthenticatedSupabaseClient(token);
+
+    // Verify token and get user
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      request.log.debug(
+        { authError },
+        'Optional auth failed, continuing as anonymous'
+      );
+      return; // Continue without auth instead of sending error response
+    }
+
+    // Get user's role for their customer using admin client
+    const adminClient = getSupabaseAdminClient();
+    const { data: roleData, error: roleError } = await adminClient
+      .from('user_roles')
+      .select('customer_id, role')
+      .eq('user_id', user.id)
+      .single();
+
+    if (roleError || !roleData) {
+      request.log.debug(
+        { roleError, userId: user.id },
+        'No customer access, continuing as anonymous'
+      );
+      return; // Continue without auth instead of sending error response
+    }
+
+    // Attach auth data to request if successful
+    request.userId = user.id;
+    request.customerId = roleData.customer_id as string;
+    request.userRole = roleData.role as UserRole;
+    request.customerEmail = user.email ?? undefined;
+
+    request.log.debug(
+      {
+        userId: request.userId,
+        customerId: request.customerId,
+        userRole: request.userRole,
+      },
+      'Optional auth successful'
+    );
   } catch (error) {
-    // Authentication failed, but we continue anyway
+    // Any unexpected errors, log and continue as anonymous
     request.log.debug(
       { error },
-      'Optional auth failed, continuing as anonymous'
+      'Optional auth error, continuing as anonymous'
     );
   }
 }

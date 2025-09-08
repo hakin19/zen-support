@@ -14,26 +14,6 @@ vi.mock('next/navigation', () => ({
   usePathname: () => '/',
 }));
 
-// Mock Supabase auth
-vi.mock('@aizen/shared/lib/supabase', () => ({
-  createClientComponentClient: () => ({
-    auth: {
-      getSession: vi.fn().mockResolvedValue({
-        data: {
-          session: {
-            user: {
-              id: 'test-user-id',
-              email: 'test@example.com',
-              user_metadata: { role: 'admin' },
-            },
-          },
-        },
-        error: null,
-      }),
-    },
-  }),
-}));
-
 describe('RootLayout', () => {
   beforeEach(() => {
     vi.clearAllMocks();

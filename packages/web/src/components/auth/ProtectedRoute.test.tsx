@@ -24,8 +24,8 @@ vi.mock('next/navigation', () => ({
 const mockGetSession = vi.fn();
 const mockOnAuthStateChange = vi.fn();
 
-vi.mock('@aizen/shared/lib/supabase', () => ({
-  createClientComponentClient: () => ({
+vi.mock('@/lib/supabase/client', () => ({
+  createClient: () => ({
     auth: {
       getSession: mockGetSession,
       onAuthStateChange: mockOnAuthStateChange,
