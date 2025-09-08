@@ -68,9 +68,11 @@ export type CustomerMessage =
   | SendCommandMessage
   | JoinRoomsMessage;
 
-// Extend FastifyInstance to include WebSocket connection manager
+// Extend FastifyInstance to include WebSocket connection manager and Redis
 declare module 'fastify' {
   interface FastifyInstance {
     websocketConnections?: WebSocketConnectionManager;
+    websocketConnectionManager?: WebSocketConnectionManager;
+    redis?: any; // Using 'any' for now as RedisClient type would need to be imported
   }
 }

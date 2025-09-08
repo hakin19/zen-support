@@ -2,7 +2,10 @@ import { randomUUID } from 'crypto';
 
 import fastify from 'fastify';
 
+import { getRedisClient } from '@aizen/shared/utils/redis-client';
+
 import { config } from './config';
+import { registerChatRoutes } from './routes/chat';
 import { registerCustomerDeviceRoutes } from './routes/customer-devices';
 import { registerCustomerSessionRoutes } from './routes/customer-sessions';
 import { registerDeviceAuthRoutes } from './routes/device-auth';
@@ -44,6 +47,10 @@ export async function createApp(): Promise<FastifyInstance> {
   // Register correlation ID plugin (replaces the old hook)
   await app.register(correlationIdPlugin);
 
+  // Add Redis client to app
+  const redisClient = getRedisClient();
+  app.decorate('redis', redisClient);
+
   // Register routes
   registerHealthRoutes(app);
   registerDeviceAuthRoutes(app);
@@ -51,8 +58,9 @@ export async function createApp(): Promise<FastifyInstance> {
   registerCustomerDeviceRoutes(app);
   registerCustomerSessionRoutes(app);
 
-  // Register WebSocket routes
+  // Register WebSocket routes before chat routes (chat routes depend on websocketConnectionManager)
   await registerWebSocketRoutes(app);
+  await registerChatRoutes(app);
 
   // Start background processes
   startVisibilityCheck();

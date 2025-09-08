@@ -8,7 +8,7 @@ export const APP_CONFIG = {
   description: 'AI-powered Virtual Network Engineer',
   version: '1.0.0',
   api: {
-    baseUrl: process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3000',
+    baseUrl: process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001',
     timeout: 30_000,
   },
   websocket: {

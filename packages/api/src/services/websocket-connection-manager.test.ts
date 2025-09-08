@@ -160,6 +160,42 @@ describe('WebSocketConnectionManager', () => {
       );
     });
 
+    it('should broadcast to connections by customer ID', async () => {
+      const ws1 = { ...mockWs, send: vi.fn((msg, cb) => cb && cb()) };
+      const ws2 = { ...mockWs, send: vi.fn((msg, cb) => cb && cb()) };
+      const ws3 = { ...mockWs, send: vi.fn((msg, cb) => cb && cb()) };
+      const ws4 = { ...mockWs, send: vi.fn((msg, cb) => cb && cb()) };
+
+      manager.addConnection('conn-1', ws1, {
+        type: 'customer',
+        customerId: 'customer-123',
+      });
+      manager.addConnection('conn-2', ws2, {
+        type: 'customer',
+        customerId: 'customer-456',
+      });
+      manager.addConnection('conn-3', ws3, {
+        type: 'customer',
+        customerId: 'customer-123',
+      });
+      manager.addConnection('conn-4', ws4, { type: 'device' });
+
+      const message = { type: 'customer_update', data: 'test' };
+      await manager.broadcastToCustomer('customer-123', message);
+
+      // Should only send to connections with matching customerId
+      expect(ws1.send).toHaveBeenCalledWith(
+        JSON.stringify(message),
+        expect.any(Function)
+      );
+      expect(ws2.send).not.toHaveBeenCalled(); // Different customer
+      expect(ws3.send).toHaveBeenCalledWith(
+        JSON.stringify(message),
+        expect.any(Function)
+      );
+      expect(ws4.send).not.toHaveBeenCalled(); // Device connection
+    });
+
     it('should send to specific connection', async () => {
       const ws1 = { ...mockWs, send: vi.fn((msg, cb) => cb && cb()) };
       manager.addConnection('conn-1', ws1);

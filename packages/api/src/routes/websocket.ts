@@ -64,6 +64,7 @@ export async function registerWebSocketRoutes(
   // Make connection manager available to server for graceful shutdown
   // Store in app decorators instead of direct assignment
   app.decorate('websocketConnections', manager);
+  app.decorate('websocketConnectionManager', manager);
 
   // Device WebSocket endpoint
   app.register(async fastify => {
@@ -74,7 +75,7 @@ export async function registerWebSocketRoutes(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       async (connection: any, request: FastifyRequest) => {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-        const socket = connection.socket as WebSocket;
+        const socket = connection.socket || (connection as WebSocket);
         const ws = socket;
         const connectionId = generateCorrelationId();
         let deviceId: string | null = null;
@@ -268,21 +269,24 @@ export async function registerWebSocketRoutes(
     return Promise.resolve();
   });
 
-  // Customer WebSocket endpoint
+  // Web Portal WebSocket endpoint (for chat)
   app.register(async fastify => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
     (fastify as any).get(
-      '/api/v1/customer/ws',
+      '/ws',
       { websocket: true },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       async (connection: any, request: FastifyRequest) => {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-        const socket = connection.socket as WebSocket;
+        const socket = connection.socket || (connection as WebSocket);
         const ws = socket;
         const connectionId = generateCorrelationId();
-        let customerId: string | null = null;
-        let customerEmail: string | null = null;
-        const subscribedChannels: string[] = [];
+        let userId: string | null = null;
+        const subscribedChannels = new Set<string>();
+        const redisSubscriptions: Map<
+          string,
+          { unsubscribe: () => Promise<void> }
+        > = new Map();
 
         // Extract JWT from headers
         const authHeader = request.headers.authorization;
@@ -305,14 +309,13 @@ export async function registerWebSocketRoutes(
             return;
           }
 
-          customerId = user.id;
-          customerEmail = user.email ?? null;
+          userId = user.id;
 
-          // Add connection to manager
+          // Add connection to manager with web portal metadata
           manager.addConnection(connectionId, ws, {
-            type: 'customer',
-            customerId,
-            customerEmail,
+            type: 'web-portal',
+            userId,
+            userEmail: user.email,
             connectedAt: new Date().toISOString(),
           });
 
@@ -321,67 +324,12 @@ export async function registerWebSocketRoutes(
             connectionId,
             addCorrelationIdToMessage({
               type: 'connected',
-              customerId,
+              userId,
               timestamp: new Date().toISOString(),
             })
           );
 
-          // Get customer's devices for room subscription
-          // TODO: Add pagination or limit for customers with many devices
-          // This unbounded query could cause performance issues at scale (1000+ devices)
-          // Consider: .limit(100) with pagination, lazy loading, or filtering by status
-          const { data: devices } = await supabase
-            .from('devices')
-            .select('id, name, status')
-            .eq('customer_id', customerId);
-
-          let multiChannelHandle: MultiChannelSubscriptionHandle | null = null;
-
-          if (devices && devices.length > 0) {
-            // Use a single Redis connection for all device channels
-            // This is much more efficient than creating N connections for N devices
-            try {
-              // Build channel configurations
-              const channelConfigs = devices.map(device => ({
-                channel: `device:${device.id}:updates`,
-                handler: async (data: DeviceStatusMessage): Promise<void> => {
-                  await manager.sendToConnection(
-                    connectionId,
-                    addCorrelationIdToMessage({
-                      ...data,
-                      deviceId: device.id,
-                    })
-                  );
-                },
-              }));
-
-              // Subscribe to all channels with a single connection
-              multiChannelHandle =
-                await subscribeToMultipleChannels<DeviceStatusMessage>(
-                  redis,
-                  channelConfigs
-                );
-
-              // Store handle for cleanup
-              (
-                ws as { multiChannelHandle?: MultiChannelSubscriptionHandle }
-              ).multiChannelHandle = multiChannelHandle;
-
-              // Track subscribed channels for logging
-              subscribedChannels.push(
-                ...devices.map(d => `device:${d.id}:updates`)
-              );
-            } catch (redisError) {
-              request.log.error(
-                redisError,
-                'Failed to setup Redis subscription'
-              );
-              ws.close(1011, 'Server error');
-              return;
-            }
-          }
-
-          // Handle incoming messages from customer
+          // Handle incoming messages from web portal
           ws.on('message', (data: Buffer): void => {
             void (async (): Promise<void> => {
               let requestId: string | undefined;
@@ -393,51 +341,105 @@ export async function registerWebSocketRoutes(
                 requestId = extractCorrelationIdFromMessage(message);
 
                 switch (message.type) {
-                  case 'approve_session':
-                    await handleSessionApproval(
-                      customerId as string,
-                      message,
-                      requestId,
-                      connectionId,
-                      manager,
-                      redis,
-                      supabase
-                    );
-                    break;
-
-                  case 'get_system_info':
-                    await handleGetSystemInfo(
-                      customerId as string,
-                      message,
-                      requestId,
-                      connectionId,
-                      manager,
-                      redis,
-                      supabase
-                    );
-                    break;
-
-                  case 'send_command':
-                    await handleSendCommand(
-                      customerId as string,
-                      message,
-                      requestId,
-                      connectionId,
-                      manager,
-                      redis,
-                      supabase
-                    );
-                    break;
-
-                  case 'join_rooms':
-                    // Already handled during connection
+                  case 'ping':
+                    // Handle ping/pong for connection health
                     await manager.sendToConnection(
                       connectionId,
                       addCorrelationIdToMessage(
                         {
-                          type: 'rooms_joined',
-                          deviceIds:
-                            devices?.map((d: { id: string }) => d.id) ?? [],
+                          type: 'pong',
+                          timestamp: Date.now(),
+                        },
+                        requestId
+                      )
+                    );
+                    break;
+
+                  case 'subscribe':
+                    // Subscribe to a channel (e.g., chat session)
+                    if (typeof message.channel === 'string') {
+                      const channel = message.channel;
+
+                      // Only allow subscribing to authorized channels
+                      if (channel.startsWith('chat:')) {
+                        // TODO: Verify user has access to this chat session
+
+                        if (!subscribedChannels.has(channel)) {
+                          const subscription = await redis.createSubscription(
+                            channel,
+                            async (data: unknown) => {
+                              await manager.sendToConnection(
+                                connectionId,
+                                addCorrelationIdToMessage({
+                                  type: 'channel',
+                                  channel,
+                                  data,
+                                })
+                              );
+                            }
+                          );
+
+                          redisSubscriptions.set(channel, subscription);
+                          subscribedChannels.add(channel);
+
+                          await manager.sendToConnection(
+                            connectionId,
+                            addCorrelationIdToMessage(
+                              {
+                                type: 'subscribed',
+                                channel,
+                              },
+                              requestId
+                            )
+                          );
+                        }
+                      } else {
+                        await manager.sendToConnection(
+                          connectionId,
+                          addCorrelationIdToMessage(
+                            {
+                              type: 'error',
+                              error: 'Invalid channel',
+                            },
+                            requestId
+                          )
+                        );
+                      }
+                    }
+                    break;
+
+                  case 'unsubscribe':
+                    // Unsubscribe from a channel
+                    if (typeof message.channel === 'string') {
+                      const channel = message.channel;
+                      const subscription = redisSubscriptions.get(channel);
+
+                      if (subscription) {
+                        await subscription.unsubscribe();
+                        redisSubscriptions.delete(channel);
+                        subscribedChannels.delete(channel);
+
+                        await manager.sendToConnection(
+                          connectionId,
+                          addCorrelationIdToMessage(
+                            {
+                              type: 'unsubscribed',
+                              channel,
+                            },
+                            requestId
+                          )
+                        );
+                      }
+                    }
+                    break;
+
+                  case 'auth':
+                    // Handle auth token refresh
+                    await manager.sendToConnection(
+                      connectionId,
+                      addCorrelationIdToMessage(
+                        {
+                          type: 'auth_success',
                         },
                         requestId
                       )
@@ -474,20 +476,23 @@ export async function registerWebSocketRoutes(
 
           // Handle connection close
           ws.on('close', (): void => {
-            const handle = (
-              ws as { multiChannelHandle?: MultiChannelSubscriptionHandle }
-            ).multiChannelHandle;
             void (async (): Promise<void> => {
               try {
-                if (handle) {
-                  await handle.disconnect();
+                // Unsubscribe from all Redis channels
+                for (const subscription of redisSubscriptions.values()) {
+                  await subscription.unsubscribe();
                 }
+                redisSubscriptions.clear();
+                subscribedChannels.clear();
+
                 manager.removeConnection(connectionId);
-                request.log.info(`Customer ${String(customerId)} disconnected`);
+                request.log.info(
+                  `Web portal user ${String(userId)} disconnected`
+                );
               } catch (error) {
                 request.log.error(
                   error,
-                  'Error during customer connection close'
+                  'Error during web portal connection close'
                 );
               }
             })();
@@ -496,28 +501,402 @@ export async function registerWebSocketRoutes(
           // Handle errors
           ws.on('error', (error): void => {
             request.log.error(error, 'WebSocket error');
-            // Clean up Redis subscriber to prevent leaks
-            const handle = (
-              ws as { multiChannelHandle?: MultiChannelSubscriptionHandle }
-            ).multiChannelHandle;
+            // Clean up Redis subscribers to prevent leaks
             void (async (): Promise<void> => {
               try {
-                if (handle) {
-                  await handle.disconnect();
+                for (const subscription of redisSubscriptions.values()) {
+                  await subscription.unsubscribe();
                 }
+                redisSubscriptions.clear();
                 manager.removeConnection(connectionId);
               } catch (cleanupError) {
                 request.log.error(
                   cleanupError,
-                  'Failed to cleanup Redis subscriber'
+                  'Failed to cleanup Redis subscribers'
                 );
               }
             })();
           });
         } catch (error) {
-          request.log.error(error, 'Failed to authenticate customer');
+          request.log.error(error, 'Failed to authenticate web portal user');
           ws.close(1008, 'Authentication failed');
         }
+      }
+    );
+    return Promise.resolve();
+  });
+
+  // Customer WebSocket endpoint
+  app.register(async fastify => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+    (fastify as any).get(
+      '/api/v1/customer/ws',
+      { websocket: true },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      async (connection: any, request: FastifyRequest) => {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        const socket = connection.socket || (connection as WebSocket);
+        const ws = socket;
+        const connectionId = generateCorrelationId();
+        let customerId: string | null = null;
+        let customerEmail: string | null = null;
+        const subscribedChannels: string[] = [];
+        let isAuthenticated = false;
+        let multiChannelHandle: MultiChannelSubscriptionHandle | null = null;
+        let devices: Array<{
+          id: string;
+          name: string | null;
+          status: string | null;
+        }> | null = null;
+
+        // Add connection to manager immediately with pending status
+        manager.addConnection(connectionId, ws, {
+          type: 'customer',
+          customerId: null,
+          customerEmail: null,
+          connectedAt: new Date().toISOString(),
+        });
+
+        // Try to extract JWT from headers first (for non-browser clients)
+        const authHeader = request.headers.authorization;
+
+        // Also check query parameters for browser clients
+        const queryToken = (request.query as { token?: string })?.token;
+
+        let token: string | null = null;
+
+        if (authHeader?.startsWith('Bearer ')) {
+          token = authHeader.substring(7);
+        } else if (queryToken) {
+          // Use query parameter token for browser clients
+          token = queryToken;
+        }
+
+        // Function to authenticate and setup customer connection
+        const authenticateAndSetup = async (
+          authToken: string
+        ): Promise<boolean> => {
+          try {
+            // Validate JWT with Supabase
+            const {
+              data: { user },
+              error,
+            } = await supabase.auth.getUser(authToken);
+
+            if (error || !user) {
+              return false;
+            }
+
+            // Get the actual customer_id from the users table
+            // user.id is the Supabase auth user ID, we need the tenant customer_id
+            const { data: userData, error: userError } = await supabase
+              .from('users')
+              .select('customer_id')
+              .eq('id', user.id)
+              .single();
+
+            if (userError || !userData) {
+              request.log.error(
+                userError,
+                'User not found in customer database'
+              );
+              return false;
+            }
+
+            // Store both IDs - user.id is the Supabase auth user ID
+            // userData.customer_id is the actual tenant/customer ID
+            customerId = userData.customer_id as string;
+            customerEmail = user.email ?? null;
+            isAuthenticated = true;
+
+            // Update connection metadata with authenticated user info
+            const connectionMetadata = {
+              type: 'customer' as const,
+              customerId,
+              customerEmail,
+              connectedAt: new Date().toISOString(),
+            };
+
+            // Update the existing connection with authentication info
+            manager.updateConnectionMetadata(connectionId, connectionMetadata);
+
+            // Send connection confirmation
+            await manager.sendToConnection(
+              connectionId,
+              addCorrelationIdToMessage({
+                type: 'connected',
+                customerId,
+                timestamp: new Date().toISOString(),
+              })
+            );
+
+            // Get customer's devices for room subscription
+            // TODO: Add pagination or limit for customers with many devices
+            // This unbounded query could cause performance issues at scale (1000+ devices)
+            // Consider: .limit(100) with pagination, lazy loading, or filtering by status
+            const { data: devicesData } = await supabase
+              .from('devices')
+              .select('id, name, status')
+              .eq('customer_id', customerId);
+
+            // Store devices in outer scope for message handlers
+            devices = devicesData;
+
+            if (devices && devices.length > 0) {
+              // Use a single Redis connection for all device channels
+              // This is much more efficient than creating N connections for N devices
+              try {
+                // Build channel configurations
+                const channelConfigs = devices.map(device => ({
+                  channel: `device:${device.id}:updates`,
+                  handler: async (data: DeviceStatusMessage): Promise<void> => {
+                    await manager.sendToConnection(
+                      connectionId,
+                      addCorrelationIdToMessage({
+                        ...data,
+                        deviceId: device.id,
+                      })
+                    );
+                  },
+                }));
+
+                // Subscribe to all channels with a single connection
+                multiChannelHandle =
+                  await subscribeToMultipleChannels<DeviceStatusMessage>(
+                    redis,
+                    channelConfigs
+                  );
+
+                // Store handle for cleanup
+                (
+                  ws as { multiChannelHandle?: MultiChannelSubscriptionHandle }
+                ).multiChannelHandle = multiChannelHandle;
+
+                // Track subscribed channels for logging
+                subscribedChannels.push(
+                  ...devices.map(d => `device:${d.id}:updates`)
+                );
+              } catch (redisError) {
+                request.log.error(
+                  redisError,
+                  'Failed to setup Redis subscription'
+                );
+                return false;
+              }
+            }
+
+            return true;
+          } catch (error) {
+            request.log.error(error, 'Authentication failed');
+            return false;
+          }
+        };
+
+        // If token was provided in headers, authenticate immediately
+        if (token) {
+          const success = await authenticateAndSetup(token);
+          if (!success) {
+            ws.close(1008, 'Unauthorized');
+            return;
+          }
+        }
+
+        // Handle incoming messages from customer
+        ws.on('message', (data: Buffer): void => {
+          void (async (): Promise<void> => {
+            let requestId: string | undefined;
+            try {
+              const message = JSON.parse(data.toString()) as Record<
+                string,
+                unknown
+              >;
+              requestId = extractCorrelationIdFromMessage(message);
+
+              // Handle auth message from browser clients
+              if (message.type === 'auth' && !isAuthenticated) {
+                const authToken = message.token as string;
+                if (!authToken) {
+                  await manager.sendToConnection(
+                    connectionId,
+                    addCorrelationIdToMessage(
+                      {
+                        type: 'error',
+                        error: 'Missing authentication token',
+                      },
+                      requestId
+                    )
+                  );
+                  ws.close(1008, 'Unauthorized');
+                  return;
+                }
+
+                const success = await authenticateAndSetup(authToken);
+                if (!success) {
+                  await manager.sendToConnection(
+                    connectionId,
+                    addCorrelationIdToMessage(
+                      {
+                        type: 'error',
+                        error: 'Authentication failed',
+                      },
+                      requestId
+                    )
+                  );
+                  ws.close(1008, 'Unauthorized');
+                  return;
+                }
+
+                // Send auth success message
+                await manager.sendToConnection(
+                  connectionId,
+                  addCorrelationIdToMessage(
+                    {
+                      type: 'auth_success',
+                      customerId,
+                    },
+                    requestId
+                  )
+                );
+                return;
+              }
+
+              // Require authentication for all other messages
+              if (!isAuthenticated) {
+                await manager.sendToConnection(
+                  connectionId,
+                  addCorrelationIdToMessage(
+                    {
+                      type: 'error',
+                      error: 'Not authenticated. Send auth message first.',
+                    },
+                    requestId
+                  )
+                );
+                return;
+              }
+
+              switch (message.type) {
+                case 'approve_session':
+                  await handleSessionApproval(
+                    customerId as string,
+                    message,
+                    requestId,
+                    connectionId,
+                    manager,
+                    redis,
+                    supabase
+                  );
+                  break;
+
+                case 'get_system_info':
+                  await handleGetSystemInfo(
+                    customerId as string,
+                    message,
+                    requestId,
+                    connectionId,
+                    manager,
+                    redis,
+                    supabase
+                  );
+                  break;
+
+                case 'send_command':
+                  await handleSendCommand(
+                    customerId as string,
+                    message,
+                    requestId,
+                    connectionId,
+                    manager,
+                    redis,
+                    supabase
+                  );
+                  break;
+
+                case 'join_rooms':
+                  // Already handled during connection
+                  await manager.sendToConnection(
+                    connectionId,
+                    addCorrelationIdToMessage(
+                      {
+                        type: 'rooms_joined',
+                        deviceIds:
+                          devices?.map((d: { id: string }) => d.id) ?? [],
+                      },
+                      requestId
+                    )
+                  );
+                  break;
+
+                default:
+                  await manager.sendToConnection(
+                    connectionId,
+                    addCorrelationIdToMessage(
+                      {
+                        type: 'error',
+                        error: 'Unknown message type',
+                      },
+                      requestId
+                    )
+                  );
+              }
+            } catch (error) {
+              request.log.error(error, 'Failed to process WebSocket message');
+              await manager.sendToConnection(
+                connectionId,
+                addCorrelationIdToMessage(
+                  {
+                    type: 'error',
+                    error: 'Invalid message format',
+                  },
+                  requestId
+                )
+              );
+            }
+          })();
+        });
+
+        // Handle connection close
+        ws.on('close', (): void => {
+          const handle = (
+            ws as { multiChannelHandle?: MultiChannelSubscriptionHandle }
+          ).multiChannelHandle;
+          void (async (): Promise<void> => {
+            try {
+              if (handle) {
+                await handle.disconnect();
+              }
+              manager.removeConnection(connectionId);
+              request.log.info(`Customer ${String(customerId)} disconnected`);
+            } catch (error) {
+              request.log.error(
+                error,
+                'Error during customer connection close'
+              );
+            }
+          })();
+        });
+
+        // Handle errors
+        ws.on('error', (error: Error): void => {
+          request.log.error(error, 'WebSocket error');
+          // Clean up Redis subscriber to prevent leaks
+          const handle = (
+            ws as { multiChannelHandle?: MultiChannelSubscriptionHandle }
+          ).multiChannelHandle;
+          void (async (): Promise<void> => {
+            try {
+              if (handle) {
+                await handle.disconnect();
+              }
+              manager.removeConnection(connectionId);
+            } catch (cleanupError) {
+              request.log.error(
+                cleanupError,
+                'Failed to cleanup Redis subscriber'
+              );
+            }
+          })();
+        });
       }
     );
     return Promise.resolve();
