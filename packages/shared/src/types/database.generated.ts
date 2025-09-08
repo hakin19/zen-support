@@ -353,6 +353,7 @@ export type Database = {
           error_message: string | null;
           executed_at: string | null;
           id: string;
+          message_id: string | null;
           metadata: Json | null;
           parameters: Json | null;
           rejected_at: string | null;
@@ -373,6 +374,7 @@ export type Database = {
           error_message?: string | null;
           executed_at?: string | null;
           id?: string;
+          message_id?: string | null;
           metadata?: Json | null;
           parameters?: Json | null;
           rejected_at?: string | null;
@@ -393,6 +395,7 @@ export type Database = {
           error_message?: string | null;
           executed_at?: string | null;
           id?: string;
+          message_id?: string | null;
           metadata?: Json | null;
           parameters?: Json | null;
           rejected_at?: string | null;

@@ -38,13 +38,13 @@
   - [x] 4.5 Wire Redis pub/sub fanout for session channels
   - [x] 4.6 Verify all tests pass
 
-- [ ] 5. Chat UI & Device Actions
-  - [ ] 5.1 Write tests for chat components and client state store
-  - [ ] 5.2 Build chat UI components (message list, input, status indicators)
-  - [ ] 5.3 Implement client chat session management (create/select, load history)
-  - [ ] 5.4 Implement device action modal (expandable/collapsible)
-  - [ ] 5.5 Add approval/rejection UI for AI-suggested actions
-  - [ ] 5.6 Verify all tests pass
+- [x] 5. Chat UI & Device Actions
+  - [x] 5.1 Write tests for chat components and client state store
+  - [x] 5.2 Build chat UI components (message list, input, status indicators)
+  - [x] 5.3 Implement client chat session management (create/select, load history)
+  - [x] 5.4 Implement device action modal (expandable/collapsible)
+  - [x] 5.5 Add approval/rejection UI for AI-suggested actions
+  - [x] 5.6 Verify all tests pass
 
 - [ ] 6. Settings and Admin Features
   - [ ] 6.1 Write tests for settings components and user management
