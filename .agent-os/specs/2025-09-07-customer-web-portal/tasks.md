@@ -20,15 +20,15 @@
   - [x] 2.7 Implement authentication middleware with role checking
   - [x] 2.8 Verify all tests pass
 
-- [ ] 3. Next.js Web Portal Foundation
-  - [ ] 3.1 Write tests for layout and navigation components
-  - [ ] 3.2 Initialize Next.js 14 app in packages/web
-  - [ ] 3.3 Configure Tailwind CSS and shadcn/ui
-  - [ ] 3.4 Create base layout with sidebar navigation (Chat, Settings)
-  - [ ] 3.5 Implement Supabase authentication integration
-  - [ ] 3.6 Create protected route middleware with role-based access
-  - [ ] 3.7 Set up Zustand store for client state management
-  - [ ] 3.8 Verify all tests pass
+- [x] 3. Next.js Web Portal Foundation
+  - [x] 3.1 Write tests for layout and navigation components
+  - [x] 3.2 Initialize Next.js 14 app in packages/web
+  - [x] 3.3 Configure Tailwind CSS and shadcn/ui
+  - [x] 3.4 Create base layout with sidebar navigation (Chat, Settings)
+  - [x] 3.5 Implement Supabase authentication integration
+  - [x] 3.6 Create protected route middleware with role-based access
+  - [x] 3.7 Set up Zustand store for client state management
+  - [x] 3.8 Verify all tests pass
 
 - [ ] 4. Chat Interface Implementation
   - [ ] 4.1 Write tests for chat components and WebSocket handling
