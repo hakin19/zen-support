@@ -1,7 +1,19 @@
+/* globals window document setTimeout */
+
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 
-import type { User, DiagnosticSession } from '@aizen/shared/types';
+import type { User } from '@aizen/shared';
+
+interface DiagnosticSession {
+  id: string;
+  customer_id: string;
+  device_id: string;
+  user_id?: string;
+  status: string;
+  started_at: string;
+  ended_at?: string | null;
+}
 
 interface Notification {
   id: string;
@@ -84,18 +96,27 @@ export const useAppStore = create<AppState>()(
         set({ theme }, false, 'setTheme');
         // Apply theme to document
         if (theme === 'dark') {
-          document.documentElement.classList.add('dark');
+          if (typeof document !== 'undefined') {
+            document.documentElement.classList.add('dark');
+          }
         } else if (theme === 'light') {
-          document.documentElement.classList.remove('dark');
+          if (typeof document !== 'undefined') {
+            document.documentElement.classList.remove('dark');
+          }
         } else {
           // System theme
-          const prefersDark = window.matchMedia(
-            '(prefers-color-scheme: dark)'
-          ).matches;
+          const prefersDark =
+            typeof window !== 'undefined'
+              ? window.matchMedia('(prefers-color-scheme: dark)').matches
+              : false;
           if (prefersDark) {
-            document.documentElement.classList.add('dark');
+            if (typeof document !== 'undefined') {
+              document.documentElement.classList.add('dark');
+            }
           } else {
-            document.documentElement.classList.remove('dark');
+            if (typeof document !== 'undefined') {
+              document.documentElement.classList.remove('dark');
+            }
           }
         }
       },
@@ -112,9 +133,11 @@ export const useAppStore = create<AppState>()(
 
         // Auto-remove notification after duration
         if (notification.duration !== 0) {
-          setTimeout(() => {
-            get().removeNotification(notification.id);
-          }, notification.duration || 5000);
+          if (typeof setTimeout !== 'undefined') {
+            setTimeout(() => {
+              get().removeNotification(notification.id);
+            }, notification.duration ?? 5000);
+          }
         }
       },
 

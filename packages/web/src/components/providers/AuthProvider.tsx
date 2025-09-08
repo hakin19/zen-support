@@ -1,10 +1,16 @@
 'use client';
 
+/* globals window */
+
 import { useRouter } from 'next/navigation';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 
-import type { User } from '@aizen/shared/types';
-import type { User as SupabaseUser, Session } from '@supabase/supabase-js';
+import type { User } from '@aizen/shared';
+import type {
+  User as SupabaseUser,
+  Session,
+  AuthChangeEvent,
+} from '@supabase/supabase-js';
 
 import { createClient } from '@/lib/supabase/client';
 
@@ -20,7 +26,11 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+export function AuthProvider({
+  children,
+}: {
+  children: React.ReactNode;
+}): React.ReactElement {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
@@ -34,11 +44,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     return {
       id: supabaseUser.id,
-      email: supabaseUser.email || '',
-      role: (supabaseUser.user_metadata?.role as User['role']) || 'viewer',
-      customer_id: supabaseUser.user_metadata?.customer_id || '',
+      email: supabaseUser.email ?? '',
+      role: (supabaseUser.user_metadata?.role as User['role']) ?? 'viewer',
+      customer_id: (supabaseUser.user_metadata?.customer_id as string) ?? '',
       created_at: supabaseUser.created_at,
-      updated_at: supabaseUser.updated_at || supabaseUser.created_at,
+      updated_at: supabaseUser.updated_at ?? supabaseUser.created_at,
     };
   };
 
@@ -49,28 +59,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           data: { session },
         } = await supabase.auth.getSession();
         setSession(session);
-        setUser(mapSupabaseUserToUser(session?.user || null));
-      } catch (error) {
-        console.error('Error checking session:', error);
+        setUser(mapSupabaseUserToUser(session?.user ?? null));
+      } catch {
+        // Error checking session
       } finally {
         setLoading(false);
       }
     };
 
-    checkSession();
+    void checkSession();
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setUser(mapSupabaseUserToUser(session?.user || null));
+    } = supabase.auth.onAuthStateChange(
+      (_event: AuthChangeEvent, session: Session | null) => {
+        setSession(session);
+        setUser(mapSupabaseUserToUser(session?.user ?? null));
 
-      if (_event === 'SIGNED_OUT') {
-        router.replace('/login');
+        if (_event === 'SIGNED_OUT') {
+          router.replace('/login');
+        }
       }
-    });
+    );
 
-    return () => subscription.unsubscribe();
+    return () => {
+      subscription.unsubscribe();
+    };
   }, [router, supabase]);
 
   const signIn = async (email: string, password: string) => {
@@ -99,14 +113,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     router.replace('/login');
   };
 
-  const refreshSession = async () => {
+  const refreshSession = async (): Promise<void> => {
     const {
       data: { session },
       error,
     } = await supabase.auth.refreshSession();
     if (error) throw error;
     setSession(session);
-    setUser(mapSupabaseUserToUser(session?.user || null));
+    setUser(mapSupabaseUserToUser(session?.user ?? null));
   };
 
   return (
@@ -126,7 +140,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function useAuth() {
+export function useAuth(): AuthContextType {
   const context = useContext(AuthContext);
   if (context === undefined) {
     throw new Error('useAuth must be used within an AuthProvider');

@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import React, { useState } from 'react';
 
-import type { User } from '@aizen/shared/types';
+import type { User } from '@aizen/shared';
 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -15,7 +15,7 @@ interface SidebarProps {
   onSignOut?: () => void;
 }
 
-export function Sidebar({ user, onSignOut }: SidebarProps) {
+export function Sidebar({ user, onSignOut }: SidebarProps): React.ReactElement {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(true);
 

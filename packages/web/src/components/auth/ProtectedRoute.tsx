@@ -1,9 +1,20 @@
 'use client';
 
+/* globals window setTimeout clearTimeout */
+
 import { useRouter } from 'next/navigation';
 import React, { useEffect, useState } from 'react';
 
-import type { User } from '@aizen/shared/types';
+import type { AuthChangeEvent, Session } from '@supabase/supabase-js';
+
+interface User {
+  id: string;
+  email: string;
+  role: 'viewer' | 'operator' | 'admin' | 'owner' | 'super_admin';
+  customer_id: string;
+  created_at: string;
+  updated_at: string;
+}
 
 import { createClient } from '@/lib/supabase/client';
 
@@ -23,7 +34,7 @@ const roleHierarchy: Record<User['role'], number> = {
 export function ProtectedRoute({
   children,
   requiredRole,
-}: ProtectedRouteProps) {
+}: ProtectedRouteProps): React.ReactElement | null {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<User | null>(null);
   const [hasAccess, setHasAccess] = useState(false);
@@ -53,19 +64,20 @@ export function ProtectedRoute({
 
         const currentUser: User = {
           id: session.user.id,
-          email: session.user.email || '',
-          role: (session.user.user_metadata?.role as User['role']) || 'viewer',
-          customer_id: session.user.user_metadata?.customer_id || '',
+          email: session.user.email ?? '',
+          role: (session.user.user_metadata?.role as User['role']) ?? 'viewer',
+          customer_id:
+            (session.user.user_metadata?.customer_id as string) ?? '',
           created_at: session.user.created_at,
-          updated_at: session.user.updated_at || session.user.created_at,
+          updated_at: session.user.updated_at ?? session.user.created_at,
         };
 
         setUser(currentUser);
 
         // Check role-based access
         if (requiredRole) {
-          const userLevel = roleHierarchy[currentUser.role] || 0;
-          const requiredLevel = roleHierarchy[requiredRole] || 0;
+          const userLevel = roleHierarchy[currentUser.role] ?? 0;
+          const requiredLevel = roleHierarchy[requiredRole] ?? 0;
 
           if (userLevel < requiredLevel) {
             setHasAccess(false);
@@ -76,25 +88,27 @@ export function ProtectedRoute({
           setHasAccess(true);
         }
       } catch (err) {
-        console.error('Auth check error:', err);
+        // Auth check error
         setError(err instanceof Error ? err.message : 'Error loading session');
       } finally {
         setLoading(false);
       }
     };
 
-    checkAuth();
+    void checkAuth();
 
     // Listen for auth state changes
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_OUT' || !session) {
-        router.replace('/login');
-      } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-        checkAuth();
+    } = supabase.auth.onAuthStateChange(
+      (event: AuthChangeEvent, session: Session | null) => {
+        if (event === 'SIGNED_OUT' || !session) {
+          router.replace('/login');
+        } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+          void checkAuth();
+        }
       }
-    });
+    );
 
     return () => {
       subscription.unsubscribe();
@@ -103,7 +117,7 @@ export function ProtectedRoute({
 
   // Retry logic for temporary failures
   useEffect(() => {
-    if (error && error.includes('Network error')) {
+    if (error?.includes('Network error')) {
       const retryTimeout = setTimeout(() => {
         window.location.reload();
       }, 3000);

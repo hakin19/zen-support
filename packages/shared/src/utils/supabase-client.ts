@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 
+import type { Database } from '../types/database.generated';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 export interface SupabaseConfig {
@@ -82,7 +83,7 @@ export function getSupabaseAdminClient(): SupabaseClient {
 
 export function getAuthenticatedSupabaseClient(
   accessToken: string
-): SupabaseClient<any, 'public', any> {
+): SupabaseClient<Database, 'public', Database['public']> {
   if (!supabaseConfig) {
     throw new Error(
       'Supabase client not initialized. Call initializeSupabase first.'

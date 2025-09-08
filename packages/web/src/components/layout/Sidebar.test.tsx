@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { Sidebar } from './Sidebar';
-import type { User } from '@aizen/shared/types';
+import type { User } from '@aizen/shared';
 
 // Mock Next.js navigation
 const mockPush = vi.fn();

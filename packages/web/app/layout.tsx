@@ -1,4 +1,5 @@
 import { Inter } from 'next/font/google';
+import React from 'react';
 
 import type { Metadata } from 'next';
 import './globals.css';
@@ -40,9 +41,9 @@ export const metadata: Metadata = {
 
 export default function RootLayout({
   children,
-}: {
+}: Readonly<{
   children: React.ReactNode;
-}) {
+}>): React.ReactElement {
   return (
     <html lang='en' suppressHydrationWarning>
       <body className={inter.className}>

@@ -1,7 +1,17 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useAppStore } from './app.store';
-import type { User, DiagnosticSession } from '@aizen/shared/types';
+import type { User } from '@aizen/shared';
+
+interface DiagnosticSession {
+  id: string;
+  customer_id: string;
+  device_id: string;
+  user_id?: string;
+  status: string;
+  started_at: string;
+  ended_at?: string | null;
+}
 
 describe('useAppStore', () => {
   const mockUser: User = {

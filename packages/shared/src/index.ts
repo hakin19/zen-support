@@ -16,6 +16,17 @@ export {
 
 // Export database types
 export * from './types/supabase.types';
+export type { Database as GeneratedDatabase } from './types/database.generated';
+
+// Export User type based on Supabase auth and our user_roles table
+export interface User {
+  id: string;
+  email?: string;
+  role?: 'viewer' | 'operator' | 'admin' | 'owner' | 'super_admin';
+  customer_id?: string;
+  created_at?: string;
+  updated_at?: string;
+}
 
 // Common types
 export interface NetworkDiagnostic {
