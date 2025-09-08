@@ -58,7 +58,7 @@ export function ChatSessionList({
   const [editingTitle, setEditingTitle] = useState('');
 
   const filteredSessions = useMemo(() => {
-    let filtered = sessions;
+    let filtered = [...sessions];
 
     // Filter by status
     if (filterStatus !== 'all') {

@@ -119,9 +119,16 @@ export function DeviceActionModal({
     }
   }, [isDragging, dragStart]);
 
-  const handleCopyOutput = () => {
+  const handleCopyOutput = async () => {
     if (selectedAction?.output) {
-      navigator.clipboard.writeText(selectedAction.output.join('\n'));
+      try {
+        await navigator.clipboard.writeText(selectedAction.output.join('\n'));
+      } catch (error) {
+        console.error('Failed to copy to clipboard:', error);
+        alert(
+          'Failed to copy to clipboard. Please try selecting and copying manually.'
+        );
+      }
     }
   };
 

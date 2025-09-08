@@ -42,7 +42,7 @@ export function MessageList({
   const bottomRef = useRef<HTMLDivElement>(null);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [isUserScrolling, setIsUserScrolling] = useState(false);
-  const scrollTimeoutRef = useRef<NodeJS.Timeout>();
+  const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
 
   const scrollToBottom = useCallback((smooth = true) => {
     if (bottomRef.current) {
@@ -192,9 +192,7 @@ export function MessageList({
               <ChatMessage
                 key={message.id}
                 message={message}
-                deviceActions={deviceActions.filter(
-                  a => a.session_id === message.session_id
-                )}
+                deviceActions={deviceActions}
                 onRetry={onRetry}
                 onApproveAction={onApproveAction}
                 onRejectAction={onRejectAction}

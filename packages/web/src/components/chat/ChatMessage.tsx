@@ -59,15 +59,38 @@ export function ChatMessage({
 }: ChatMessageProps) {
   const isUser = message.role === 'user';
   const isAssistant = message.role === 'assistant';
-  const messageActions = deviceActions.filter(
-    action => action.session_id === message.session_id
-  );
+  // Filter device actions by message_id to show only actions associated with this message
+  const messageActions = isAssistant
+    ? deviceActions.filter(action => action.message_id === message.id)
+    : [];
 
   const renderContent = () => {
     if (isAssistant) {
       return (
         <div className='prose prose-sm dark:prose-invert max-w-none'>
-          <ReactMarkdown>{message.content}</ReactMarkdown>
+          <ReactMarkdown
+            allowedElements={[
+              'p',
+              'strong',
+              'em',
+              'code',
+              'pre',
+              'ul',
+              'ol',
+              'li',
+              'blockquote',
+              'h1',
+              'h2',
+              'h3',
+              'h4',
+              'h5',
+              'h6',
+            ]}
+            unwrapDisallowed={true}
+            skipHtml={true}
+          >
+            {message.content}
+          </ReactMarkdown>
         </div>
       );
     }

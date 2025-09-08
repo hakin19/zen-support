@@ -1,5 +1,3 @@
-/* globals window document setTimeout clearTimeout */
-
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 
@@ -8,8 +6,6 @@ import type { Database } from '@aizen/shared';
 type ChatSession = Database['public']['Tables']['chat_sessions']['Row'];
 type ChatMessage = Database['public']['Tables']['chat_messages']['Row'];
 type DeviceAction = Database['public']['Tables']['device_actions']['Row'];
-type MessageRole = Database['public']['Enums']['message_role'];
-type ActionStatus = Database['public']['Enums']['action_status'];
 
 export interface MessageWithStatus extends ChatMessage {
   status?: 'sending' | 'sent' | 'error';
@@ -39,7 +35,7 @@ interface ChatState {
 
   // UI State
   isTyping: boolean;
-  typingTimeout: NodeJS.Timeout | null;
+  typingTimeout: ReturnType<typeof setTimeout> | null;
   isSending: boolean;
   deviceModalOpen: boolean;
   selectedActionId: string | null;
@@ -68,6 +64,10 @@ interface ChatState {
   // Device Action Actions
   setDeviceActions: (actions: DeviceActionWithStatus[]) => void;
   addDeviceAction: (action: DeviceActionWithStatus) => void;
+  addDeviceActionForMessage: (
+    action: Omit<DeviceActionWithStatus, 'message_id'>,
+    messageId: string
+  ) => void;
   updateDeviceAction: (
     id: string,
     updates: Partial<DeviceActionWithStatus>
@@ -301,6 +301,30 @@ export const useChatStore = create<ChatState>()(
         );
       },
 
+      addDeviceActionForMessage: (action, messageId) => {
+        const actionWithMessageId = {
+          ...action,
+          message_id: messageId,
+        } as DeviceActionWithStatus;
+
+        set(
+          state => {
+            const newActions = [...state.deviceActions, actionWithMessageId];
+            const pending =
+              actionWithMessageId.status === 'pending'
+                ? [...state.pendingActions, actionWithMessageId]
+                : state.pendingActions;
+
+            return {
+              deviceActions: newActions,
+              pendingActions: pending,
+            };
+          },
+          false,
+          'addDeviceActionForMessage'
+        );
+      },
+
       updateDeviceAction: (id, updates) => {
         set(
           state => {
@@ -320,6 +344,10 @@ export const useChatStore = create<ChatState>()(
       },
 
       approveAction: async (id: string) => {
+        // Store original state for rollback
+        const originalAction = get().deviceActions.find(a => a.id === id);
+
+        // Optimistic update
         get().updateDeviceAction(id, {
           status: 'approved' as const,
           approved_at: new Date().toISOString(),
@@ -330,12 +358,23 @@ export const useChatStore = create<ChatState>()(
           // API call would go here
           await new Promise(resolve => setTimeout(resolve, 500));
         } catch (error) {
-          get().updateDeviceAction(id, { status: 'pending' as const });
+          // Rollback to original state
+          if (originalAction) {
+            get().updateDeviceAction(id, {
+              status: originalAction.status,
+              approved_at: originalAction.approved_at,
+              approved_by: originalAction.approved_by,
+            });
+          }
           throw error;
         }
       },
 
       rejectAction: async (id: string) => {
+        // Store original state for rollback
+        const originalAction = get().deviceActions.find(a => a.id === id);
+
+        // Optimistic update
         get().updateDeviceAction(id, {
           status: 'rejected' as const,
           rejected_at: new Date().toISOString(),
@@ -346,7 +385,14 @@ export const useChatStore = create<ChatState>()(
           // API call would go here
           await new Promise(resolve => setTimeout(resolve, 500));
         } catch (error) {
-          get().updateDeviceAction(id, { status: 'pending' as const });
+          // Rollback to original state
+          if (originalAction) {
+            get().updateDeviceAction(id, {
+              status: originalAction.status,
+              rejected_at: originalAction.rejected_at,
+              rejected_by: originalAction.rejected_by,
+            });
+          }
           throw error;
         }
       },
