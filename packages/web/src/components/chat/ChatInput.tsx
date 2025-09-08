@@ -1,5 +1,5 @@
 import { Send, Paperclip, Loader2 } from 'lucide-react';
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, type JSX } from 'react';
 
 import type { KeyboardEvent } from 'react';
 
@@ -24,7 +24,7 @@ export function ChatInput({
   placeholder = 'Type your message...',
   maxLength = 4000,
   className,
-}: ChatInputProps) {
+}: ChatInputProps): JSX.Element {
   const [message, setMessage] = useState('');
   const [rows, setRows] = useState(1);
   const textareaRef = useRef<HTMLTextAreaElement>(null);

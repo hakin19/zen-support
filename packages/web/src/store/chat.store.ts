@@ -140,7 +140,7 @@ export const useChatStore = create<ChatState>()(
         set(
           state => ({
             sessions: state.sessions.map(s =>
-              s.id === id ? { ...s, ...updates } : s
+              (s.id as string) === id ? { ...s, ...updates } : s
             ),
           }),
           false,
@@ -154,7 +154,9 @@ export const useChatStore = create<ChatState>()(
         set(
           state => ({
             sessions: state.sessions.map(s =>
-              s.id === id ? { ...s, status: 'archived' as const } : s
+              (s.id as string) === id
+                ? { ...s, status: 'archived' as const }
+                : s
             ),
           }),
           false,
@@ -164,7 +166,7 @@ export const useChatStore = create<ChatState>()(
       deleteSession: id =>
         set(
           state => ({
-            sessions: state.sessions.filter(s => s.id !== id),
+            sessions: state.sessions.filter(s => (s.id as string) !== id),
             activeSessionId:
               state.activeSessionId === id ? null : state.activeSessionId,
           }),
@@ -361,9 +363,9 @@ export const useChatStore = create<ChatState>()(
           // Rollback to original state
           if (originalAction) {
             get().updateDeviceAction(id, {
-              status: originalAction.status,
-              approved_at: originalAction.approved_at,
-              approved_by: originalAction.approved_by,
+              status: originalAction.status as string,
+              approved_at: originalAction.approved_at as string,
+              approved_by: originalAction.approved_by as string,
             });
           }
           throw error;
@@ -388,9 +390,9 @@ export const useChatStore = create<ChatState>()(
           // Rollback to original state
           if (originalAction) {
             get().updateDeviceAction(id, {
-              status: originalAction.status,
-              rejected_at: originalAction.rejected_at,
-              rejected_by: originalAction.rejected_by,
+              status: originalAction.status as string,
+              rejected_at: originalAction.rejected_at as string,
+              rejected_by: originalAction.rejected_by as string,
             });
           }
           throw error;
@@ -401,7 +403,7 @@ export const useChatStore = create<ChatState>()(
         set(
           state => ({
             deviceActions: state.deviceActions.map(a =>
-              a.id === id ? { ...a, output: [...(a.output || []), output] } : a
+              a.id === id ? { ...a, output: [...(a.output ?? []), output] } : a
             ),
           }),
           false,

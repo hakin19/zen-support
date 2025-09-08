@@ -1,7 +1,6 @@
 import {
   X,
   Minimize2,
-  Maximize2,
   Copy,
   CheckCircle2,
   XCircle,
@@ -11,7 +10,7 @@ import {
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, type JSX } from 'react';
 
 import type { DeviceActionWithStatus } from '@/store/chat.store';
 
@@ -62,7 +61,7 @@ export function DeviceActionModal({
   onReject,
   onSelectAction,
   className,
-}: DeviceActionModalProps) {
+}: DeviceActionModalProps): JSX.Element | null {
   const [isMinimized, setIsMinimized] = useState(false);
   const [position, setPosition] = useState({ x: 20, y: 20 });
   const [isDragging, setIsDragging] = useState(false);
@@ -124,6 +123,7 @@ export function DeviceActionModal({
       try {
         await navigator.clipboard.writeText(selectedAction.output.join('\n'));
       } catch (error) {
+        // eslint-disable-next-line no-console
         console.error('Failed to copy to clipboard:', error);
         alert(
           'Failed to copy to clipboard. Please try selecting and copying manually.'
@@ -137,7 +137,7 @@ export function DeviceActionModal({
 
     const newIndex = direction === 'prev' ? currentIndex - 1 : currentIndex + 1;
     if (newIndex >= 0 && newIndex < actions.length) {
-      onSelectAction(actions[newIndex].id);
+      onSelectAction(actions[newIndex].id as string);
     }
   };
 
@@ -166,7 +166,7 @@ export function DeviceActionModal({
               variant='ghost'
               className='h-6 w-6 ml-2'
               onClick={e => {
-                e.stopPropagation();
+                (e as React.MouseEvent).stopPropagation();
                 onClose();
               }}
             >
@@ -238,18 +238,22 @@ export function DeviceActionModal({
                       ? 'bg-primary/10 border-primary'
                       : 'hover:bg-muted/50'
                   )}
-                  onClick={() => onSelectAction(action.id)}
+                  onClick={() => onSelectAction(action.id as string)}
                 >
                   <div className='flex items-center justify-between'>
                     <div className='flex items-center gap-2'>
-                      {statusIcons[action.status] || statusIcons.pending}
+                      {statusIcons[action.status as keyof typeof statusIcons] ??
+                        statusIcons.pending}
                       <span className='text-sm font-medium truncate'>
                         {action.action_type}
                       </span>
                     </div>
                     <Badge
                       variant='secondary'
-                      className={cn('text-xs', statusColors[action.status])}
+                      className={cn(
+                        'text-xs',
+                        statusColors[action.status as keyof typeof statusColors]
+                      )}
                     >
                       {action.status}
                     </Badge>
@@ -319,7 +323,7 @@ export function DeviceActionModal({
                       <Button
                         size='sm'
                         variant='default'
-                        onClick={() => onApprove(selectedAction.id)}
+                        onClick={() => onApprove(selectedAction.id as string)}
                       >
                         <CheckCircle2 className='h-4 w-4 mr-2' />
                         Approve
@@ -327,7 +331,7 @@ export function DeviceActionModal({
                       <Button
                         size='sm'
                         variant='destructive'
-                        onClick={() => onReject(selectedAction.id)}
+                        onClick={() => onReject(selectedAction.id as string)}
                       >
                         <XCircle className='h-4 w-4 mr-2' />
                         Reject

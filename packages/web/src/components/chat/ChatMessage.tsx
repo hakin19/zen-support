@@ -9,7 +9,7 @@ import {
   Info,
   AlertTriangle,
 } from 'lucide-react';
-import React from 'react';
+import React, { type JSX } from 'react';
 import ReactMarkdown from 'react-markdown';
 
 import type {
@@ -56,7 +56,7 @@ export function ChatMessage({
   onApproveAction,
   onRejectAction,
   onViewAction,
-}: ChatMessageProps) {
+}: ChatMessageProps): JSX.Element {
   const isUser = message.role === 'user';
   const isAssistant = message.role === 'assistant';
   // Filter device actions by message_id to show only actions associated with this message
@@ -113,13 +113,13 @@ export function ChatMessage({
       return (
         <div className='flex items-center gap-2 text-xs text-red-600 dark:text-red-400'>
           <AlertCircle className='h-3 w-3' />
-          <span>{message.error || 'Failed to send'}</span>
+          <span>{message.error ?? 'Failed to send'}</span>
           {onRetry && (
             <Button
               variant='ghost'
               size='sm'
               className='h-6 px-2'
-              onClick={() => onRetry(message.id)}
+              onClick={() => onRetry(message.id as string)}
             >
               <RefreshCw className='h-3 w-3 mr-1' />
               Retry
@@ -136,7 +136,7 @@ export function ChatMessage({
     return (
       <div className='mt-3 space-y-2'>
         {messageActions.map(action => (
-          <Card key={action.id} className='p-3'>
+          <Card key={action.id as string} className='p-3'>
             <div className='flex items-start justify-between'>
               <div className='flex-1'>
                 <div className='flex items-center gap-2'>
@@ -183,7 +183,7 @@ export function ChatMessage({
                     <Button
                       size='sm'
                       variant='default'
-                      onClick={() => onApproveAction(action.id)}
+                      onClick={() => onApproveAction(action.id as string)}
                       className='h-7'
                     >
                       <CheckCircle2 className='h-3 w-3 mr-1' />
@@ -194,7 +194,7 @@ export function ChatMessage({
                     <Button
                       size='sm'
                       variant='destructive'
-                      onClick={() => onRejectAction(action.id)}
+                      onClick={() => onRejectAction(action.id as string)}
                       className='h-7'
                     >
                       Reject
@@ -206,7 +206,7 @@ export function ChatMessage({
                 <Button
                   size='sm'
                   variant='ghost'
-                  onClick={() => onViewAction(action.id)}
+                  onClick={() => onViewAction(action.id as string)}
                   className='h-7'
                 >
                   View
@@ -223,7 +223,7 @@ export function ChatMessage({
     <div
       className={cn(
         'group relative flex gap-3 p-4 rounded-lg border transition-colors',
-        roleColors[message.role],
+        roleColors[message.role as MessageRole],
         isUser && 'ml-8',
         !isUser && 'mr-8'
       )}
@@ -232,7 +232,7 @@ export function ChatMessage({
     >
       <div className='flex-shrink-0'>
         <div className='w-8 h-8 rounded-full bg-background flex items-center justify-center border'>
-          {roleIcons[message.role]}
+          {roleIcons[message.role as MessageRole]}
         </div>
       </div>
       <div className='flex-1 space-y-1'>
@@ -240,7 +240,7 @@ export function ChatMessage({
           <span className='text-xs font-medium capitalize'>{message.role}</span>
           {message.created_at && (
             <span className='text-xs text-muted-foreground'>
-              {formatDistanceToNow(new Date(message.created_at), {
+              {formatDistanceToNow(new Date(message.created_at as string), {
                 addSuffix: true,
               })}
             </span>

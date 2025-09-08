@@ -288,14 +288,23 @@ export async function registerWebSocketRoutes(
           { unsubscribe: () => Promise<void> }
         > = new Map();
 
-        // Extract JWT from headers
+        // Extract JWT from headers (for non-browser clients) or query params (for browser clients)
         const authHeader = request.headers.authorization;
-        if (!authHeader?.startsWith('Bearer ')) {
+        const queryToken = (request.query as { token?: string })?.token;
+
+        let token: string | null = null;
+
+        if (authHeader?.startsWith('Bearer ')) {
+          token = authHeader.substring(7);
+        } else if (queryToken) {
+          // Use query parameter token for browser clients
+          token = queryToken;
+        }
+
+        if (!token) {
           ws.close(1008, 'Unauthorized');
           return;
         }
-
-        const token = authHeader.substring(7);
 
         try {
           // Validate JWT with Supabase
@@ -362,7 +371,64 @@ export async function registerWebSocketRoutes(
 
                       // Only allow subscribing to authorized channels
                       if (channel.startsWith('chat:')) {
-                        // TODO: Verify user has access to this chat session
+                        // Extract session ID from channel name (format: "chat:session-id")
+                        const sessionId = channel.substring(5);
+
+                        // Verify user has access to this chat session
+                        const supabaseAdmin = getSupabaseAdminClient();
+
+                        // First, get the user's customer_id
+                        const { data: userData, error: userError } =
+                          await supabaseAdmin
+                            .from('users')
+                            .select('customer_id')
+                            .eq('id', userId)
+                            .single();
+
+                        if (userError || !userData?.customer_id) {
+                          await manager.sendToConnection(
+                            connectionId,
+                            addCorrelationIdToMessage(
+                              {
+                                type: 'error',
+                                error: 'User not associated with a customer',
+                              },
+                              requestId
+                            )
+                          );
+                          break;
+                        }
+
+                        // Verify the session belongs to the user's customer
+                        const { data: session, error: sessionError } =
+                          await supabaseAdmin
+                            .from('diagnostic_sessions')
+                            .select('id, customer_id')
+                            .eq('id', sessionId)
+                            .eq('customer_id', userData.customer_id)
+                            .single();
+
+                        if (sessionError || !session) {
+                          await manager.sendToConnection(
+                            connectionId,
+                            addCorrelationIdToMessage(
+                              {
+                                type: 'error',
+                                error: 'Access denied to this chat session',
+                              },
+                              requestId
+                            )
+                          );
+                          request.log.warn(
+                            {
+                              userId,
+                              sessionId,
+                              customerId: userData.customer_id,
+                            },
+                            'Unauthorized chat subscription attempt'
+                          );
+                          break;
+                        }
 
                         if (!subscribedChannels.has(channel)) {
                           const subscription = await redis.createSubscription(

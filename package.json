@@ -18,6 +18,10 @@
   "workspaces": [
     "packages/*"
   ],
+  "overrides": {
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
   "scripts": {
     "// Development": "Scripts for local development",
     "dev": "nx run-many --target=dev --all --parallel",

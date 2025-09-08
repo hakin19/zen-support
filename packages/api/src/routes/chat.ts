@@ -447,6 +447,8 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
         stream.destroy();
       });
 
+      // Hijack the response to keep the connection open
+      reply.hijack();
       return reply;
     }
   );
