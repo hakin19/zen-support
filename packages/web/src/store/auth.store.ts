@@ -11,13 +11,13 @@ interface User {
 
 interface AuthState {
   user: User | null;
-  session: unknown | null;
-  organization: unknown | null;
+  session: Record<string, unknown> | null;
+  organization: Record<string, unknown> | null;
   isAuthenticated: boolean;
   loading: boolean;
   setUser: (user: User | null) => void;
-  setSession: (session: unknown | null) => void;
-  setOrganization: (organization: unknown | null) => void;
+  setSession: (session: Record<string, unknown> | null) => void;
+  setOrganization: (organization: Record<string, unknown> | null) => void;
   setLoading: (loading: boolean) => void;
   clearAuth: () => void;
 }

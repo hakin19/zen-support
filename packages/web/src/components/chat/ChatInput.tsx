@@ -1,3 +1,4 @@
+/* global window */
 import { Send, Paperclip, Loader2 } from 'lucide-react';
 import React, { useState, useRef, useEffect, type JSX } from 'react';
 
@@ -28,7 +29,7 @@ export function ChatInput({
   const [message, setMessage] = useState('');
   const [rows, setRows] = useState(1);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const typingTimeoutRef = useRef<NodeJS.Timeout>();
 
   const isNearLimit = message.length > maxLength * 0.9;
   const remainingChars = maxLength - message.length;
@@ -71,12 +72,12 @@ export function ChatInput({
 
       if (onTyping) {
         if (typingTimeoutRef.current) {
-          clearTimeout(typingTimeoutRef.current);
+          window.clearTimeout(typingTimeoutRef.current);
         }
 
         onTyping();
 
-        typingTimeoutRef.current = setTimeout(() => {
+        typingTimeoutRef.current = window.setTimeout(() => {
           // Typing stopped
         }, 1000);
       }
@@ -86,7 +87,7 @@ export function ChatInput({
   useEffect(() => {
     return () => {
       if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current);
+        window.clearTimeout(typingTimeoutRef.current);
       }
     };
   }, []);

@@ -12,7 +12,10 @@ import type { WebSocketConnectionManager } from '../services/websocket-connectio
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 
 // Create a wrapper for the middleware without options
-const webPortalAuth = async (request: FastifyRequest, reply: FastifyReply) => {
+const webPortalAuth = async (
+  request: FastifyRequest,
+  reply: FastifyReply
+): Promise<void> => {
   return webPortalAuthMiddleware(request, reply);
 };
 
@@ -46,14 +49,17 @@ interface ListMessagesQuery {
   offset?: number;
 }
 
-export async function registerChatRoutes(fastify: FastifyInstance) {
+export function registerChatRoutes(fastify: FastifyInstance): void {
   const claudeService = new ClaudeCodeService({
     model: 'sonnet',
     timeout: 60000,
   });
 
-  const connectionManager = (fastify as any)
-    .websocketConnectionManager as WebSocketConnectionManager;
+  const connectionManager = (
+    fastify as unknown as {
+      websocketConnectionManager: WebSocketConnectionManager;
+    }
+  ).websocketConnectionManager;
 
   // Create a new chat session
   fastify.post<{ Body: CreateSessionBody }>(
@@ -77,7 +83,7 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
       }
 
       // Get authenticated Supabase client using the token from middleware
-      const token = request.headers.authorization?.replace('Bearer ', '') || '';
+      const token = request.headers.authorization?.replace('Bearer ', '') ?? '';
       const supabase = getAuthenticatedSupabaseClient(token);
 
       const { data: session, error } = await supabase
@@ -85,8 +91,8 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
         .insert({
           user_id: userId,
           customer_id: customerId,
-          title: title || null,
-          metadata: metadata as any,
+          title: title ?? null,
+          metadata,
           status: 'active',
         })
         .select()
@@ -129,7 +135,7 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
       }
 
       // Get authenticated Supabase client using the token from middleware
-      const token = request.headers.authorization?.replace('Bearer ', '') || '';
+      const token = request.headers.authorization?.replace('Bearer ', '') ?? '';
       const supabase = getAuthenticatedSupabaseClient(token);
 
       let query = supabase
@@ -174,7 +180,7 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
       }
 
       // Get authenticated Supabase client using the token from middleware
-      const token = request.headers.authorization?.replace('Bearer ', '') || '';
+      const token = request.headers.authorization?.replace('Bearer ', '') ?? '';
       const supabase = getAuthenticatedSupabaseClient(token);
 
       // Get session
@@ -234,7 +240,7 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
       }
 
       // Get authenticated Supabase client using the token from middleware
-      const token = request.headers.authorization?.replace('Bearer ', '') || '';
+      const token = request.headers.authorization?.replace('Bearer ', '') ?? '';
       const supabase = getAuthenticatedSupabaseClient(token);
 
       // Verify session ownership
@@ -278,23 +284,20 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
       await connectionManager.broadcastToCustomer(customerId, messageData);
 
       // Publish to Redis for multi-server fanout
-      if ((fastify as any).redis) {
-        await publishToChannel(
-          (fastify as any).redis,
-          `chat:${sessionId}`,
-          messageData
-        );
+      const redis = (fastify as unknown as { redis?: unknown }).redis;
+      if (redis) {
+        await publishToChannel(redis, `chat:${sessionId}`, messageData);
       }
 
       // Process AI response asynchronously
-      processAIResponse(
+      void processAIResponse(
         fastify,
         sessionId,
         content,
         userId,
         customerId,
         token
-      ).catch(error => {
+      ).catch((error: unknown) => {
         fastify.log.error('Failed to process AI response:', error);
       });
 
@@ -327,7 +330,7 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
       }
 
       // Get authenticated Supabase client using the token from middleware
-      const token = request.headers.authorization?.replace('Bearer ', '') || '';
+      const token = request.headers.authorization?.replace('Bearer ', '') ?? '';
       const supabase = getAuthenticatedSupabaseClient(token);
 
       // Verify session ownership
@@ -378,7 +381,7 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
       }
 
       // Get authenticated Supabase client using the token from middleware
-      const token = request.headers.authorization?.replace('Bearer ', '') || '';
+      const token = request.headers.authorization?.replace('Bearer ', '') ?? '';
       const supabase = getAuthenticatedSupabaseClient(token);
 
       // Verify session ownership
@@ -416,10 +419,20 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
       // Subscribe to Redis channel for this session
       let unsubscribe: (() => Promise<void>) | null = null;
 
-      if ((fastify as any).redis) {
-        const subscription = await (fastify as any).redis.createSubscription(
+      const redis = (
+        fastify as unknown as {
+          redis?: {
+            createSubscription: (
+              channel: string,
+              callback: (data: unknown) => void
+            ) => Promise<{ unsubscribe: () => Promise<void> }>;
+          };
+        }
+      ).redis;
+      if (redis) {
+        const subscription = await redis.createSubscription(
           `chat:${sessionId}`,
-          (data: any) => {
+          (data: unknown) => {
             stream.write(`event: message\ndata: ${JSON.stringify(data)}\n\n`);
           }
         );
@@ -427,10 +440,10 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
       }
 
       // Clean up on disconnect
-      request.raw.on('close', async () => {
+      request.raw.on('close', () => {
         clearInterval(heartbeatInterval);
         if (unsubscribe) {
-          await unsubscribe();
+          void unsubscribe();
         }
         stream.destroy();
       });
@@ -472,10 +485,10 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
       }
 
       // Get authenticated Supabase client using the token from middleware
-      const token = request.headers.authorization?.replace('Bearer ', '') || '';
+      const token = request.headers.authorization?.replace('Bearer ', '') ?? '';
       const supabase = getAuthenticatedSupabaseClient(token);
 
-      const updateData: any = {};
+      const updateData: Record<string, unknown> = {};
       if (title !== undefined) updateData.title = title;
       if (status !== undefined) {
         updateData.status = status;
@@ -520,7 +533,7 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
       }
 
       // Get authenticated Supabase client using the token from middleware
-      const token = request.headers.authorization?.replace('Bearer ', '') || '';
+      const token = request.headers.authorization?.replace('Bearer ', '') ?? '';
       const supabase = getAuthenticatedSupabaseClient(token);
 
       const { data: session, error } = await supabase
@@ -559,7 +572,7 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
     let updateTimer: NodeJS.Timeout | null = null;
 
     // Function to perform the DB update
-    const updateDatabase = async () => {
+    const updateDatabase = async (): Promise<void> => {
       if (!assistantMessageId || !pendingUpdate) return;
 
       pendingUpdate = false;
@@ -574,7 +587,7 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
     };
 
     // Schedule a throttled update
-    const scheduleUpdate = () => {
+    const scheduleUpdate = (): void => {
       if (!assistantMessageId) return;
 
       pendingUpdate = true;
@@ -582,13 +595,13 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
 
       if (timeSinceLastUpdate >= UPDATE_INTERVAL_MS) {
         // Enough time has passed, update immediately
-        updateDatabase();
+        void updateDatabase();
       } else if (!updateTimer) {
         // Schedule update for later
         const delay = UPDATE_INTERVAL_MS - timeSinceLastUpdate;
         updateTimer = setTimeout(() => {
           updateTimer = null;
-          updateDatabase();
+          void updateDatabase();
         }, delay);
       }
     };
@@ -596,10 +609,14 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
     try {
       await claudeService.streamQuery(
         prompt,
-        async (output: any) => {
-          if (output.type === 'message' && output.data?.content) {
-            const text = output.data.content
-              .map((c: any) => c.text || '')
+        (output: unknown) => {
+          const typedOutput = output as {
+            type: string;
+            data?: { content?: Array<{ text?: string }> };
+          };
+          if (typedOutput.type === 'message' && typedOutput.data?.content) {
+            const text = typedOutput.data.content
+              .map(c => c.text ?? '')
               .join('');
 
             if (text) {
@@ -644,31 +661,28 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
                 messageData
               );
 
-              if ((fastify as any).redis) {
-                await publishToChannel(
-                  (fastify as any).redis,
-                  `chat:${sessionId}`,
-                  messageData
-                );
+              const redis = (fastify as unknown as { redis?: unknown }).redis;
+              if (redis) {
+                await publishToChannel(redis, `chat:${sessionId}`, messageData);
               }
             }
-          } else if (output.type === 'tool_use' && output.data) {
+          } else if (
+            typedOutput.type === 'tool_use' &&
+            (typedOutput as { data?: unknown }).data
+          ) {
             // Handle device actions
             const toolData = {
               type: 'chat:device_action',
               sessionId,
-              data: output.data,
+              data: (typedOutput as { data: unknown }).data,
             };
 
             // Only broadcast to connections from the same customer
             await connectionManager.broadcastToCustomer(customerId, toolData);
 
-            if ((fastify as any).redis) {
-              await publishToChannel(
-                (fastify as any).redis,
-                `chat:${sessionId}`,
-                toolData
-              );
+            const redis = (fastify as unknown as { redis?: unknown }).redis;
+            if (redis) {
+              await publishToChannel(redis, `chat:${sessionId}`, toolData);
             }
           }
         },
@@ -698,9 +712,9 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
       // Save error message
       await supabase.from('chat_messages').insert({
         session_id: sessionId,
-        role: 'error' as any,
+        role: 'error' as const,
         content: 'Failed to process AI response. Please try again.',
-        metadata: { error: String(error) } as any,
+        metadata: { error: String(error) } as Record<string, unknown>,
       });
 
       // Broadcast error
@@ -715,12 +729,9 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
       // Only broadcast to connections from the same customer
       await connectionManager.broadcastToCustomer(customerId, errorData);
 
-      if ((fastify as any).redis) {
-        await publishToChannel(
-          (fastify as any).redis,
-          `chat:${sessionId}`,
-          errorData
-        );
+      const redis = (fastify as unknown as { redis?: unknown }).redis;
+      if (redis) {
+        await publishToChannel(redis, `chat:${sessionId}`, errorData);
       }
     }
   }

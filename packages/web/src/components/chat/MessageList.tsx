@@ -1,5 +1,12 @@
+/* global window, setTimeout, clearTimeout */
 import { ChevronDown, Loader2 } from 'lucide-react';
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React, {
+  useRef,
+  useEffect,
+  useState,
+  useCallback,
+  type JSX,
+} from 'react';
 
 import { ChatMessage } from './ChatMessage';
 
@@ -37,12 +44,12 @@ export function MessageList({
   onLoadMore,
   hasMore = false,
   className,
-}: MessageListProps) {
+}: MessageListProps): JSX.Element {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [isUserScrolling, setIsUserScrolling] = useState(false);
-  const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const scrollTimeoutRef = useRef<ReturnType<typeof window.setTimeout>>();
 
   const scrollToBottom = useCallback((smooth = true) => {
     if (bottomRef.current) {
@@ -63,12 +70,12 @@ export function MessageList({
 
     // Detect user scrolling
     if (scrollTimeoutRef.current) {
-      clearTimeout(scrollTimeoutRef.current);
+      window.clearTimeout(scrollTimeoutRef.current);
     }
 
     setIsUserScrolling(true);
 
-    scrollTimeoutRef.current = setTimeout(() => {
+    scrollTimeoutRef.current = window.setTimeout(() => {
       setIsUserScrolling(false);
     }, 1000);
 
@@ -89,7 +96,7 @@ export function MessageList({
   useEffect(() => {
     return () => {
       if (scrollTimeoutRef.current) {
-        clearTimeout(scrollTimeoutRef.current);
+        window.clearTimeout(scrollTimeoutRef.current);
       }
     };
   }, []);
@@ -140,16 +147,16 @@ export function MessageList({
     messages.forEach(message => {
       if (!message.created_at) return;
 
-      const messageDate = new Date(message.created_at).toDateString();
+      const messageDate = new Date(message.created_at || '').toDateString();
 
       if (messageDate !== currentDate) {
         currentDate = messageDate;
         groups.push({
-          date: message.created_at,
+          date: message.created_at || '',
           messages: [message],
         });
       } else {
-        groups[groups.length - 1].messages.push(message);
+        groups[groups.length - 1]?.messages.push(message);
       }
     });
 
@@ -190,7 +197,7 @@ export function MessageList({
             {renderDateSeparator(group.date)}
             {group.messages.map(message => (
               <ChatMessage
-                key={message.id}
+                key={message.id as string}
                 message={message}
                 deviceActions={deviceActions}
                 onRetry={onRetry}

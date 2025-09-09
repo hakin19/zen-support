@@ -7,6 +7,18 @@ type DeviceStatus = 'online' | 'offline' | 'pending';
 type UserRole = 'owner' | 'admin' | 'viewer';
 type UserStatus = 'active' | 'invited' | 'suspended';
 
+interface WebSocketMessage {
+  type: string;
+  device?: Device;
+  deviceId?: string;
+  user?: User;
+  userId?: string;
+  organization?: Organization;
+  template?: PromptTemplate;
+  templateId?: string;
+  [key: string]: unknown;
+}
+
 interface Device {
   id: string;
   name: string;
@@ -33,6 +45,17 @@ interface User {
   invitation_expires_at?: string;
 }
 
+interface OrganizationSettings {
+  [key: string]: unknown;
+}
+
+interface Subscription {
+  plan: string;
+  status: 'active' | 'inactive' | 'trial';
+  expires_at?: string;
+  [key: string]: unknown;
+}
+
 interface Organization {
   id: string;
   name: string;
@@ -50,8 +73,8 @@ interface Organization {
   timezone: string;
   created_at: string;
   updated_at: string;
-  settings: any;
-  subscription: any;
+  settings: OrganizationSettings;
+  subscription: Subscription;
 }
 
 interface PromptTemplate {
@@ -107,8 +130,8 @@ interface WebSocketState {
   removePromptTemplate: (templateId: string) => void;
 
   // Event listeners
-  listeners: Map<string, Set<(data: any) => void>>;
-  subscribe: (event: string, callback: (data: any) => void) => () => void;
+  listeners: Map<string, Set<(data: unknown) => void>>;
+  subscribe: (event: string, callback: (data: unknown) => void) => () => void;
 }
 
 export const useWebSocketStore = create<WebSocketState>((set, get) => ({
@@ -133,6 +156,7 @@ export const useWebSocketStore = create<WebSocketState>((set, get) => ({
       } = await supabase.auth.getSession();
 
       if (!session?.access_token) {
+        // eslint-disable-next-line no-console
         console.error('No access token available for WebSocket connection');
         return;
       }
@@ -156,63 +180,95 @@ export const useWebSocketStore = create<WebSocketState>((set, get) => ({
         set({ isConnected: false });
       });
 
-      wsClient.on('message', (data: any) => {
+      wsClient.on('message', (data: unknown) => {
         const state = get();
 
+        // Type guard for WebSocket message
+        if (!data || typeof data !== 'object') {
+          return;
+        }
+
+        const message = data as WebSocketMessage;
+        if (!message.type) {
+          return;
+        }
+
         // Handle different message types
-        switch (data.type) {
+        switch (message.type) {
           // Device events
           case 'device_update':
-            state.updateDevice(data.device);
+            if (message.device) {
+              state.updateDevice(message.device);
+            }
             break;
           case 'device_added':
-            state.addDevice(data.device);
+            if (message.device) {
+              state.addDevice(message.device);
+            }
             break;
           case 'device_removed':
-            state.removeDevice(data.deviceId);
+            if (message.deviceId) {
+              state.removeDevice(message.deviceId);
+            }
             break;
 
           // User events
           case 'user_update':
-            state.updateUser(data.user);
+            if (message.user) {
+              state.updateUser(message.user);
+            }
             break;
           case 'user_added':
-            state.addUser(data.user);
+            if (message.user) {
+              state.addUser(message.user);
+            }
             break;
           case 'user_removed':
-            state.removeUser(data.userId);
+            if (message.userId) {
+              state.removeUser(message.userId);
+            }
             break;
 
           // Organization events
           case 'organization_update':
-            state.setOrganization(data.organization);
+            if (message.organization) {
+              state.setOrganization(message.organization);
+            }
             break;
 
           // Prompt template events
           case 'prompt_template_update':
-            state.updatePromptTemplate(data.template);
+            if (message.template) {
+              state.updatePromptTemplate(message.template);
+            }
             break;
           case 'prompt_template_created':
-            state.addPromptTemplate(data.template);
+            if (message.template) {
+              state.addPromptTemplate(message.template);
+            }
             break;
           case 'prompt_template_deleted':
-            state.removePromptTemplate(data.templateId);
+            if (message.templateId) {
+              state.removePromptTemplate(message.templateId);
+            }
             break;
         }
 
         // Notify specific listeners
-        const listeners = state.listeners.get(data.type);
+        const listeners = state.listeners.get(message.type);
         if (listeners) {
           listeners.forEach(callback => callback(data));
         }
       });
 
-      wsClient.on('error', (error: any) => {
+      wsClient.on('error', (error: unknown) => {
+        // eslint-disable-next-line no-console
         console.error('WebSocket error:', error);
       });
 
       set({ wsClient });
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error('Failed to initialize WebSocket:', error);
     }
   },
@@ -283,7 +339,10 @@ export const useWebSocketStore = create<WebSocketState>((set, get) => ({
     if (!state.listeners.has(event)) {
       state.listeners.set(event, new Set());
     }
-    state.listeners.get(event)!.add(callback);
+    const eventListeners = state.listeners.get(event);
+    if (eventListeners) {
+      eventListeners.add(callback);
+    }
 
     // Return unsubscribe function
     return () => {

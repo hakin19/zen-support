@@ -1,3 +1,4 @@
+/* global fetch */
 export class ApiClient {
   private baseUrl: string;
   private getAuthToken: (() => Promise<string | null>) | null = null;
@@ -8,7 +9,7 @@ export class ApiClient {
     this.baseUrl = baseUrl;
   }
 
-  setAuthTokenProvider(provider: () => Promise<string | null>) {
+  setAuthTokenProvider(provider: () => Promise<string | null>): void {
     this.getAuthToken = provider;
   }
 

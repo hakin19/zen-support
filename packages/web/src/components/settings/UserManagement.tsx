@@ -10,13 +10,13 @@ import {
   Mail,
   Filter,
   Download,
-  Upload,
+  // Upload,
   RefreshCw,
   ChevronLeft,
   ChevronRight,
   AlertCircle,
 } from 'lucide-react';
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, type JSX } from 'react';
 
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
@@ -97,18 +97,18 @@ interface InviteUserFormData {
   full_name?: string;
 }
 
-export function UserManagement() {
+export function UserManagement(): JSX.Element {
   const user = useAuthStore(state => state.user);
   const { toast } = useToast();
   const {
     users: wsUsers,
     connect,
     disconnect,
-    setUsers,
+    setUsers: setWsUsers,
     subscribe,
   } = useWebSocketStore();
 
-  const [users, setUsers] = useState<User[]>([]);
+  const [users, setLocalUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState<UserRole | 'all'>('all');
@@ -150,9 +150,9 @@ export function UserManagement() {
       if (statusFilter !== 'all') queryParams.append('status', statusFilter);
 
       const { data } = await apiClient.get(`/api/users?${queryParams}`);
-      setUsers(data.users);
+      setLocalUsers(data.users);
       setTotalPages(Math.ceil(data.total / itemsPerPage));
-    } catch (error) {
+    } catch (_error: unknown) {
       toast({
         title: 'Error',
         description: 'Failed to load users. Please try again.',
@@ -169,14 +169,14 @@ export function UserManagement() {
 
   // Connect to WebSocket on mount
   useEffect(() => {
-    connect();
+    void connect();
     return () => disconnect();
   }, [connect, disconnect]);
 
   // Subscribe to user-related WebSocket events
   useEffect(() => {
     const unsubscribeUserAdded = subscribe('user_added', () => {
-      fetchUsers();
+      void fetchUsers();
     });
 
     return () => {
@@ -187,7 +187,7 @@ export function UserManagement() {
   // Sync WebSocket users with local state
   useEffect(() => {
     if (wsUsers.length > 0) {
-      setUsers(wsUsers);
+      setLocalUsers(wsUsers);
     }
   }, [wsUsers]);
 
@@ -217,8 +217,8 @@ export function UserManagement() {
 
       setIsInviteDialogOpen(false);
       setInviteFormData({ email: '', role: 'viewer', full_name: '' });
-      fetchUsers();
-    } catch (error) {
+      void fetchUsers();
+    } catch (error: unknown) {
       toast({
         title: 'Error',
         description:
@@ -246,8 +246,8 @@ export function UserManagement() {
 
       setIsRoleDialogOpen(false);
       setSelectedUserForAction(null);
-      fetchUsers();
-    } catch (error) {
+      void fetchUsers();
+    } catch (error: unknown) {
       toast({
         title: 'Error',
         description: 'Failed to update user role',
@@ -272,8 +272,8 @@ export function UserManagement() {
 
       setIsDeleteDialogOpen(false);
       setSelectedUserForAction(null);
-      fetchUsers();
-    } catch (error) {
+      void fetchUsers();
+    } catch (error: unknown) {
       toast({
         title: 'Error',
         description: 'Failed to delete user',
@@ -301,8 +301,8 @@ export function UserManagement() {
 
       setSelectedUsers(new Set());
       setBulkAction(null);
-      fetchUsers();
-    } catch (error) {
+      void fetchUsers();
+    } catch (error: unknown) {
       toast({
         title: 'Error',
         description: `Failed to ${bulkAction} selected users`,
@@ -324,8 +324,8 @@ export function UserManagement() {
         description: 'A new invitation has been sent to the user',
       });
 
-      fetchUsers();
-    } catch (error) {
+      void fetchUsers();
+    } catch (error: unknown) {
       toast({
         title: 'Error',
         description: 'Failed to resend invitation',
@@ -351,7 +351,7 @@ export function UserManagement() {
         title: 'Export successful',
         description: 'User list has been exported',
       });
-    } catch (error) {
+    } catch (error: unknown) {
       toast({
         title: 'Error',
         description: 'Failed to export user list',
@@ -479,7 +479,7 @@ export function UserManagement() {
                     <DropdownMenuItem
                       onClick={() => {
                         setBulkAction('suspend');
-                        handleBulkAction();
+                        void handleBulkAction();
                       }}
                     >
                       Suspend Selected
@@ -487,7 +487,7 @@ export function UserManagement() {
                     <DropdownMenuItem
                       onClick={() => {
                         setBulkAction('delete');
-                        handleBulkAction();
+                        void handleBulkAction();
                       }}
                       className='text-destructive'
                     >
@@ -648,7 +648,9 @@ export function UserManagement() {
                               {u.status === 'invited' && (
                                 <>
                                   <DropdownMenuItem
-                                    onClick={() => handleResendInvitation(u.id)}
+                                    onClick={() =>
+                                      void handleResendInvitation(u.id)
+                                    }
                                   >
                                     Resend Invitation
                                   </DropdownMenuItem>

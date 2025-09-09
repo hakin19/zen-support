@@ -48,11 +48,11 @@ const allowedOriginSchema = z.object({
   origin: z.string().url(),
 });
 
-export const organizationRoutes: FastifyPluginAsync = async fastify => {
+export const organizationRoutes: FastifyPluginAsync = fastify => {
   // Get organization
   fastify.get(
     '/api/organization',
-    { preHandler: webPortalAuthMiddleware },
+    { preHandler: [webPortalAuthMiddleware] },
     async (request, reply) => {
       const { user } = request;
       if (!user) {
@@ -67,7 +67,7 @@ export const organizationRoutes: FastifyPluginAsync = async fastify => {
           .eq('id', user.organization_id)
           .single();
 
-        if (error || !org) {
+        if (error ?? !org) {
           fastify.log.error('Failed to fetch organization:', error);
           return reply.code(404).send({ error: 'Organization not found' });
         }
@@ -89,37 +89,37 @@ export const organizationRoutes: FastifyPluginAsync = async fastify => {
         // Mock organization data structure for UI compatibility
         const organization = {
           id: org.id,
-          name: org.business_name || 'Organization',
-          subdomain: org.subdomain || '',
-          logo_url: org.logo_url || '',
-          primary_color: org.primary_color || '#007bff',
-          secondary_color: org.secondary_color || '#6c757d',
-          contact_email: org.email || '',
-          contact_phone: org.phone || '',
-          address: org.address || '',
-          city: org.city || '',
-          state: org.state || '',
-          zip: org.zip || '',
-          country: org.country || 'US',
-          timezone: org.timezone || 'America/New_York',
+          name: org.business_name ?? 'Organization',
+          subdomain: org.subdomain ?? '',
+          logo_url: org.logo_url ?? '',
+          primary_color: org.primary_color ?? '#007bff',
+          secondary_color: org.secondary_color ?? '#6c757d',
+          contact_email: org.email ?? '',
+          contact_phone: org.phone ?? '',
+          address: org.address ?? '',
+          city: org.city ?? '',
+          state: org.state ?? '',
+          zip: org.zip ?? '',
+          country: org.country ?? 'US',
+          timezone: org.timezone ?? 'America/New_York',
           created_at: org.created_at,
           updated_at: org.updated_at,
           settings: {
-            allow_sso: settings?.allow_sso || false,
-            enforce_2fa: settings?.enforce_2fa || false,
-            session_timeout: settings?.session_timeout || 3600,
-            ip_whitelist: settings?.ip_whitelist || [],
+            allow_sso: settings?.allow_sso ?? false,
+            enforce_2fa: settings?.enforce_2fa ?? false,
+            session_timeout: settings?.session_timeout ?? 3600,
+            ip_whitelist: settings?.ip_whitelist ?? [],
             notification_preferences: {
               email_alerts: settings?.email_alerts ?? true,
               sms_alerts: settings?.sms_alerts ?? false,
-              webhook_url: settings?.webhook_url || null,
+              webhook_url: settings?.webhook_url ?? null,
             },
             api_settings: {
-              rate_limit: settings?.rate_limit || 1000,
-              allowed_origins: settings?.allowed_origins || [],
+              rate_limit: settings?.rate_limit ?? 1000,
+              allowed_origins: settings?.allowed_origins ?? [],
             },
           },
-          subscription: subscription || {
+          subscription: subscription ?? {
             plan: 'free',
             seats: 5,
             used_seats: 1,
@@ -142,10 +142,10 @@ export const organizationRoutes: FastifyPluginAsync = async fastify => {
   // Update organization
   fastify.patch(
     '/api/organization',
-    { preHandler: webPortalAuthMiddleware },
+    { preHandler: [webPortalAuthMiddleware] },
     async (request, reply) => {
       const { user } = request;
-      if (!user || (user.role !== 'owner' && user.role !== 'admin')) {
+      if (!user ?? (user.role !== 'owner' && user.role !== 'admin')) {
         return reply.code(403).send({ error: 'Insufficient permissions' });
       }
 
@@ -200,10 +200,10 @@ export const organizationRoutes: FastifyPluginAsync = async fastify => {
   // Update security settings
   fastify.patch(
     '/api/organization/settings',
-    { preHandler: webPortalAuthMiddleware },
+    { preHandler: [webPortalAuthMiddleware] },
     async (request, reply) => {
       const { user } = request;
-      if (!user || (user.role !== 'owner' && user.role !== 'admin')) {
+      if (!user ?? (user.role !== 'owner' && user.role !== 'admin')) {
         return reply.code(403).send({ error: 'Insufficient permissions' });
       }
 
@@ -233,10 +233,10 @@ export const organizationRoutes: FastifyPluginAsync = async fastify => {
   // Update notification settings
   fastify.patch(
     '/api/organization/notifications',
-    { preHandler: webPortalAuthMiddleware },
+    { preHandler: [webPortalAuthMiddleware] },
     async (request, reply) => {
       const { user } = request;
-      if (!user || (user.role !== 'owner' && user.role !== 'admin')) {
+      if (!user ?? (user.role !== 'owner' && user.role !== 'admin')) {
         return reply.code(403).send({ error: 'Insufficient permissions' });
       }
 
@@ -248,7 +248,7 @@ export const organizationRoutes: FastifyPluginAsync = async fastify => {
           organization_id: user.organization_id,
           email_alerts: body.email_alerts,
           sms_alerts: body.sms_alerts,
-          webhook_url: body.webhook_url || null,
+          webhook_url: body.webhook_url ?? null,
           updated_at: new Date().toISOString(),
         });
 
@@ -268,10 +268,10 @@ export const organizationRoutes: FastifyPluginAsync = async fastify => {
   // Update API settings
   fastify.patch(
     '/api/organization/api-settings',
-    { preHandler: webPortalAuthMiddleware },
+    { preHandler: [webPortalAuthMiddleware] },
     async (request, reply) => {
       const { user } = request;
-      if (!user || (user.role !== 'owner' && user.role !== 'admin')) {
+      if (!user ?? (user.role !== 'owner' && user.role !== 'admin')) {
         return reply.code(403).send({ error: 'Insufficient permissions' });
       }
 
@@ -301,10 +301,10 @@ export const organizationRoutes: FastifyPluginAsync = async fastify => {
   // Add IP to whitelist
   fastify.post(
     '/api/organization/ip-whitelist',
-    { preHandler: webPortalAuthMiddleware },
+    { preHandler: [webPortalAuthMiddleware] },
     async (request, reply) => {
       const { user } = request;
-      if (!user || (user.role !== 'owner' && user.role !== 'admin')) {
+      if (!user ?? (user.role !== 'owner' && user.role !== 'admin')) {
         return reply.code(403).send({ error: 'Insufficient permissions' });
       }
 
@@ -318,11 +318,13 @@ export const organizationRoutes: FastifyPluginAsync = async fastify => {
           .eq('organization_id', user.organization_id)
           .single();
 
-        const currentWhitelist = settings?.ip_whitelist || [];
+        const currentWhitelist = settings?.ip_whitelist ?? [];
 
         // Check if IP already exists
         if (
-          currentWhitelist.some((entry: any) => entry.ip === body.ip_address)
+          (currentWhitelist as any[]).some(
+            (entry: any) => entry.ip === body.ip_address
+          )
         ) {
           return reply
             .code(400)
@@ -334,7 +336,7 @@ export const organizationRoutes: FastifyPluginAsync = async fastify => {
           ...currentWhitelist,
           {
             ip: body.ip_address,
-            description: body.description || '',
+            description: body.description ?? '',
             created_at: new Date().toISOString(),
           },
         ];
@@ -360,10 +362,10 @@ export const organizationRoutes: FastifyPluginAsync = async fastify => {
   // Remove IP from whitelist
   fastify.delete(
     '/api/organization/ip-whitelist/:ip',
-    { preHandler: webPortalAuthMiddleware },
+    { preHandler: [webPortalAuthMiddleware] },
     async (request, reply) => {
       const { user } = request;
-      if (!user || (user.role !== 'owner' && user.role !== 'admin')) {
+      if (!user ?? (user.role !== 'owner' && user.role !== 'admin')) {
         return reply.code(403).send({ error: 'Insufficient permissions' });
       }
 
@@ -377,8 +379,8 @@ export const organizationRoutes: FastifyPluginAsync = async fastify => {
           .eq('organization_id', user.organization_id)
           .single();
 
-        const currentWhitelist = settings?.ip_whitelist || [];
-        const newWhitelist = currentWhitelist.filter(
+        const currentWhitelist = settings?.ip_whitelist ?? [];
+        const newWhitelist = (currentWhitelist as any[]).filter(
           (entry: any) => entry.ip !== ip
         );
 
@@ -403,10 +405,10 @@ export const organizationRoutes: FastifyPluginAsync = async fastify => {
   // Add allowed origin
   fastify.post(
     '/api/organization/allowed-origins',
-    { preHandler: webPortalAuthMiddleware },
+    { preHandler: [webPortalAuthMiddleware] },
     async (request, reply) => {
       const { user } = request;
-      if (!user || (user.role !== 'owner' && user.role !== 'admin')) {
+      if (!user ?? (user.role !== 'owner' && user.role !== 'admin')) {
         return reply.code(403).send({ error: 'Insufficient permissions' });
       }
 
@@ -420,7 +422,7 @@ export const organizationRoutes: FastifyPluginAsync = async fastify => {
           .eq('organization_id', user.organization_id)
           .single();
 
-        const currentOrigins = settings?.allowed_origins || [];
+        const currentOrigins = settings?.allowed_origins ?? [];
 
         // Check if origin already exists
         if (currentOrigins.includes(body.origin)) {
@@ -451,10 +453,10 @@ export const organizationRoutes: FastifyPluginAsync = async fastify => {
   // Remove allowed origin
   fastify.delete(
     '/api/organization/allowed-origins/:origin',
-    { preHandler: webPortalAuthMiddleware },
+    { preHandler: [webPortalAuthMiddleware] },
     async (request, reply) => {
       const { user } = request;
-      if (!user || (user.role !== 'owner' && user.role !== 'admin')) {
+      if (!user ?? (user.role !== 'owner' && user.role !== 'admin')) {
         return reply.code(403).send({ error: 'Insufficient permissions' });
       }
 
@@ -468,7 +470,7 @@ export const organizationRoutes: FastifyPluginAsync = async fastify => {
           .eq('organization_id', user.organization_id)
           .single();
 
-        const currentOrigins = settings?.allowed_origins || [];
+        const currentOrigins = settings?.allowed_origins ?? [];
         const newOrigins = currentOrigins.filter((o: string) => o !== origin);
 
         const { error } = await supabase.from('organization_settings').upsert({
@@ -492,10 +494,10 @@ export const organizationRoutes: FastifyPluginAsync = async fastify => {
   // Test webhook
   fastify.post(
     '/api/organization/test-webhook',
-    { preHandler: webPortalAuthMiddleware },
+    { preHandler: [webPortalAuthMiddleware] },
     async (request, reply) => {
       const { user } = request;
-      if (!user || (user.role !== 'owner' && user.role !== 'admin')) {
+      if (!user ?? (user.role !== 'owner' && user.role !== 'admin')) {
         return reply.code(403).send({ error: 'Insufficient permissions' });
       }
 
@@ -517,10 +519,10 @@ export const organizationRoutes: FastifyPluginAsync = async fastify => {
   // Get billing portal URL
   fastify.post(
     '/api/organization/billing-portal',
-    { preHandler: webPortalAuthMiddleware },
+    { preHandler: [webPortalAuthMiddleware] },
     async (request, reply) => {
       const { user } = request;
-      if (!user || user.role !== 'owner') {
+      if (!user ?? user.role !== 'owner') {
         return reply
           .code(403)
           .send({ error: 'Only owners can access billing' });
@@ -542,10 +544,10 @@ export const organizationRoutes: FastifyPluginAsync = async fastify => {
   // Delete organization
   fastify.delete(
     '/api/organization',
-    { preHandler: webPortalAuthMiddleware },
+    { preHandler: [webPortalAuthMiddleware] },
     async (request, reply) => {
       const { user } = request;
-      if (!user || user.role !== 'owner') {
+      if (!user ?? user.role !== 'owner') {
         return reply
           .code(403)
           .send({ error: 'Only owners can delete organization' });

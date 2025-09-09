@@ -1,3 +1,4 @@
+/* global window */
 'use client';
 
 import {
@@ -5,17 +6,17 @@ import {
   Settings as SettingsIcon,
   Building2,
   Brain,
-  ChevronDown,
   Menu,
 } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import {
+import React, {
   useState,
   useEffect,
   useCallback,
   useMemo,
   useRef,
   Component,
+  type JSX,
 } from 'react';
 
 import { DeviceRegistration } from './DeviceRegistration';
@@ -25,13 +26,7 @@ import { UserManagement } from './UserManagement';
 
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -46,7 +41,7 @@ interface Tab {
   id: TabId;
   label: string;
   icon: React.ComponentType<{ className?: string; 'data-testid'?: string }>;
-  component: React.ComponentType<any>;
+  component: React.ComponentType<Record<string, unknown>>;
   roles: Array<'owner' | 'admin' | 'viewer'>;
 }
 
@@ -69,6 +64,7 @@ class ErrorBoundary extends Component<
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    // eslint-disable-next-line no-console
     console.error('Settings component error:', error, errorInfo);
   }
 
@@ -97,10 +93,10 @@ class ErrorBoundary extends Component<
   }
 }
 
-export function SettingsPage() {
+export function SettingsPage(): JSX.Element {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { user, isAuthenticated } = useAuthStore();
+  const { user, isAuthenticated: _isAuthenticated } = useAuthStore();
 
   const [activeTab, setActiveTab] = useState<TabId>('users');
   const [loadedTabs, setLoadedTabs] = useState<Set<TabId>>(new Set(['users']));

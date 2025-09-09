@@ -1,3 +1,4 @@
+/* global setTimeout, clearTimeout, setInterval, clearInterval */
 import { EventEmitter } from 'events';
 
 export interface WebSocketClientOptions {
@@ -306,7 +307,10 @@ export class WebSocketClient extends EventEmitter {
 
     // Parse JSON messages
     try {
-      const message = JSON.parse(event.data as string);
+      const message = JSON.parse(event.data as string) as Record<
+        string,
+        unknown
+      >;
 
       // Handle system messages
       switch ((message as { type?: string }).type) {

@@ -36,11 +36,16 @@ const queryParamsSchema = z.object({
   search: z.string().optional(),
 });
 
-export const devicesRoutes: FastifyPluginAsync = async fastify => {
+export const devicesRoutes: FastifyPluginAsync = async (
+  fastify
+): Promise<void> => {
   // Get devices list - simplified endpoint for UI compatibility
   fastify.get(
     '/api/devices',
-    { preHandler: webPortalAuthMiddleware },
+    {
+      preHandler: async (request, reply) =>
+        webPortalAuthMiddleware(request, reply),
+    },
     async (request, reply) => {
       const { user } = request;
       if (!user) {
@@ -60,8 +65,8 @@ export const devicesRoutes: FastifyPluginAsync = async fastify => {
         }
 
         // Get firmware update status
-        const deviceIds = devices?.map(d => d.id) || [];
-        const firmwareUpdates: Record<string, any> = {};
+        const deviceIds = devices?.map((d: { id: string }) => d.id) || [];
+        const firmwareUpdates: Record<string, unknown> = {};
 
         if (deviceIds.length > 0) {
           const { data: updates } = await supabase
@@ -70,7 +75,7 @@ export const devicesRoutes: FastifyPluginAsync = async fastify => {
             .in('device_id', deviceIds)
             .eq('status', 'available');
 
-          updates?.forEach(update => {
+          updates?.forEach((update: { device_id: string }) => {
             firmwareUpdates[update.device_id] = update;
           });
         }
@@ -79,7 +84,7 @@ export const devicesRoutes: FastifyPluginAsync = async fastify => {
           devices: devices || [],
           firmware_updates: firmwareUpdates,
         });
-      } catch (error) {
+      } catch (error: unknown) {
         fastify.log.error('Error fetching devices:', error);
         return reply.code(500).send({ error: 'Internal server error' });
       }
@@ -89,7 +94,10 @@ export const devicesRoutes: FastifyPluginAsync = async fastify => {
   // Register device - simplified endpoint for UI compatibility
   fastify.post(
     '/api/devices/register',
-    { preHandler: webPortalAuthMiddleware },
+    {
+      preHandler: async (request, reply) =>
+        webPortalAuthMiddleware(request, reply),
+    },
     async (request, reply) => {
       const { user } = request;
       if (!user || (user.role !== 'owner' && user.role !== 'admin')) {
@@ -147,10 +155,10 @@ export const devicesRoutes: FastifyPluginAsync = async fastify => {
 
         return reply.send({
           success: true,
-          device_id: newDevice.id,
+          device_id: (newDevice as { id: string }).id,
           registration_code: registrationCode,
         });
-      } catch (error) {
+      } catch (error: unknown) {
         fastify.log.error('Error registering device:', error);
         return reply.code(500).send({ error: 'Internal server error' });
       }
@@ -160,7 +168,10 @@ export const devicesRoutes: FastifyPluginAsync = async fastify => {
   // Get devices list
   fastify.get(
     '/devices',
-    { preHandler: webPortalAuthMiddleware },
+    {
+      preHandler: async (request, reply) =>
+        webPortalAuthMiddleware(request, reply),
+    },
     async (request, reply) => {
       const { user } = request;
       if (!user) {
@@ -200,8 +211,8 @@ export const devicesRoutes: FastifyPluginAsync = async fastify => {
         }
 
         // Get firmware update status
-        const deviceIds = devices?.map(d => d.id) || [];
-        const firmwareUpdates: Record<string, any> = {};
+        const deviceIds = devices?.map((d: { id: string }) => d.id) || [];
+        const firmwareUpdates: Record<string, unknown> = {};
 
         if (deviceIds.length > 0) {
           const { data: updates } = await supabase
@@ -210,7 +221,7 @@ export const devicesRoutes: FastifyPluginAsync = async fastify => {
             .in('device_id', deviceIds)
             .eq('status', 'available');
 
-          updates?.forEach(update => {
+          updates?.forEach((update: { device_id: string }) => {
             firmwareUpdates[update.device_id] = update;
           });
         }
@@ -222,7 +233,7 @@ export const devicesRoutes: FastifyPluginAsync = async fastify => {
           page,
           limit,
         });
-      } catch (error) {
+      } catch (error: unknown) {
         fastify.log.error('Error fetching devices:', error);
         return reply.code(500).send({ error: 'Internal server error' });
       }
@@ -232,7 +243,10 @@ export const devicesRoutes: FastifyPluginAsync = async fastify => {
   // Register new device
   fastify.post(
     '/devices',
-    { preHandler: webPortalAuthMiddleware },
+    {
+      preHandler: async (request, reply) =>
+        webPortalAuthMiddleware(request, reply),
+    },
     async (request, reply) => {
       const { user } = request;
       if (!user || (user.role !== 'owner' && user.role !== 'admin')) {
@@ -278,7 +292,7 @@ export const devicesRoutes: FastifyPluginAsync = async fastify => {
         });
 
         return reply.send({ device: newDevice });
-      } catch (error) {
+      } catch (error: unknown) {
         fastify.log.error('Error registering device:', error);
         return reply.code(500).send({ error: 'Internal server error' });
       }
@@ -288,7 +302,10 @@ export const devicesRoutes: FastifyPluginAsync = async fastify => {
   // Update device
   fastify.patch(
     '/devices/:deviceId',
-    { preHandler: webPortalAuthMiddleware },
+    {
+      preHandler: async (request, reply) =>
+        webPortalAuthMiddleware(request, reply),
+    },
     async (request, reply) => {
       const { user } = request;
       if (!user || (user.role !== 'owner' && user.role !== 'admin')) {
@@ -332,7 +349,7 @@ export const devicesRoutes: FastifyPluginAsync = async fastify => {
         });
 
         return reply.send({ device: updatedDevice });
-      } catch (error) {
+      } catch (error: unknown) {
         fastify.log.error('Error updating device:', error);
         return reply.code(500).send({ error: 'Internal server error' });
       }
@@ -342,7 +359,10 @@ export const devicesRoutes: FastifyPluginAsync = async fastify => {
   // Delete device
   fastify.delete(
     '/devices/:deviceId',
-    { preHandler: webPortalAuthMiddleware },
+    {
+      preHandler: async (request, reply) =>
+        webPortalAuthMiddleware(request, reply),
+    },
     async (request, reply) => {
       const { user } = request;
       if (!user || user.role !== 'owner') {
@@ -385,7 +405,7 @@ export const devicesRoutes: FastifyPluginAsync = async fastify => {
         });
 
         return reply.send({ success: true });
-      } catch (error) {
+      } catch (error: unknown) {
         fastify.log.error('Error deleting device:', error);
         return reply.code(500).send({ error: 'Internal server error' });
       }
@@ -395,7 +415,10 @@ export const devicesRoutes: FastifyPluginAsync = async fastify => {
   // Restart device
   fastify.post(
     '/devices/:deviceId/restart',
-    { preHandler: webPortalAuthMiddleware },
+    {
+      preHandler: async (request, reply) =>
+        webPortalAuthMiddleware(request, reply),
+    },
     async (request, reply) => {
       const { user } = request;
       if (!user || (user.role !== 'owner' && user.role !== 'admin')) {
@@ -442,7 +465,7 @@ export const devicesRoutes: FastifyPluginAsync = async fastify => {
           success: true,
           message: 'Restart command sent to device',
         });
-      } catch (error) {
+      } catch (error: unknown) {
         fastify.log.error('Error restarting device:', error);
         return reply.code(500).send({ error: 'Internal server error' });
       }
@@ -452,7 +475,10 @@ export const devicesRoutes: FastifyPluginAsync = async fastify => {
   // Update firmware
   fastify.post(
     '/devices/:deviceId/firmware',
-    { preHandler: webPortalAuthMiddleware },
+    {
+      preHandler: async (request, reply) =>
+        webPortalAuthMiddleware(request, reply),
+    },
     async (request, reply) => {
       const { user } = request;
       if (!user || (user.role !== 'owner' && user.role !== 'admin')) {
@@ -502,11 +528,12 @@ export const devicesRoutes: FastifyPluginAsync = async fastify => {
         }
 
         // Send firmware update command via WebSocket
-        fastify.websocket?.sendToDevice(deviceId, {
+        const connectionManager = getConnectionManager();
+        await connectionManager.sendToDevice(deviceId, {
           type: 'command',
           command: 'firmware_update',
           version,
-          update_id: updateRecord.id,
+          update_id: (updateRecord as { id: string }).id,
           timestamp: new Date().toISOString(),
         });
 
@@ -515,7 +542,7 @@ export const devicesRoutes: FastifyPluginAsync = async fastify => {
           update: updateRecord,
           message: 'Firmware update initiated',
         });
-      } catch (error) {
+      } catch (error: unknown) {
         fastify.log.error('Error updating firmware:', error);
         return reply.code(500).send({ error: 'Internal server error' });
       }
@@ -525,7 +552,10 @@ export const devicesRoutes: FastifyPluginAsync = async fastify => {
   // Get device diagnostics
   fastify.get(
     '/devices/:deviceId/diagnostics',
-    { preHandler: webPortalAuthMiddleware },
+    {
+      preHandler: async (request, reply) =>
+        webPortalAuthMiddleware(request, reply),
+    },
     async (request, reply) => {
       const { user } = request;
       if (!user) {
@@ -568,7 +598,7 @@ export const devicesRoutes: FastifyPluginAsync = async fastify => {
           diagnostics: diagnostics || [],
           events: events || [],
         });
-      } catch (error) {
+      } catch (error: unknown) {
         fastify.log.error('Error fetching device diagnostics:', error);
         return reply.code(500).send({ error: 'Internal server error' });
       }
@@ -578,7 +608,10 @@ export const devicesRoutes: FastifyPluginAsync = async fastify => {
   // Export devices to CSV
   fastify.get(
     '/api/devices/export',
-    { preHandler: webPortalAuthMiddleware },
+    {
+      preHandler: async (request, reply) =>
+        webPortalAuthMiddleware(request, reply),
+    },
     async (request, reply) => {
       const { user } = request;
       if (!user) {
@@ -655,7 +688,7 @@ export const devicesRoutes: FastifyPluginAsync = async fastify => {
             `attachment; filename="devices-${new Date().toISOString().split('T')[0]}.csv"`
           )
           .send(csvContent);
-      } catch (error) {
+      } catch (error: unknown) {
         fastify.log.error('Error exporting devices:', error);
         return reply.code(500).send({ error: 'Internal server error' });
       }
@@ -665,7 +698,10 @@ export const devicesRoutes: FastifyPluginAsync = async fastify => {
   // Bulk restart devices
   fastify.post(
     '/api/devices/bulk-restart',
-    { preHandler: webPortalAuthMiddleware },
+    {
+      preHandler: async (request, reply) =>
+        webPortalAuthMiddleware(request, reply),
+    },
     async (request, reply) => {
       const { user } = request;
       if (!user || (user.role !== 'owner' && user.role !== 'admin')) {
@@ -699,8 +735,9 @@ export const devicesRoutes: FastifyPluginAsync = async fastify => {
         }
 
         // Send restart commands to all online devices
-        const restartPromises = onlineDevices.map(device => {
-          fastify.websocket?.sendToDevice(device.id, {
+        const connectionManager = getConnectionManager();
+        const restartPromises = onlineDevices.map(async device => {
+          await connectionManager.sendToDevice(device.id, {
             type: 'command',
             command: 'restart',
             timestamp: new Date().toISOString(),
@@ -722,7 +759,7 @@ export const devicesRoutes: FastifyPluginAsync = async fastify => {
           message: `Restart command sent to ${onlineDevices.length} device(s)`,
           devices_affected: onlineDevices.length,
         });
-      } catch (error) {
+      } catch (error: unknown) {
         fastify.log.error('Error in bulk restart:', error);
         return reply.code(500).send({ error: 'Internal server error' });
       }
@@ -732,7 +769,10 @@ export const devicesRoutes: FastifyPluginAsync = async fastify => {
   // Bulk enable devices
   fastify.post(
     '/api/devices/bulk-enable',
-    { preHandler: webPortalAuthMiddleware },
+    {
+      preHandler: async (request, reply) =>
+        webPortalAuthMiddleware(request, reply),
+    },
     async (request, reply) => {
       const { user } = request;
       if (!user || (user.role !== 'owner' && user.role !== 'admin')) {
@@ -773,7 +813,8 @@ export const devicesRoutes: FastifyPluginAsync = async fastify => {
         await Promise.all(auditPromises);
 
         // Broadcast updates
-        fastify.websocket?.broadcast({
+        const connectionManager = getConnectionManager();
+        await connectionManager.broadcast({
           type: 'devices_updated',
           devices: updatedDevices,
         });
@@ -783,7 +824,7 @@ export const devicesRoutes: FastifyPluginAsync = async fastify => {
           message: `Enabled ${updatedDevices?.length || 0} device(s)`,
           devices_affected: updatedDevices?.length || 0,
         });
-      } catch (error) {
+      } catch (error: unknown) {
         fastify.log.error('Error in bulk enable:', error);
         return reply.code(500).send({ error: 'Internal server error' });
       }
@@ -793,7 +834,10 @@ export const devicesRoutes: FastifyPluginAsync = async fastify => {
   // Bulk disable devices
   fastify.post(
     '/api/devices/bulk-disable',
-    { preHandler: webPortalAuthMiddleware },
+    {
+      preHandler: async (request, reply) =>
+        webPortalAuthMiddleware(request, reply),
+    },
     async (request, reply) => {
       const { user } = request;
       if (!user || (user.role !== 'owner' && user.role !== 'admin')) {
@@ -834,7 +878,8 @@ export const devicesRoutes: FastifyPluginAsync = async fastify => {
         await Promise.all(auditPromises);
 
         // Broadcast updates
-        fastify.websocket?.broadcast({
+        const connectionManager = getConnectionManager();
+        await connectionManager.broadcast({
           type: 'devices_updated',
           devices: updatedDevices,
         });
@@ -844,7 +889,7 @@ export const devicesRoutes: FastifyPluginAsync = async fastify => {
           message: `Disabled ${updatedDevices?.length || 0} device(s)`,
           devices_affected: updatedDevices?.length || 0,
         });
-      } catch (error) {
+      } catch (error: unknown) {
         fastify.log.error('Error in bulk disable:', error);
         return reply.code(500).send({ error: 'Internal server error' });
       }
@@ -854,7 +899,10 @@ export const devicesRoutes: FastifyPluginAsync = async fastify => {
   // Bulk remove devices
   fastify.post(
     '/api/devices/bulk-remove',
-    { preHandler: webPortalAuthMiddleware },
+    {
+      preHandler: async (request, reply) =>
+        webPortalAuthMiddleware(request, reply),
+    },
     async (request, reply) => {
       const { user } = request;
       if (!user || user.role !== 'owner') {
@@ -913,7 +961,8 @@ export const devicesRoutes: FastifyPluginAsync = async fastify => {
         await Promise.all(auditPromises);
 
         // Broadcast removals
-        fastify.websocket?.broadcast({
+        const connectionManager = getConnectionManager();
+        await connectionManager.broadcast({
           type: 'devices_removed',
           deviceIds: validDeviceIds,
         });
@@ -923,10 +972,13 @@ export const devicesRoutes: FastifyPluginAsync = async fastify => {
           message: `Removed ${validDeviceIds.length} device(s)`,
           devices_affected: validDeviceIds.length,
         });
-      } catch (error) {
+      } catch (error: unknown) {
         fastify.log.error('Error in bulk remove:', error);
         return reply.code(500).send({ error: 'Internal server error' });
       }
     }
   );
+
+  // Satisfy the async requirement
+  await Promise.resolve();
 };

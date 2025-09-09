@@ -52,11 +52,11 @@ export function registerPromptsRoutes(app: FastifyInstance): void {
           .code(403)
           .send({ error: 'Access denied. Owner role required.' });
       }
-      const body = request.body as any;
+      const body = request.body as Record<string, unknown>;
       return {
         prompt: {
           id: `prompt-${Date.now()}`,
-          ...body,
+          ...(body as any),
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
           created_by: user.id,
@@ -80,11 +80,11 @@ export function registerPromptsRoutes(app: FastifyInstance): void {
           .send({ error: 'Access denied. Owner role required.' });
       }
       const { id } = request.params as { id: string };
-      const body = request.body as any;
+      const body = request.body as Record<string, unknown>;
       return {
         prompt: {
           id,
-          ...body,
+          ...(body as any),
           updated_at: new Date().toISOString(),
           version: 2,
         },
@@ -143,7 +143,9 @@ export function registerPromptsRoutes(app: FastifyInstance): void {
           .code(403)
           .send({ error: 'Access denied. Owner role required.' });
       }
-      const { prompt_ids } = request.body as { prompt_ids: string[] };
+      const { prompt_ids: _prompt_ids } = request.body as {
+        prompt_ids: string[];
+      };
       return {
         templates: [
           {
@@ -195,7 +197,7 @@ export function registerPromptsRoutes(app: FastifyInstance): void {
           .code(403)
           .send({ error: 'Access denied. Owner role required.' });
       }
-      const { id } = request.params as { id: string };
+      const { id: _id } = request.params as { id: string };
       return {
         versions: [
           {

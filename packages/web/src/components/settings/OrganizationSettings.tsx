@@ -30,6 +30,7 @@ import React, {
   useCallback,
   useMemo,
   useRef,
+  type JSX,
 } from 'react';
 
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -172,7 +173,7 @@ interface ValidationErrors {
   [key: string]: string;
 }
 
-export function OrganizationSettings() {
+export function OrganizationSettings(): JSX.Element {
   const { user } = useAuthStore();
   const { toast } = useToast();
   const {
@@ -297,7 +298,7 @@ export function OrganizationSettings() {
       setApiData({
         rate_limit: org.settings?.api_settings?.rate_limit || 1000,
       });
-    } catch (error) {
+    } catch (error: unknown) {
       toast({
         title: 'Error',
         description: 'Failed to load organization settings. Please try again.',
@@ -428,7 +429,7 @@ export function OrganizationSettings() {
 
       // Refresh data
       fetchOrganization();
-    } catch (error) {
+    } catch (error: unknown) {
       toast({
         title: 'Error',
         description: 'Failed to save settings. Please try again.',
@@ -455,7 +456,7 @@ export function OrganizationSettings() {
       });
 
       fetchOrganization();
-    } catch (error) {
+    } catch (error: unknown) {
       toast({
         title: 'Error',
         description: 'Failed to save security settings.',
@@ -479,7 +480,7 @@ export function OrganizationSettings() {
       });
 
       fetchOrganization();
-    } catch (error) {
+    } catch (error: unknown) {
       toast({
         title: 'Error',
         description: 'Failed to save notification settings.',
@@ -503,7 +504,7 @@ export function OrganizationSettings() {
       });
 
       fetchOrganization();
-    } catch (error) {
+    } catch (error: unknown) {
       toast({
         title: 'Error',
         description: 'Failed to save API settings.',
@@ -536,7 +537,7 @@ export function OrganizationSettings() {
       setNewIPDescription('');
       setIsIPDialogOpen(false);
       fetchOrganization();
-    } catch (error) {
+    } catch (error: unknown) {
       toast({
         title: 'Error',
         description: 'Failed to add IP address.',
@@ -559,7 +560,7 @@ export function OrganizationSettings() {
       });
 
       fetchOrganization();
-    } catch (error) {
+    } catch (error: unknown) {
       toast({
         title: 'Error',
         description: 'Failed to remove IP address.',
@@ -588,7 +589,7 @@ export function OrganizationSettings() {
       setNewOrigin('');
       setIsOriginDialogOpen(false);
       fetchOrganization();
-    } catch (error) {
+    } catch (error: unknown) {
       toast({
         title: 'Error',
         description: 'Failed to add origin.',
@@ -611,7 +612,7 @@ export function OrganizationSettings() {
       });
 
       fetchOrganization();
-    } catch (error) {
+    } catch (error: unknown) {
       toast({
         title: 'Error',
         description: 'Failed to remove origin.',
@@ -635,7 +636,7 @@ export function OrganizationSettings() {
         title: 'Success',
         description: 'Webhook test successful',
       });
-    } catch (error) {
+    } catch (error: unknown) {
       setWebhookTestResult('Webhook test failed');
       toast({
         title: 'Error',
@@ -657,7 +658,7 @@ export function OrganizationSettings() {
       if (response.data.url) {
         window.location.href = response.data.url;
       }
-    } catch (error) {
+    } catch (error: unknown) {
       toast({
         title: 'Error',
         description: 'Failed to access billing portal.',
@@ -681,7 +682,7 @@ export function OrganizationSettings() {
 
       // Redirect or handle post-deletion logic
       window.location.href = '/';
-    } catch (error) {
+    } catch (error: unknown) {
       toast({
         title: 'Error',
         description: 'Failed to delete organization.',

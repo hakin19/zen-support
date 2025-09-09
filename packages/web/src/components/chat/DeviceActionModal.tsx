@@ -1,3 +1,4 @@
+/* global window, MouseEvent */
 import {
   X,
   Minimize2,
@@ -94,38 +95,44 @@ export function DeviceActionModal({
     }
   };
 
-  const handleMouseMove = (e: MouseEvent) => {
-    if (isDragging) {
-      setPosition({
-        x: e.clientX - dragStart.x,
-        y: e.clientY - dragStart.y,
-      });
-    }
-  };
+  const handleMouseMove = React.useCallback(
+    (e: MouseEvent) => {
+      if (isDragging) {
+        setPosition({
+          x: e.clientX - dragStart.x,
+          y: e.clientY - dragStart.y,
+        });
+      }
+    },
+    [isDragging, dragStart.x, dragStart.y]
+  );
 
-  const handleMouseUp = () => {
+  const handleMouseUp = React.useCallback(() => {
     setIsDragging(false);
-  };
+  }, []);
 
   useEffect(() => {
     if (isDragging) {
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
+      window.document.addEventListener('mousemove', handleMouseMove);
+      window.document.addEventListener('mouseup', handleMouseUp);
       return () => {
-        document.removeEventListener('mousemove', handleMouseMove);
-        document.removeEventListener('mouseup', handleMouseUp);
+        window.document.removeEventListener('mousemove', handleMouseMove);
+        window.document.removeEventListener('mouseup', handleMouseUp);
       };
     }
-  }, [isDragging, dragStart]);
+    return undefined;
+  }, [isDragging, dragStart, handleMouseMove, handleMouseUp]);
 
   const handleCopyOutput = async () => {
     if (selectedAction?.output) {
       try {
-        await navigator.clipboard.writeText(selectedAction.output.join('\n'));
-      } catch (error) {
+        await window.navigator.clipboard.writeText(
+          selectedAction.output.join('\n')
+        );
+      } catch (error: unknown) {
         // eslint-disable-next-line no-console
         console.error('Failed to copy to clipboard:', error);
-        alert(
+        window.alert(
           'Failed to copy to clipboard. Please try selecting and copying manually.'
         );
       }
@@ -231,7 +238,7 @@ export function DeviceActionModal({
             <div className='p-2 space-y-1'>
               {actions.map(action => (
                 <Card
-                  key={action.id}
+                  key={action.id as string}
                   className={cn(
                     'p-3 cursor-pointer transition-colors',
                     action.id === selectedActionId
@@ -349,7 +356,7 @@ export function DeviceActionModal({
                     size='icon'
                     variant='ghost'
                     className='h-6 w-6'
-                    onClick={handleCopyOutput}
+                    onClick={() => void handleCopyOutput()}
                     disabled={!selectedAction.output?.length}
                   >
                     <Copy className='h-3 w-3' />

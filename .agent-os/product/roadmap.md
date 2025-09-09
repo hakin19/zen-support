@@ -46,8 +46,8 @@ The following infrastructure and development setup has been implemented:
 - [ ] Customer Web Portal - Next.js 14 dashboard for network status and diagnostics `L`
 - [ ] Claude SDK Integration - AI orchestration for diagnostic analysis and script generation `L`
 - [ ] Human-in-the-Loop Approval System - Secure approval workflow for remediation actions `M`
-- [ ] PII Sanitization Engine - Cloud-based data cleaning before AI processing `M`
 - [ ] Diagnostic History & Reporting - Historical view of network issues and resolutions `M`
+- [ ] PII Sanitization Engine - Cloud-based data cleaning before AI processing `M`
 
 ### Dependencies
 

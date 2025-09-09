@@ -1,8 +1,9 @@
+/* global fetch */
 'use client';
 
 import { createContext, useContext, useState, useEffect } from 'react';
 
-import type { ReactNode } from 'react';
+import type { ReactNode, JSX } from 'react';
 
 type UserRole = 'owner' | 'admin' | 'viewer';
 
@@ -22,7 +23,11 @@ interface SessionContextType {
 
 const SessionContext = createContext<SessionContextType | undefined>(undefined);
 
-export function SessionProvider({ children }: { children: ReactNode }) {
+export function SessionProvider({
+  children,
+}: {
+  children: ReactNode;
+}): JSX.Element {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
@@ -34,7 +39,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       if (!response.ok) {
         throw new Error('Failed to fetch session');
       }
-      const data = await response.json();
+      const data = (await response.json()) as { user: User };
       setUser(data.user);
       setError(null);
     } catch (err) {
@@ -46,7 +51,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    fetchSession();
+    void fetchSession();
   }, []);
 
   return (
@@ -58,7 +63,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   );
 }
 
-export function useSession() {
+export function useSession(): SessionContextType {
   const context = useContext(SessionContext);
   if (context === undefined) {
     throw new Error('useSession must be used within a SessionProvider');

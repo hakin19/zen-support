@@ -27,9 +27,11 @@
     "@aizen/shared": "^0.0.1",
     "@fastify/websocket": "^10.0.1",
     "@instantlyeasy/claude-code-sdk-ts": "^0.3.0",
+    "@sinclair/typebox": "^0.34.41",
     "@supabase/supabase-js": "^2.57.0",
     "fastify": "^4.28.1",
     "ioredis": "^5.7.0",
-    "ws": "^8.18.3"
+    "ws": "^8.18.3",
+    "zod": "^4.1.5"
   }
 }

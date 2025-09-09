@@ -1,3 +1,4 @@
+/* global confirm */
 import { formatDistanceToNow } from 'date-fns';
 import {
   Plus,
@@ -10,7 +11,13 @@ import {
 } from 'lucide-react';
 import React, { useState, useMemo, type JSX } from 'react';
 
-import type { Database } from '@aizen/shared';
+interface ChatSession {
+  id: string;
+  title?: string | null;
+  status: 'active' | 'closed' | 'archived';
+  created_at: string;
+  updated_at?: string | null;
+}
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -24,8 +31,6 @@ import {
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
-
-type ChatSession = Database['public']['Tables']['chat_sessions']['Row'];
 
 interface ChatSessionListProps {
   sessions: ChatSession[];
@@ -59,13 +64,11 @@ export function ChatSessionList({
   const [editingTitle, setEditingTitle] = useState('');
 
   const filteredSessions = useMemo(() => {
-    let filtered = [...sessions] as ChatSession[];
+    let filtered = [...sessions];
 
     // Filter by status
     if (filterStatus !== 'all') {
-      filtered = filtered.filter(
-        session => (session.status as string) === filterStatus
-      );
+      filtered = filtered.filter(session => session.status === filterStatus);
     }
 
     // Filter by search query
@@ -73,15 +76,15 @@ export function ChatSessionList({
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(
         session =>
-          (session.title?.toLowerCase().includes(query) ?? false) ||
-          (session.id as string).toLowerCase().includes(query)
+          session.title?.toLowerCase().includes(query) ??
+          String(session.id).toLowerCase().includes(query)
       );
     }
 
     // Sort by most recent
     return filtered.sort((a, b) => {
-      const dateA = new Date(a.updated_at ?? a.created_at ?? 0);
-      const dateB = new Date(b.updated_at ?? b.created_at ?? 0);
+      const dateA = new Date(a.updated_at ?? a.created_at);
+      const dateB = new Date(b.updated_at ?? b.created_at);
       return dateB.getTime() - dateA.getTime();
     });
   }, [sessions, filterStatus, searchQuery]);
@@ -108,7 +111,7 @@ export function ChatSessionList({
     const olderSessions: ChatSession[] = [];
 
     filteredSessions.forEach(session => {
-      const sessionDate = new Date(session.created_at ?? 0);
+      const sessionDate = new Date(session.created_at);
 
       if (sessionDate.toDateString() === today.toDateString()) {
         todaySessions.push(session);
@@ -150,7 +153,7 @@ export function ChatSessionList({
             ? 'bg-primary/10 text-primary'
             : 'hover:bg-muted/50 text-foreground'
         )}
-        onClick={() => !isEditing && onSessionSelect(session.id as string)}
+        onClick={() => !isEditing && onSessionSelect(String(session.id))}
         role='button'
         tabIndex={0}
         aria-selected={isActive}
@@ -162,16 +165,16 @@ export function ChatSessionList({
             <Input
               value={editingTitle}
               onChange={e => setEditingTitle(e.target.value)}
-              onBlur={() => handleRename(session.id as string)}
+              onBlur={() => handleRename(String(session.id))}
               onKeyDown={e => {
                 if (e.key === 'Enter') {
-                  handleRename(session.id as string);
+                  handleRename(String(session.id));
                 } else if (e.key === 'Escape') {
                   setEditingId(null);
                   setEditingTitle('');
                 }
               }}
-              onClick={e => (e as React.MouseEvent).stopPropagation()}
+              onClick={e => e.stopPropagation()}
               className='h-6 px-1 text-sm'
               autoFocus
             />
@@ -182,7 +185,7 @@ export function ChatSessionList({
               </p>
               {session.updated_at && (
                 <p className='text-xs text-muted-foreground truncate'>
-                  {formatDistanceToNow(new Date(session.updated_at as string), {
+                  {formatDistanceToNow(new Date(session.updated_at), {
                     addSuffix: true,
                   })}
                 </p>
@@ -190,7 +193,7 @@ export function ChatSessionList({
             </>
           )}
         </div>
-        {(session.status as string) === 'archived' && (
+        {session.status === 'archived' && (
           <Badge variant='secondary' className='text-xs'>
             Archived
           </Badge>
@@ -201,7 +204,7 @@ export function ChatSessionList({
               variant='ghost'
               size='icon'
               className='h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity'
-              onClick={e => (e as React.MouseEvent).stopPropagation()}
+              onClick={e => e.stopPropagation()}
             >
               <MoreVertical className='h-3 w-3' />
             </Button>
@@ -209,9 +212,9 @@ export function ChatSessionList({
           <DropdownMenuContent align='end'>
             {onSessionRename && (
               <DropdownMenuItem
-                onClick={e => {
-                  (e as React.MouseEvent).stopPropagation();
-                  setEditingId(session.id as string);
+                onClick={(e: React.MouseEvent) => {
+                  e.stopPropagation();
+                  setEditingId(String(session.id));
                   setEditingTitle(session.title ?? '');
                 }}
               >
@@ -219,11 +222,11 @@ export function ChatSessionList({
                 Rename
               </DropdownMenuItem>
             )}
-            {onSessionArchive && (session.status as string) !== 'archived' && (
+            {onSessionArchive && session.status !== 'archived' && (
               <DropdownMenuItem
-                onClick={e => {
-                  (e as React.MouseEvent).stopPropagation();
-                  onSessionArchive(session.id as string);
+                onClick={(e: React.MouseEvent) => {
+                  e.stopPropagation();
+                  onSessionArchive(String(session.id));
                 }}
               >
                 <Archive className='h-3 w-3 mr-2' />
@@ -234,10 +237,10 @@ export function ChatSessionList({
               <>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
-                  onClick={e => {
-                    (e as React.MouseEvent).stopPropagation();
+                  onClick={(e: React.MouseEvent) => {
+                    e.stopPropagation();
                     if (confirm('Are you sure you want to delete this chat?')) {
-                      onSessionDelete(session.id as string);
+                      onSessionDelete(String(session.id));
                     }
                   }}
                   className='text-red-600'

@@ -39,13 +39,12 @@ const queryParamsSchema = z.object({
   status: userStatusSchema.optional(),
 });
 
-export const usersRoutes: FastifyPluginAsync = async fastify => {
+export const usersRoutes: FastifyPluginAsync = fastify => {
   // Get users list
   fastify.get(
     '/users',
     {
-      preHandler: async (request, reply) =>
-        webPortalAuthMiddleware(request, reply),
+      preHandler: [webPortalAuthMiddleware],
     },
     async (request, reply) => {
       const { user } = request;
@@ -90,8 +89,8 @@ export const usersRoutes: FastifyPluginAsync = async fastify => {
         }
 
         return reply.send({
-          users: users || [],
-          total: count || 0,
+          users: users ?? [],
+          total: count ?? 0,
           page,
           limit,
         });
@@ -106,8 +105,7 @@ export const usersRoutes: FastifyPluginAsync = async fastify => {
   fastify.post(
     '/users/invite',
     {
-      preHandler: async (request, reply) =>
-        webPortalAuthMiddleware(request, reply),
+      preHandler: [webPortalAuthMiddleware],
     },
     async (request, reply) => {
       const { user } = request;
@@ -231,8 +229,7 @@ export const usersRoutes: FastifyPluginAsync = async fastify => {
   fastify.patch(
     '/users/:userId/role',
     {
-      preHandler: async (request, reply) =>
-        webPortalAuthMiddleware(request, reply),
+      preHandler: [webPortalAuthMiddleware],
     },
     async (request, reply) => {
       const { user } = request;
@@ -302,8 +299,7 @@ export const usersRoutes: FastifyPluginAsync = async fastify => {
   fastify.delete(
     '/users/:userId',
     {
-      preHandler: async (request, reply) =>
-        webPortalAuthMiddleware(request, reply),
+      preHandler: [webPortalAuthMiddleware],
     },
     async (request, reply) => {
       const { user } = request;
@@ -377,8 +373,7 @@ export const usersRoutes: FastifyPluginAsync = async fastify => {
   fastify.post(
     '/users/bulk',
     {
-      preHandler: async (request, reply) =>
-        webPortalAuthMiddleware(request, reply),
+      preHandler: [webPortalAuthMiddleware],
     },
     async (request, reply) => {
       const { user } = request;
@@ -459,8 +454,7 @@ export const usersRoutes: FastifyPluginAsync = async fastify => {
   fastify.post(
     '/users/:userId/resend-invitation',
     {
-      preHandler: async (request, reply) =>
-        webPortalAuthMiddleware(request, reply),
+      preHandler: [webPortalAuthMiddleware],
     },
     async (request, reply) => {
       const { user } = request;
@@ -504,8 +498,7 @@ export const usersRoutes: FastifyPluginAsync = async fastify => {
   fastify.get(
     '/users/export',
     {
-      preHandler: async (request, reply) =>
-        webPortalAuthMiddleware(request, reply),
+      preHandler: [webPortalAuthMiddleware],
     },
     async (request, reply) => {
       const { user } = request;

@@ -3,28 +3,20 @@
 import {
   AlertCircle,
   BookOpen,
-  ChevronDown,
-  Copy,
   Download,
   Edit,
   Eye,
-  FileText,
-  Filter,
   MoreHorizontal,
   Plus,
   Save,
   Search,
-  Settings,
-  Tag,
   TestTube,
   Trash2,
   Upload,
-  X,
-  CheckCircle,
   Clock,
   Code2,
 } from 'lucide-react';
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
@@ -147,7 +139,6 @@ export function PromptTemplateEditor() {
     promptTemplates: wsPromptTemplates,
     connect,
     disconnect,
-    setPromptTemplates,
   } = useWebSocketStore();
 
   // Access control - only owners can manage prompt templates
@@ -208,7 +199,7 @@ export function PromptTemplateEditor() {
       setLoading(true);
       const response = await api.get('/api/prompts');
       setPrompts(response.data.prompts);
-    } catch (error) {
+    } catch {
       toast({
         title: 'Error',
         description: 'Failed to load prompt templates',
@@ -221,12 +212,12 @@ export function PromptTemplateEditor() {
 
   // Load prompts on mount
   useEffect(() => {
-    fetchPrompts();
+    void fetchPrompts();
   }, [fetchPrompts]);
 
   // Connect to WebSocket on mount
   useEffect(() => {
-    connect();
+    void connect();
     return () => disconnect();
   }, [connect, disconnect]);
 
@@ -269,8 +260,10 @@ export function PromptTemplateEditor() {
       }
     };
 
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
+    if (typeof document !== 'undefined') {
+      document.addEventListener('keydown', handleKeyDown);
+      return () => document.removeEventListener('keydown', handleKeyDown);
+    }
   }, [selectedPrompt]);
 
   // Variable detection from template content
@@ -367,14 +360,14 @@ export function PromptTemplateEditor() {
       template: prompt.template,
       variables: prompt.variables,
       is_active: prompt.is_active,
-      tags: prompt.tags || [],
-      description: prompt.description || '',
+      tags: prompt.tags ?? [],
+      description: prompt.description ?? '',
     });
     setErrors({});
   };
 
   // Handle form data changes
-  const handleFormChange = (field: keyof TemplateFormData, value: any) => {
+  const handleFormChange = (field: keyof TemplateFormData, value: unknown) => {
     setFormData(prev => ({
       ...prev,
       [field]: value,
@@ -410,7 +403,7 @@ export function PromptTemplateEditor() {
         title: 'Template created',
         description: 'New prompt template has been created successfully',
       });
-    } catch (error) {
+    } catch {
       toast({
         title: 'Error',
         description: 'Failed to create template',
@@ -448,7 +441,7 @@ export function PromptTemplateEditor() {
         title: 'Template saved',
         description: 'Template has been updated successfully',
       });
-    } catch (error) {
+    } catch {
       toast({
         title: 'Error',
         description: 'Failed to save changes',
@@ -478,7 +471,7 @@ export function PromptTemplateEditor() {
         title: 'Template deleted',
         description: 'Template deleted successfully',
       });
-    } catch (error) {
+    } catch {
       toast({
         title: 'Error',
         description: 'Failed to delete template',
@@ -501,7 +494,7 @@ export function PromptTemplateEditor() {
       });
 
       setTestResult(response.data);
-    } catch (error) {
+    } catch {
       toast({
         title: 'Error',
         description: 'Failed to test template',
@@ -536,23 +529,25 @@ export function PromptTemplateEditor() {
       });
 
       // Create download link
-      const blob = new Blob([JSON.stringify(response.data, null, 2)], {
-        type: 'application/json',
-      });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `prompt-templates-${new Date().toISOString().split('T')[0]}.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      if (typeof document !== 'undefined') {
+        const blob = new Blob([JSON.stringify(response.data, null, 2)], {
+          type: 'application/json',
+        });
+        const url = URL.createObjectURL(blob);
+        const a = window.document.createElement('a');
+        a.href = url;
+        a.download = `prompt-templates-${new Date().toISOString().split('T')[0]}.json`;
+        window.document.body.appendChild(a);
+        a.click();
+        window.document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
 
       toast({
         title: 'Export successful',
         description: 'Templates have been exported',
       });
-    } catch (error) {
+    } catch {
       toast({
         title: 'Error',
         description: 'Failed to export templates',
@@ -565,7 +560,7 @@ export function PromptTemplateEditor() {
   const handleImport = async (file: File) => {
     try {
       const text = await file.text();
-      const templates = JSON.parse(text);
+      const templates = JSON.parse(text) as unknown;
 
       // Validate template format
       if (!Array.isArray(templates)) {
@@ -574,14 +569,14 @@ export function PromptTemplateEditor() {
 
       const response = await api.post('/api/prompts/import', { templates });
 
-      fetchPrompts(); // Refresh list
+      void fetchPrompts(); // Refresh list
       setIsImportDialogOpen(false);
 
       toast({
         title: 'Import successful',
         description: `${response.data.imported_count} templates imported`,
       });
-    } catch (error) {
+    } catch {
       toast({
         title: 'Error',
         description: 'Invalid template format',
@@ -594,9 +589,9 @@ export function PromptTemplateEditor() {
   const fetchVersionHistory = async (promptId: string) => {
     try {
       const response = await api.get(`/api/prompts/${promptId}/history`);
-      setVersionHistory(response.data.versions);
+      setVersionHistory(response.data.versions as TemplateVersionHistory[]);
       setIsHistoryDialogOpen(true);
-    } catch (error) {
+    } catch {
       toast({
         title: 'Error',
         description: 'Failed to load version history',
@@ -688,7 +683,9 @@ export function PromptTemplateEditor() {
                     <Button
                       variant='outline'
                       size='sm'
-                      onClick={() => handleExport(false)}
+                      onClick={() => {
+                        void handleExport(false);
+                      }}
                       className='flex-1'
                     >
                       <Download className='h-4 w-4 mr-2' />
@@ -698,7 +695,9 @@ export function PromptTemplateEditor() {
                       <Button
                         variant='outline'
                         size='sm'
-                        onClick={() => handleExport(true)}
+                        onClick={() => {
+                          void handleExport(true);
+                        }}
                       >
                         Export Selected
                       </Button>

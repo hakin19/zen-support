@@ -1,11 +1,15 @@
 'use client';
 
-import { useEffect } from 'react';
+import React, { useEffect } from 'react';
 
 import { apiClient } from '@/lib/api-client';
 import { createClient } from '@/lib/supabase/client';
 
-export function ApiClientProvider({ children }: { children: React.ReactNode }) {
+export function ApiClientProvider({
+  children,
+}: {
+  children: React.ReactNode;
+}): JSX.Element {
   useEffect(() => {
     const supabase = createClient();
 
@@ -14,7 +18,7 @@ export function ApiClientProvider({ children }: { children: React.ReactNode }) {
       const {
         data: { session },
       } = await supabase.auth.getSession();
-      return session?.access_token || null;
+      return session?.access_token ?? null;
     });
   }, []);
 

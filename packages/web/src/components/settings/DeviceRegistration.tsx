@@ -1,3 +1,4 @@
+/* global window, document, navigator, setTimeout */
 'use client';
 
 import {
@@ -7,7 +8,6 @@ import {
   Settings,
   RefreshCw,
   Zap,
-  Power,
   Play,
   Trash2,
   Filter,
@@ -20,9 +20,8 @@ import {
   Clock,
   AlertCircle,
   CheckCircle,
-  X,
 } from 'lucide-react';
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, type JSX } from 'react';
 
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
@@ -108,10 +107,10 @@ interface FirmwareUpdate {
   critical: boolean;
 }
 
-export function DeviceRegistration() {
+export function DeviceRegistration(): JSX.Element {
   const { user } = useSession();
   const { toast } = useToast();
-  const { devices: wsDevices, isConnected: wsConnected } = useWebSocketStore();
+  const { devices: wsDevices, isConnected: _wsConnected } = useWebSocketStore();
 
   const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
@@ -182,9 +181,11 @@ export function DeviceRegistration() {
       setLoading(true);
       setError(null);
       const response = await api.get('/api/devices');
-      setDevices(response.data.devices);
-      setFirmwareUpdates(response.data.firmware_updates || {});
-    } catch (err) {
+      setDevices(response.data.devices as Device[]);
+      setFirmwareUpdates(
+        (response.data.firmware_updates as Record<string, FirmwareUpdate>) ?? {}
+      );
+    } catch (_err: unknown) {
       setError('Failed to load devices');
     } finally {
       setLoading(false);
@@ -192,7 +193,7 @@ export function DeviceRegistration() {
   }, []);
 
   useEffect(() => {
-    fetchDevices();
+    void fetchDevices();
   }, [fetchDevices]);
 
   // Update devices from WebSocket
@@ -241,8 +242,8 @@ export function DeviceRegistration() {
         location: '',
         capabilities: ['diagnostics', 'monitoring'],
       });
-      fetchDevices();
-    } catch (error) {
+      void fetchDevices();
+    } catch (_error: unknown) {
       toast({
         title: 'Registration failed',
         description:
@@ -272,8 +273,8 @@ export function DeviceRegistration() {
 
       setIsConfigureDialogOpen(false);
       setSelectedDevice(null);
-      fetchDevices();
-    } catch (error) {
+      void fetchDevices();
+    } catch (_error: unknown) {
       toast({
         title: 'Update failed',
         description: 'Failed to update device configuration',
@@ -308,8 +309,8 @@ export function DeviceRegistration() {
         description: message,
       });
 
-      fetchDevices();
-    } catch (error) {
+      void fetchDevices();
+    } catch (_error: unknown) {
       toast({
         title: 'Action failed',
         description: `Failed to ${action} device`,
@@ -332,8 +333,8 @@ export function DeviceRegistration() {
 
       setIsRemoveDialogOpen(false);
       setSelectedDevice(null);
-      fetchDevices();
-    } catch (error) {
+      void fetchDevices();
+    } catch (_error: unknown) {
       toast({
         title: 'Removal failed',
         description: 'Failed to remove device',
@@ -361,8 +362,8 @@ export function DeviceRegistration() {
       setSelectedDevices(new Set());
       setBulkAction(null);
       setIsBulkConfirmOpen(false);
-      fetchDevices();
-    } catch (error) {
+      void fetchDevices();
+    } catch (_error: unknown) {
       toast({
         title: 'Bulk action failed',
         description: `Failed to ${bulkAction} selected devices`,
@@ -382,8 +383,8 @@ export function DeviceRegistration() {
         title: 'Firmware update started',
         description: 'The device will restart automatically when complete',
       });
-      fetchDevices();
-    } catch (error) {
+      void fetchDevices();
+    } catch (_error: unknown) {
       toast({
         title: 'Update failed',
         description: 'Failed to start firmware update',
@@ -409,7 +410,7 @@ export function DeviceRegistration() {
         title: 'Export successful',
         description: 'Device list has been exported',
       });
-    } catch (error) {
+    } catch (_error: unknown) {
       toast({
         title: 'Export failed',
         description: 'Failed to export device list',
@@ -427,7 +428,7 @@ export function DeviceRegistration() {
         title: 'Code copied',
         description: 'Code copied to clipboard',
       });
-    } catch (error) {
+    } catch (_error: unknown) {
       toast({
         title: 'Copy failed',
         description: 'Failed to copy registration code',
@@ -441,7 +442,7 @@ export function DeviceRegistration() {
     setDeviceFormData({
       name: device.name,
       serial_number: device.serial_number,
-      location: device.location || '',
+      location: device.location ?? '',
       capabilities: device.capabilities,
     });
     setIsConfigureDialogOpen(true);
@@ -537,7 +538,7 @@ export function DeviceRegistration() {
               <h3 className='text-lg font-semibold'>Failed to load devices</h3>
               <p className='text-muted-foreground'>{error}</p>
             </div>
-            <Button onClick={fetchDevices}>
+            <Button onClick={() => void fetchDevices()}>
               <RefreshCw className='mr-2 h-4 w-4' />
               Retry
             </Button>
@@ -666,7 +667,7 @@ export function DeviceRegistration() {
                 <Button
                   variant='outline'
                   size='icon'
-                  onClick={handleExportDevices}
+                  onClick={() => void handleExportDevices()}
                   aria-label='Export devices'
                 >
                   <Download className='h-4 w-4' />
@@ -675,7 +676,7 @@ export function DeviceRegistration() {
                 <Button
                   variant='outline'
                   size='icon'
-                  onClick={fetchDevices}
+                  onClick={() => void fetchDevices()}
                   aria-label='Refresh device list'
                 >
                   <RefreshCw className='h-4 w-4' />
@@ -894,7 +895,9 @@ export function DeviceRegistration() {
                               <Button
                                 size='sm'
                                 variant='outline'
-                                onClick={() => handleUpdateFirmware(device.id)}
+                                onClick={() =>
+                                  void handleUpdateFirmware(device.id)
+                                }
                               >
                                 Update Firmware
                               </Button>
