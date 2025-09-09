@@ -609,7 +609,7 @@ export function registerChatRoutes(fastify: FastifyInstance): void {
     try {
       await claudeService.streamQuery(
         prompt,
-        async (output: unknown) => {
+        (output: unknown) => {
           const typedOutput = output as {
             type: string;
             data?: { content?: Array<{ text?: string }> };
