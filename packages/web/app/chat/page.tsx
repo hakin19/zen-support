@@ -2,6 +2,8 @@
 
 import React from 'react';
 
+import type { Database } from '@aizen/shared';
+
 import { ChatInput } from '@/components/chat/ChatInput';
 import { ChatSessionList } from '@/components/chat/ChatSessionList';
 import { DeviceActionModal } from '@/components/chat/DeviceActionModal';
@@ -12,12 +14,12 @@ export default function ChatPage(): React.ReactElement {
   const {
     sessions,
     activeSessionId,
-    currentSession,
     setActiveSession,
     addSession,
     archiveSession,
     deleteSession,
     updateSession,
+    messages,
     deviceActions,
     selectedActionId,
     deviceModalOpen,
@@ -25,23 +27,41 @@ export default function ChatPage(): React.ReactElement {
     setSelectedAction,
     approveAction,
     rejectAction,
+    sendMessage,
+    retryMessage,
+    isTyping,
+    isSending,
+    setTyping,
   } = useChatStore();
 
+  // Derive currentSession from sessions and activeSessionId
+  const currentSession = sessions.find(s => s.id === activeSessionId) || null;
+
   const handleSessionCreate = () => {
-    // Create a new session
+    // Create a new session with all required fields
+    const sessionId = crypto.randomUUID();
     const newSession = {
-      id: crypto.randomUUID(),
+      id: sessionId,
       title: 'New Session',
-      status: 'active' as const,
+      status: 'active' as Database['public']['Enums']['chat_session_status'],
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
+      closed_at: null,
+      customer_id: 'temp-customer-id', // This would normally come from auth context
+      user_id: 'temp-user-id', // This would normally come from auth context
+      metadata: null,
     };
-    addSession(newSession as any);
-    setActiveSession(newSession.id);
+    addSession(newSession);
+    setActiveSession(sessionId);
   };
 
   const handleSessionRename = (id: string, title: string) => {
     updateSession(id, { title });
+  };
+
+  const handleViewAction = (id: string) => {
+    setSelectedAction(id);
+    setDeviceModalOpen(true);
   };
 
   return (
@@ -75,12 +95,26 @@ export default function ChatPage(): React.ReactElement {
 
             {/* Messages */}
             <div className='flex-1 overflow-hidden'>
-              <MessageList />
+              <MessageList
+                messages={messages}
+                deviceActions={deviceActions}
+                isTyping={isTyping}
+                onRetry={retryMessage}
+                onApproveAction={approveAction}
+                onRejectAction={rejectAction}
+                onViewAction={handleViewAction}
+                className='h-full'
+              />
             </div>
 
             {/* Input */}
             <div className='border-t'>
-              <ChatInput />
+              <ChatInput
+                onSend={sendMessage}
+                onTyping={() => setTyping(true)}
+                isSending={isSending}
+                isDisabled={!currentSession}
+              />
             </div>
           </>
         ) : (
