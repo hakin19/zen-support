@@ -1,4 +1,3 @@
-/* global fetch */
 export class ApiClient {
   private baseUrl: string;
   private getAuthToken: (() => Promise<string | null>) | null = null;

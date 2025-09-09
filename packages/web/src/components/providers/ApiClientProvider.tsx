@@ -9,7 +9,7 @@ export function ApiClientProvider({
   children,
 }: {
   children: React.ReactNode;
-}): JSX.Element {
+}): React.JSX.Element {
   useEffect(() => {
     const supabase = createClient();
 

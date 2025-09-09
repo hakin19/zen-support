@@ -1,7 +1,5 @@
 'use client';
 
-/* globals window */
-
 import { useRouter } from 'next/navigation';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 

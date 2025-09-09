@@ -72,10 +72,8 @@ export async function registerWebSocketRoutes(
     (fastify as any).get(
       '/api/v1/device/ws',
       { websocket: true },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      async (connection: any, request: FastifyRequest) => {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-        const socket = connection.socket || (connection as WebSocket);
+      async (connection: { socket: WebSocket }, request: FastifyRequest) => {
+        const socket = connection.socket;
         const ws = socket;
         const connectionId = generateCorrelationId();
         let deviceId: string | null = null;
@@ -275,10 +273,8 @@ export async function registerWebSocketRoutes(
     (fastify as any).get(
       '/ws',
       { websocket: true },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      async (connection: any, request: FastifyRequest) => {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-        const socket = connection.socket || (connection as WebSocket);
+      async (connection: { socket: WebSocket }, request: FastifyRequest) => {
+        const socket = connection.socket;
         const ws = socket;
         const connectionId = generateCorrelationId();
         let userId: string | null = null;
@@ -300,7 +296,8 @@ export async function registerWebSocketRoutes(
           // Extract token from subprotocol for browser clients (auth-{token})
           token = protocol.substring(5);
           // Accept the subprotocol in the response
-          connection.socket.protocol = protocol;
+          (connection.socket as WebSocket & { protocol?: string }).protocol =
+            protocol;
         }
 
         if (!token) {
@@ -436,8 +433,8 @@ export async function registerWebSocketRoutes(
                           try {
                             const subscription = await redis.createSubscription(
                               channel,
-                              async (data: unknown) => {
-                                await manager.sendToConnection(
+                              (data: unknown) => {
+                                void manager.sendToConnection(
                                   connectionId,
                                   addCorrelationIdToMessage({
                                     type: 'channel',
@@ -622,10 +619,8 @@ export async function registerWebSocketRoutes(
     (fastify as any).get(
       '/api/v1/customer/ws',
       { websocket: true },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      async (connection: any, request: FastifyRequest) => {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-        const socket = connection.socket || (connection as WebSocket);
+      async (connection: { socket: WebSocket }, request: FastifyRequest) => {
+        const socket = connection.socket;
         const ws = socket;
         const connectionId = generateCorrelationId();
         let customerId: string | null = null;
@@ -659,7 +654,8 @@ export async function registerWebSocketRoutes(
           // Extract token from subprotocol for browser clients (auth-{token})
           token = protocol.substring(5);
           // Accept the subprotocol in the response
-          connection.socket.protocol = protocol;
+          (connection.socket as WebSocket & { protocol?: string }).protocol =
+            protocol;
         }
 
         // Function to authenticate and setup customer connection
@@ -1040,8 +1036,8 @@ async function handleDeviceClaimCommand(
         )
       );
     }
-  } catch (error) {
-    console.error('Failed to claim command:', error);
+  } catch (_error) {
+    // Log error - will be replaced with proper logger later
     await manager.sendToConnection(
       connectionId,
       addCorrelationIdToMessage(
@@ -1138,8 +1134,8 @@ async function handleDeviceCommandResult(
         requestId
       )
     );
-  } catch (error) {
-    console.error('Failed to submit command result:', error);
+  } catch (_error) {
+    // Log error - will be replaced with proper logger later
     await manager.sendToConnection(
       connectionId,
       addCorrelationIdToMessage(
@@ -1350,8 +1346,8 @@ async function handleSendCommand(
         requestId
       )
     );
-  } catch (error) {
-    console.error('Failed to queue command:', error);
+  } catch (_error) {
+    // Log error - will be replaced with proper logger later
     await manager.sendToConnection(
       connectionId,
       addCorrelationIdToMessage(

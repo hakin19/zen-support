@@ -10,10 +10,10 @@ export interface ToastProps {
   action?: React.ReactNode;
 }
 
-export function useToast() {
-  const toast = React.useCallback((props: ToastProps) => {
+export function useToast(): { toast: (props: ToastProps) => void } {
+  const toast = React.useCallback((props: ToastProps): void => {
     const { title, description, variant = 'default' } = props;
-    const message = title || description || '';
+    const message = title ?? description ?? '';
 
     if (variant === 'destructive') {
       sonnerToast.error(message, {

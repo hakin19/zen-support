@@ -1,4 +1,3 @@
-/* global window */
 import { Send, Paperclip, Loader2 } from 'lucide-react';
 import React, { useState, useRef, useEffect, type JSX } from 'react';
 

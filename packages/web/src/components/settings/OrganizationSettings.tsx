@@ -2,13 +2,9 @@
 
 import {
   Building2,
-  Globe,
   Mail,
-  Phone,
-  MapPin,
   Palette,
   Shield,
-  Clock,
   Network,
   Plus,
   Trash2,
@@ -19,19 +15,8 @@ import {
   Save,
   RefreshCw,
   Eye,
-  EyeOff,
-  Copy,
-  Check,
-  X,
 } from 'lucide-react';
-import React, {
-  useState,
-  useEffect,
-  useCallback,
-  useMemo,
-  useRef,
-  type JSX,
-} from 'react';
+import React, { useState, useEffect, useCallback, type JSX } from 'react';
 
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
@@ -44,7 +29,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -64,22 +48,15 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { Separator } from '@/components/ui/separator';
-import { Textarea } from '@/components/ui/textarea';
+import { Separator as _Separator } from '@/components/ui/separator';
+import { Textarea as _Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { api } from '@/lib/api-client';
 import { useAuthStore } from '@/store/auth.store';
 import { useWebSocketStore } from '@/store/websocket.store';
 
 // TypeScript interfaces
-interface OrganizationSettings {
+interface OrganizationSettingsData {
   allow_sso: boolean;
   enforce_2fa: boolean;
   session_timeout: number;
@@ -133,7 +110,7 @@ interface Organization {
   timezone: string;
   created_at: string;
   updated_at: string;
-  settings: OrganizationSettings;
+  settings: OrganizationSettingsData;
   subscription: Subscription;
 }
 
@@ -180,7 +157,7 @@ export function OrganizationSettings(): JSX.Element {
     organization: wsOrganization,
     connect,
     disconnect,
-    setOrganization: setWsOrganization,
+    setOrganization: _setWsOrganization,
   } = useWebSocketStore();
 
   // State management
@@ -228,7 +205,8 @@ export function OrganizationSettings(): JSX.Element {
   const [isOriginDialogOpen, setIsOriginDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [is2FADialogOpen, setIs2FADialogOpen] = useState(false);
-  const [isWebhookTestDialogOpen, setIsWebhookTestDialogOpen] = useState(false);
+  const [_isWebhookTestDialogOpen, _setIsWebhookTestDialogOpen] =
+    useState(false);
 
   // IP Whitelist management
   const [newIP, setNewIP] = useState('');
@@ -237,7 +215,7 @@ export function OrganizationSettings(): JSX.Element {
 
   // Origin management
   const [newOrigin, setNewOrigin] = useState('');
-  const [originToRemove, setOriginToRemove] = useState<string | null>(null);
+  const [_originToRemove, _setOriginToRemove] = useState<string | null>(null);
 
   // Deletion confirmation
   const [deleteConfirmation, setDeleteConfirmation] = useState('');
@@ -265,38 +243,38 @@ export function OrganizationSettings(): JSX.Element {
 
       // Populate form data
       setFormData({
-        name: org.name || '',
-        subdomain: org.subdomain || '',
-        contact_email: org.contact_email || '',
-        contact_phone: org.contact_phone || '',
-        address: org.address || '',
-        city: org.city || '',
-        state: org.state || '',
-        zip: org.zip || '',
-        country: org.country || '',
-        timezone: org.timezone || '',
-        logo_url: org.logo_url || '',
-        primary_color: org.primary_color || '#007bff',
-        secondary_color: org.secondary_color || '#6c757d',
+        name: org.name ?? '',
+        subdomain: org.subdomain ?? '',
+        contact_email: org.contact_email ?? '',
+        contact_phone: org.contact_phone ?? '',
+        address: org.address ?? '',
+        city: org.city ?? '',
+        state: org.state ?? '',
+        zip: org.zip ?? '',
+        country: org.country ?? '',
+        timezone: org.timezone ?? '',
+        logo_url: org.logo_url ?? '',
+        primary_color: org.primary_color ?? '#007bff',
+        secondary_color: org.secondary_color ?? '#6c757d',
       });
 
       setSecurityData({
-        allow_sso: org.settings?.allow_sso || false,
-        enforce_2fa: org.settings?.enforce_2fa || false,
+        allow_sso: org.settings?.allow_sso ?? false,
+        enforce_2fa: org.settings?.enforce_2fa ?? false,
         session_timeout: Math.floor(
-          (org.settings?.session_timeout || 3600) / 60
+          (org.settings?.session_timeout ?? 3600) / 60
         ), // Convert to minutes
       });
 
       setNotificationData({
         email_alerts:
-          org.settings?.notification_preferences?.email_alerts || true,
-        sms_alerts: org.settings?.notification_preferences?.sms_alerts || false,
-        webhook_url: org.settings?.notification_preferences?.webhook_url || '',
+          org.settings?.notification_preferences?.email_alerts ?? true,
+        sms_alerts: org.settings?.notification_preferences?.sms_alerts ?? false,
+        webhook_url: org.settings?.notification_preferences?.webhook_url ?? '',
       });
 
       setApiData({
-        rate_limit: org.settings?.api_settings?.rate_limit || 1000,
+        rate_limit: org.settings?.api_settings?.rate_limit ?? 1000,
       });
     } catch (error: unknown) {
       toast({
@@ -326,24 +304,24 @@ export function OrganizationSettings(): JSX.Element {
 
       // Update form data when organization changes via WebSocket
       setFormData({
-        name: wsOrganization.name || '',
-        subdomain: wsOrganization.subdomain || '',
-        contact_email: wsOrganization.contact_email || '',
-        contact_phone: wsOrganization.contact_phone || '',
-        address: wsOrganization.address || '',
-        city: wsOrganization.city || '',
-        state: wsOrganization.state || '',
-        zip: wsOrganization.zip || '',
-        country: wsOrganization.country || '',
-        timezone: wsOrganization.timezone || '',
-        logo_url: wsOrganization.logo_url || '',
-        primary_color: wsOrganization.primary_color || '#007bff',
-        secondary_color: wsOrganization.secondary_color || '#6c757d',
+        name: wsOrganization.name ?? '',
+        subdomain: wsOrganization.subdomain ?? '',
+        contact_email: wsOrganization.contact_email ?? '',
+        contact_phone: wsOrganization.contact_phone ?? '',
+        address: wsOrganization.address ?? '',
+        city: wsOrganization.city ?? '',
+        state: wsOrganization.state ?? '',
+        zip: wsOrganization.zip ?? '',
+        country: wsOrganization.country ?? '',
+        timezone: wsOrganization.timezone ?? '',
+        logo_url: wsOrganization.logo_url ?? '',
+        primary_color: wsOrganization.primary_color ?? '#007bff',
+        secondary_color: wsOrganization.secondary_color ?? '#6c757d',
       });
 
       setSecurityData({
-        allow_sso: wsOrganization.settings?.allow_sso || false,
-        enforce_2fa: wsOrganization.settings?.enforce_2fa || false,
+        allow_sso: wsOrganization.settings?.allow_sso ?? false,
+        enforce_2fa: wsOrganization.settings?.enforce_2fa ?? false,
         session_timeout: Math.floor(
           (wsOrganization.settings?.session_timeout || 3600) / 60
         ),

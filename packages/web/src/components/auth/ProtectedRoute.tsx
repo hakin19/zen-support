@@ -1,7 +1,5 @@
 'use client';
 
-/* globals window setTimeout clearTimeout */
-
 import { useRouter } from 'next/navigation';
 import React, { useEffect, useState } from 'react';
 

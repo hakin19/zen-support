@@ -1,4 +1,3 @@
-/* global window, document, navigator, setTimeout */
 'use client';
 
 import {
@@ -185,7 +184,7 @@ export function DeviceRegistration(): JSX.Element {
       setFirmwareUpdates(
         (response.data.firmware_updates as Record<string, FirmwareUpdate>) ?? {}
       );
-    } catch (_err: unknown) {
+    } catch {
       setError('Failed to load devices');
     } finally {
       setLoading(false);
@@ -243,7 +242,7 @@ export function DeviceRegistration(): JSX.Element {
         capabilities: ['diagnostics', 'monitoring'],
       });
       void fetchDevices();
-    } catch (_error: unknown) {
+    } catch {
       toast({
         title: 'Registration failed',
         description:
@@ -274,7 +273,7 @@ export function DeviceRegistration(): JSX.Element {
       setIsConfigureDialogOpen(false);
       setSelectedDevice(null);
       void fetchDevices();
-    } catch (_error: unknown) {
+    } catch {
       toast({
         title: 'Update failed',
         description: 'Failed to update device configuration',
@@ -310,7 +309,7 @@ export function DeviceRegistration(): JSX.Element {
       });
 
       void fetchDevices();
-    } catch (_error: unknown) {
+    } catch {
       toast({
         title: 'Action failed',
         description: `Failed to ${action} device`,
@@ -334,7 +333,7 @@ export function DeviceRegistration(): JSX.Element {
       setIsRemoveDialogOpen(false);
       setSelectedDevice(null);
       void fetchDevices();
-    } catch (_error: unknown) {
+    } catch {
       toast({
         title: 'Removal failed',
         description: 'Failed to remove device',
@@ -363,7 +362,7 @@ export function DeviceRegistration(): JSX.Element {
       setBulkAction(null);
       setIsBulkConfirmOpen(false);
       void fetchDevices();
-    } catch (_error: unknown) {
+    } catch {
       toast({
         title: 'Bulk action failed',
         description: `Failed to ${bulkAction} selected devices`,
@@ -384,7 +383,7 @@ export function DeviceRegistration(): JSX.Element {
         description: 'The device will restart automatically when complete',
       });
       void fetchDevices();
-    } catch (_error: unknown) {
+    } catch {
       toast({
         title: 'Update failed',
         description: 'Failed to start firmware update',
@@ -410,7 +409,7 @@ export function DeviceRegistration(): JSX.Element {
         title: 'Export successful',
         description: 'Device list has been exported',
       });
-    } catch (_error: unknown) {
+    } catch {
       toast({
         title: 'Export failed',
         description: 'Failed to export device list',
@@ -428,7 +427,7 @@ export function DeviceRegistration(): JSX.Element {
         title: 'Code copied',
         description: 'Code copied to clipboard',
       });
-    } catch (_error: unknown) {
+    } catch {
       toast({
         title: 'Copy failed',
         description: 'Failed to copy registration code',
@@ -912,9 +911,9 @@ export function DeviceRegistration(): JSX.Element {
                               <Button
                                 size='sm'
                                 variant='outline'
-                                onClick={() =>
-                                  handleDeviceAction(device.id, 'restart')
-                                }
+                                onClick={() => {
+                                  void handleDeviceAction(device.id, 'restart');
+                                }}
                               >
                                 <RefreshCw className='mr-1 h-3 w-3' />
                                 Restart
@@ -924,9 +923,9 @@ export function DeviceRegistration(): JSX.Element {
                               <Button
                                 size='sm'
                                 variant='outline'
-                                onClick={() =>
-                                  handleDeviceAction(device.id, 'wake')
-                                }
+                                onClick={() => {
+                                  void handleDeviceAction(device.id, 'wake');
+                                }}
                               >
                                 <Zap className='mr-1 h-3 w-3' />
                                 Wake
@@ -936,9 +935,12 @@ export function DeviceRegistration(): JSX.Element {
                               <Button
                                 size='sm'
                                 variant='outline'
-                                onClick={() =>
-                                  handleDeviceAction(device.id, 'activate')
-                                }
+                                onClick={() => {
+                                  void handleDeviceAction(
+                                    device.id,
+                                    'activate'
+                                  );
+                                }}
                               >
                                 <Play className='mr-1 h-3 w-3' />
                                 Activate
@@ -1039,7 +1041,9 @@ export function DeviceRegistration(): JSX.Element {
               Cancel
             </Button>
             <Button
-              onClick={handleRegisterDevice}
+              onClick={() => {
+                void handleRegisterDevice();
+              }}
               disabled={
                 isSubmitting ||
                 !deviceFormData.name ||
@@ -1080,7 +1084,9 @@ export function DeviceRegistration(): JSX.Element {
                 <Button
                   size='icon'
                   variant='outline'
-                  onClick={copyRegistrationCode}
+                  onClick={() => {
+                    void copyRegistrationCode();
+                  }}
                   aria-label='Copy Code'
                 >
                   {copySuccess ? (
@@ -1196,7 +1202,9 @@ export function DeviceRegistration(): JSX.Element {
               Cancel
             </Button>
             <Button
-              onClick={handleConfigureDevice}
+              onClick={() => {
+                void handleConfigureDevice();
+              }}
               disabled={isSubmitting || !deviceFormData.name}
             >
               {isSubmitting ? 'Saving...' : 'Save Changes'}

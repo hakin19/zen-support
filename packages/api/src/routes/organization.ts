@@ -5,7 +5,10 @@ import { supabase } from '../services/supabase';
 
 import { getConnectionManager } from './websocket';
 
+import type { Database } from '@aizen/shared';
 import type { FastifyPluginAsync } from 'fastify';
+
+type Customer = Database['public']['Tables']['customers']['Row'];
 
 const organizationSchema = z.object({
   name: z.string().min(1),
@@ -61,49 +64,59 @@ export const organizationRoutes: FastifyPluginAsync = fastify => {
 
       try {
         // Get organization data
-        const { data: org, error } = await supabase
+        const { data: org, error } = (await supabase
           .from('customers')
           .select('*')
           .eq('id', user.organization_id)
-          .single();
+          .single()) as { data: Customer | null; error: unknown };
 
         if (error ?? !org) {
           fastify.log.error('Failed to fetch organization:', error);
           return reply.code(404).send({ error: 'Organization not found' });
         }
 
-        // Get organization settings
-        const { data: settings } = await supabase
-          .from('organization_settings')
-          .select('*')
-          .eq('organization_id', user.organization_id)
-          .single();
-
-        // Get subscription info
-        const { data: subscription } = await supabase
-          .from('subscriptions')
-          .select('*')
-          .eq('organization_id', user.organization_id)
-          .single();
+        // Note: organization_settings and subscriptions tables don't exist yet
+        // Using customer data only for now
+        const settings: {
+          allow_sso?: boolean;
+          enforce_2fa?: boolean;
+          session_timeout?: number;
+          ip_whitelist?: unknown[];
+          email_alerts?: boolean;
+          sms_alerts?: boolean;
+          webhook_url?: string | null;
+          rate_limit?: number;
+          allowed_origins?: unknown[];
+        } | null = null; // Placeholder until organization_settings table is implemented
+        const subscription: {
+          plan: string;
+          seats: number;
+          used_seats: number;
+          billing_cycle: string;
+          next_billing_date: string | null;
+          amount: number;
+          currency: string;
+          status: string;
+        } | null = null; // Placeholder until subscriptions table is implemented
 
         // Mock organization data structure for UI compatibility
         const organization = {
-          id: org.id,
-          name: org.business_name ?? 'Organization',
-          subdomain: org.subdomain ?? '',
-          logo_url: org.logo_url ?? '',
-          primary_color: org.primary_color ?? '#007bff',
-          secondary_color: org.secondary_color ?? '#6c757d',
-          contact_email: org.email ?? '',
-          contact_phone: org.phone ?? '',
-          address: org.address ?? '',
-          city: org.city ?? '',
-          state: org.state ?? '',
-          zip: org.zip ?? '',
-          country: org.country ?? 'US',
-          timezone: org.timezone ?? 'America/New_York',
-          created_at: org.created_at,
-          updated_at: org.updated_at,
+          id: String(org.id),
+          name: String(org.business_name ?? 'Organization'),
+          subdomain: String(org.subdomain ?? ''),
+          logo_url: String(org.logo_url ?? ''),
+          primary_color: String(org.primary_color ?? '#007bff'),
+          secondary_color: String(org.secondary_color ?? '#6c757d'),
+          contact_email: String(org.email ?? ''),
+          contact_phone: String(org.phone ?? ''),
+          address: String(org.address ?? ''),
+          city: String(org.city ?? ''),
+          state: String(org.state ?? ''),
+          zip: String(org.zip ?? ''),
+          country: String(org.country ?? 'US'),
+          timezone: String(org.timezone ?? 'America/New_York'),
+          created_at: String(org.created_at),
+          updated_at: String(org.updated_at),
           settings: {
             allow_sso: settings?.allow_sso ?? false,
             enforce_2fa: settings?.enforce_2fa ?? false,
@@ -145,7 +158,7 @@ export const organizationRoutes: FastifyPluginAsync = fastify => {
     { preHandler: [webPortalAuthMiddleware] },
     async (request, reply) => {
       const { user } = request;
-      if (!user ?? (user.role !== 'owner' && user.role !== 'admin')) {
+      if (!user || (user.role !== 'owner' && user.role !== 'admin')) {
         return reply.code(403).send({ error: 'Insufficient permissions' });
       }
 
@@ -203,7 +216,7 @@ export const organizationRoutes: FastifyPluginAsync = fastify => {
     { preHandler: [webPortalAuthMiddleware] },
     async (request, reply) => {
       const { user } = request;
-      if (!user ?? (user.role !== 'owner' && user.role !== 'admin')) {
+      if (!user || (user.role !== 'owner' && user.role !== 'admin')) {
         return reply.code(403).send({ error: 'Insufficient permissions' });
       }
 
@@ -236,7 +249,7 @@ export const organizationRoutes: FastifyPluginAsync = fastify => {
     { preHandler: [webPortalAuthMiddleware] },
     async (request, reply) => {
       const { user } = request;
-      if (!user ?? (user.role !== 'owner' && user.role !== 'admin')) {
+      if (!user || (user.role !== 'owner' && user.role !== 'admin')) {
         return reply.code(403).send({ error: 'Insufficient permissions' });
       }
 
@@ -271,7 +284,7 @@ export const organizationRoutes: FastifyPluginAsync = fastify => {
     { preHandler: [webPortalAuthMiddleware] },
     async (request, reply) => {
       const { user } = request;
-      if (!user ?? (user.role !== 'owner' && user.role !== 'admin')) {
+      if (!user || (user.role !== 'owner' && user.role !== 'admin')) {
         return reply.code(403).send({ error: 'Insufficient permissions' });
       }
 
@@ -304,7 +317,7 @@ export const organizationRoutes: FastifyPluginAsync = fastify => {
     { preHandler: [webPortalAuthMiddleware] },
     async (request, reply) => {
       const { user } = request;
-      if (!user ?? (user.role !== 'owner' && user.role !== 'admin')) {
+      if (!user || (user.role !== 'owner' && user.role !== 'admin')) {
         return reply.code(403).send({ error: 'Insufficient permissions' });
       }
 
@@ -365,7 +378,7 @@ export const organizationRoutes: FastifyPluginAsync = fastify => {
     { preHandler: [webPortalAuthMiddleware] },
     async (request, reply) => {
       const { user } = request;
-      if (!user ?? (user.role !== 'owner' && user.role !== 'admin')) {
+      if (!user || (user.role !== 'owner' && user.role !== 'admin')) {
         return reply.code(403).send({ error: 'Insufficient permissions' });
       }
 
@@ -408,7 +421,7 @@ export const organizationRoutes: FastifyPluginAsync = fastify => {
     { preHandler: [webPortalAuthMiddleware] },
     async (request, reply) => {
       const { user } = request;
-      if (!user ?? (user.role !== 'owner' && user.role !== 'admin')) {
+      if (!user || (user.role !== 'owner' && user.role !== 'admin')) {
         return reply.code(403).send({ error: 'Insufficient permissions' });
       }
 
@@ -456,7 +469,7 @@ export const organizationRoutes: FastifyPluginAsync = fastify => {
     { preHandler: [webPortalAuthMiddleware] },
     async (request, reply) => {
       const { user } = request;
-      if (!user ?? (user.role !== 'owner' && user.role !== 'admin')) {
+      if (!user || (user.role !== 'owner' && user.role !== 'admin')) {
         return reply.code(403).send({ error: 'Insufficient permissions' });
       }
 
@@ -497,7 +510,7 @@ export const organizationRoutes: FastifyPluginAsync = fastify => {
     { preHandler: [webPortalAuthMiddleware] },
     async (request, reply) => {
       const { user } = request;
-      if (!user ?? (user.role !== 'owner' && user.role !== 'admin')) {
+      if (!user || (user.role !== 'owner' && user.role !== 'admin')) {
         return reply.code(403).send({ error: 'Insufficient permissions' });
       }
 
@@ -522,7 +535,7 @@ export const organizationRoutes: FastifyPluginAsync = fastify => {
     { preHandler: [webPortalAuthMiddleware] },
     async (request, reply) => {
       const { user } = request;
-      if (!user ?? user.role !== 'owner') {
+      if (!user || user.role !== 'owner') {
         return reply
           .code(403)
           .send({ error: 'Only owners can access billing' });
@@ -547,7 +560,7 @@ export const organizationRoutes: FastifyPluginAsync = fastify => {
     { preHandler: [webPortalAuthMiddleware] },
     async (request, reply) => {
       const { user } = request;
-      if (!user ?? user.role !== 'owner') {
+      if (!user || user.role !== 'owner') {
         return reply
           .code(403)
           .send({ error: 'Only owners can delete organization' });

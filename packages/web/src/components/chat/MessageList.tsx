@@ -1,4 +1,3 @@
-/* global window, setTimeout, clearTimeout */
 import { ChevronDown, Loader2 } from 'lucide-react';
 import React, {
   useRef,
@@ -49,7 +48,7 @@ export function MessageList({
   const bottomRef = useRef<HTMLDivElement>(null);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [isUserScrolling, setIsUserScrolling] = useState(false);
-  const scrollTimeoutRef = useRef<ReturnType<typeof window.setTimeout>>();
+  const scrollTimeoutRef = useRef<NodeJS.Timeout>();
 
   const scrollToBottom = useCallback((smooth = true) => {
     if (bottomRef.current) {
@@ -70,12 +69,12 @@ export function MessageList({
 
     // Detect user scrolling
     if (scrollTimeoutRef.current) {
-      window.clearTimeout(scrollTimeoutRef.current);
+      clearTimeout(scrollTimeoutRef.current);
     }
 
     setIsUserScrolling(true);
 
-    scrollTimeoutRef.current = window.setTimeout(() => {
+    scrollTimeoutRef.current = setTimeout(() => {
       setIsUserScrolling(false);
     }, 1000);
 
@@ -96,7 +95,7 @@ export function MessageList({
   useEffect(() => {
     return () => {
       if (scrollTimeoutRef.current) {
-        window.clearTimeout(scrollTimeoutRef.current);
+        clearTimeout(scrollTimeoutRef.current);
       }
     };
   }, []);
@@ -147,12 +146,15 @@ export function MessageList({
     messages.forEach(message => {
       if (!message.created_at) return;
 
-      const messageDate = new Date(message.created_at || '').toDateString();
+      const createdAt = message.created_at;
+      if (!createdAt) return;
+
+      const messageDate = new Date(String(createdAt)).toDateString();
 
       if (messageDate !== currentDate) {
         currentDate = messageDate;
         groups.push({
-          date: message.created_at || '',
+          date: String(createdAt),
           messages: [message],
         });
       } else {
@@ -197,7 +199,7 @@ export function MessageList({
             {renderDateSeparator(group.date)}
             {group.messages.map(message => (
               <ChatMessage
-                key={message.id as string}
+                key={message.id}
                 message={message}
                 deviceActions={deviceActions}
                 onRetry={onRetry}

@@ -7,6 +7,21 @@ export default [
   // Next.js specific overrides
   {
     files: ['**/*.ts', '**/*.tsx'],
+    languageOptions: {
+      globals: {
+        // Browser globals
+        window: 'readonly',
+        document: 'readonly',
+        navigator: 'readonly',
+        location: 'readonly',
+        setTimeout: 'readonly',
+        clearTimeout: 'readonly',
+        setInterval: 'readonly',
+        clearInterval: 'readonly',
+        fetch: 'readonly',
+        console: 'readonly',
+      },
+    },
     rules: {
       // Allow default exports for Next.js pages and components
       'import/no-default-export': 'off',

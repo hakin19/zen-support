@@ -1,4 +1,3 @@
-/* global setTimeout, clearTimeout, setInterval, clearInterval */
 import { EventEmitter } from 'events';
 
 export interface WebSocketClientOptions {
@@ -345,7 +344,11 @@ export class WebSocketClient extends EventEmitter {
           this.emit('message', message);
       }
     } catch (error) {
-      this.emit('error', { type: 'parse_error', error, data: event.data });
+      this.emit('error', {
+        type: 'parse_error',
+        error: error instanceof Error ? error.message : String(error),
+        data: event.data as unknown,
+      });
     }
   }
 

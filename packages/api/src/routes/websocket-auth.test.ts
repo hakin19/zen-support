@@ -5,6 +5,12 @@ import { buildApp } from '../app';
 
 import type { FastifyInstance } from 'fastify';
 
+interface WebSocketTestMessage {
+  type: string;
+  error?: string;
+  channel?: string;
+}
+
 describe('WebSocket Authorization Security', () => {
   let app: FastifyInstance;
   let serverUrl: string;
@@ -12,7 +18,8 @@ describe('WebSocket Authorization Security', () => {
   beforeEach(async () => {
     app = await buildApp();
     await app.listen({ port: 0 });
-    serverUrl = `ws://localhost:${(app.server.address() as any).port}`;
+    const address = app.server.address() as { port: number };
+    serverUrl = `ws://localhost:${address.port}`;
   });
 
   afterEach(async () => {
@@ -36,9 +43,9 @@ describe('WebSocket Authorization Security', () => {
       await new Promise(resolve => ws.on('open', resolve));
 
       // Set up message listener
-      const messages: any[] = [];
+      const messages: WebSocketTestMessage[] = [];
       ws.on('message', data => {
-        messages.push(JSON.parse(data.toString()));
+        messages.push(JSON.parse(data.toString()) as WebSocketTestMessage);
       });
 
       // Attempt to subscribe to a session from a different customer
@@ -81,9 +88,9 @@ describe('WebSocket Authorization Security', () => {
       await new Promise(resolve => ws.on('open', resolve));
 
       // Set up message listener
-      const messages: any[] = [];
+      const messages: WebSocketTestMessage[] = [];
       ws.on('message', data => {
-        messages.push(JSON.parse(data.toString()));
+        messages.push(JSON.parse(data.toString()) as WebSocketTestMessage);
       });
 
       // Attempt to subscribe to own customer's session
@@ -124,9 +131,9 @@ describe('WebSocket Authorization Security', () => {
       await new Promise(resolve => ws.on('open', resolve));
 
       // Set up message listener
-      const messages: any[] = [];
+      const messages: WebSocketTestMessage[] = [];
       ws.on('message', data => {
-        messages.push(JSON.parse(data.toString()));
+        messages.push(JSON.parse(data.toString()) as WebSocketTestMessage);
       });
 
       // Attempt to subscribe to any session
@@ -165,9 +172,9 @@ describe('WebSocket Authorization Security', () => {
       await new Promise(resolve => ws.on('open', resolve));
 
       // Set up message listener
-      const messages: any[] = [];
+      const messages: WebSocketTestMessage[] = [];
       ws.on('message', data => {
-        messages.push(JSON.parse(data.toString()));
+        messages.push(JSON.parse(data.toString()) as WebSocketTestMessage);
       });
 
       // Attempt to subscribe to non-existent session

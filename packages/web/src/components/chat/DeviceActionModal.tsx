@@ -1,4 +1,3 @@
-/* global window, MouseEvent */
 import {
   X,
   Minimize2,

@@ -391,7 +391,7 @@ export const usersRoutes: FastifyPluginAsync = fastify => {
           .in('user_id', body.userIds)
           .eq('customer_id', user.customerId);
 
-        const validUserIds = (targetUsers || [])
+        const validUserIds = (targetUsers ?? [])
           .filter(u => u.user_id !== user.id && u.role !== 'owner')
           .map(u => u.user_id);
 
@@ -523,7 +523,7 @@ export const usersRoutes: FastifyPluginAsync = fastify => {
           'Email,Full Name,Role,Status,Created At,Last Login',
           ...(users || []).map(
             (u: UserManagementRecord) =>
-              `"${u.auth_email || u.email || ''}","${u.full_name || ''}","${u.role}","${u.status}","${u.created_at}","${u.last_login_at || ''}"`
+              `"${u.auth_email ?? u.email ?? ''}","${u.full_name ?? ''}","${u.role}","${u.status}","${u.created_at}","${u.last_login_at ?? ''}"`
           ),
         ].join('\n');
 

@@ -1,4 +1,3 @@
-/* global setTimeout, clearTimeout */
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 
@@ -37,7 +36,7 @@ interface ChatState {
 
   // UI State
   isTyping: boolean;
-  typingTimeout: ReturnType<typeof setTimeout> | null;
+  typingTimeout: NodeJS.Timeout | null;
   isSending: boolean;
   deviceModalOpen: boolean;
   selectedActionId: string | null;
@@ -127,9 +126,9 @@ export const useChatStore = create<ChatState>()(
       ...initialState,
 
       // Computed getter for current session
-      get currentSession() {
+      get currentSession(): ChatSession | null {
         const state = get();
-        return state.sessions.find(s => s.id === state.activeSessionId) || null;
+        return state.sessions.find(s => s.id === state.activeSessionId) ?? null;
       },
 
       // Session Actions
@@ -369,9 +368,9 @@ export const useChatStore = create<ChatState>()(
           // Rollback to original state
           if (originalAction) {
             get().updateDeviceAction(id, {
-              status: originalAction.status as string,
-              approved_at: originalAction.approved_at as string,
-              approved_by: originalAction.approved_by as string,
+              status: originalAction.status,
+              approved_at: originalAction.approved_at,
+              approved_by: originalAction.approved_by,
             });
           }
           throw error;
@@ -396,9 +395,9 @@ export const useChatStore = create<ChatState>()(
           // Rollback to original state
           if (originalAction) {
             get().updateDeviceAction(id, {
-              status: originalAction.status as string,
-              rejected_at: originalAction.rejected_at as string,
-              rejected_by: originalAction.rejected_by as string,
+              status: originalAction.status,
+              rejected_at: originalAction.rejected_at,
+              rejected_by: originalAction.rejected_by,
             });
           }
           throw error;
