@@ -10,7 +10,11 @@ import { registerCustomerDeviceRoutes } from './routes/customer-devices';
 import { registerCustomerSessionRoutes } from './routes/customer-sessions';
 import { registerDeviceAuthRoutes } from './routes/device-auth';
 import { registerDeviceCommandRoutes } from './routes/device-commands';
+import { devicesRoutes } from './routes/devices';
 import { registerHealthRoutes } from './routes/health';
+import { organizationRoutes } from './routes/organization';
+import { registerPromptsRoutes } from './routes/prompts';
+import { usersRoutes } from './routes/users';
 import {
   registerWebSocketRoutes,
   getConnectionManager,
@@ -57,6 +61,12 @@ export async function createApp(): Promise<FastifyInstance> {
   registerDeviceCommandRoutes(app);
   registerCustomerDeviceRoutes(app);
   registerCustomerSessionRoutes(app);
+
+  // Register new UI routes
+  await app.register(organizationRoutes);
+  registerPromptsRoutes(app);
+  await app.register(devicesRoutes);
+  await app.register(usersRoutes);
 
   // Register WebSocket routes before chat routes (chat routes depend on websocketConnectionManager)
   await registerWebSocketRoutes(app);

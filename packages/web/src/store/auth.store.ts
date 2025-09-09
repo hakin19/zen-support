@@ -1,0 +1,42 @@
+import { create } from 'zustand';
+
+type UserRole = 'owner' | 'admin' | 'viewer';
+
+interface User {
+  id: string;
+  email: string;
+  role: UserRole;
+  full_name?: string;
+}
+
+interface AuthState {
+  user: User | null;
+  session: unknown | null;
+  organization: unknown | null;
+  isAuthenticated: boolean;
+  loading: boolean;
+  setUser: (user: User | null) => void;
+  setSession: (session: unknown | null) => void;
+  setOrganization: (organization: unknown | null) => void;
+  setLoading: (loading: boolean) => void;
+  clearAuth: () => void;
+}
+
+export const useAuthStore = create<AuthState>(set => ({
+  user: null,
+  session: null,
+  organization: null,
+  isAuthenticated: false,
+  loading: true,
+  setUser: user => set({ user, isAuthenticated: !!user }),
+  setSession: session => set({ session }),
+  setOrganization: organization => set({ organization }),
+  setLoading: loading => set({ loading }),
+  clearAuth: () =>
+    set({
+      user: null,
+      session: null,
+      organization: null,
+      isAuthenticated: false,
+    }),
+}));

@@ -39,7 +39,7 @@ type ConnectionState =
   | 'reconnecting';
 
 interface QueuedMessage {
-  data: any;
+  data: unknown;
   binary?: boolean;
   timestamp: number;
 }
@@ -102,14 +102,14 @@ export class WebSocketClient extends EventEmitter {
     this.metrics.connectionAttempts++;
 
     try {
-      // For browser environments, append token as query parameter
-      let connectUrl = this.url;
+      // For browser environments, pass token via subprotocol header
+      let protocols: string | string[] | undefined;
       if (this.options.auth.token && typeof window !== 'undefined') {
-        const separator = this.url.includes('?') ? '&' : '?';
-        connectUrl = `${this.url}${separator}token=${encodeURIComponent(this.options.auth.token)}`;
+        // Use subprotocol to securely pass the token
+        protocols = [`auth-${this.options.auth.token}`];
       }
 
-      this.ws = new WebSocket(connectUrl);
+      this.ws = new WebSocket(this.url, protocols);
       this.ws.binaryType = this.options.binaryType;
 
       this.ws.onopen = this.handleOpen.bind(this);
@@ -137,7 +137,7 @@ export class WebSocketClient extends EventEmitter {
   /**
    * Send a message to the server
    */
-  send(data: any): boolean {
+  send(data: unknown): boolean {
     if (this.state !== 'connected') {
       if (this.options.queueMessages) {
         return this.queueMessage(data, false);
@@ -295,7 +295,7 @@ export class WebSocketClient extends EventEmitter {
       this.metrics.bytesReceived +=
         typeof event.data === 'string'
           ? event.data.length
-          : event.data.byteLength;
+          : (event.data as ArrayBuffer).byteLength;
     }
 
     // Handle binary data
@@ -306,16 +306,16 @@ export class WebSocketClient extends EventEmitter {
 
     // Parse JSON messages
     try {
-      const message = JSON.parse(event.data);
+      const message = JSON.parse(event.data as string);
 
       // Handle system messages
-      switch (message.type) {
+      switch ((message as { type?: string }).type) {
         case 'pong':
           this.handlePong(message);
           break;
 
         case 'auth_error':
-          this.handleAuthError(message);
+          void this.handleAuthError(message);
           break;
 
         case 'auth_success':
@@ -323,15 +323,18 @@ export class WebSocketClient extends EventEmitter {
           break;
 
         case 'subscribed':
-          this.emit('subscribed', message.channel);
+          this.emit('subscribed', (message as { channel?: string }).channel);
           break;
 
         case 'unsubscribed':
-          this.emit('unsubscribed', message.channel);
+          this.emit('unsubscribed', (message as { channel?: string }).channel);
           break;
 
         case 'channel':
-          this.emit(`channel:${message.channel}`, message.data);
+          this.emit(
+            `channel:${(message as { channel?: string }).channel}`,
+            (message as { data?: unknown }).data
+          );
           break;
 
         default:
@@ -342,23 +345,29 @@ export class WebSocketClient extends EventEmitter {
     }
   }
 
-  private handlePong(message: any): void {
+  private handlePong(message: unknown): void {
     if (this.pongTimer) {
       clearTimeout(this.pongTimer);
       this.pongTimer = null;
     }
 
     // Calculate latency
-    if (message.timestamp && this.lastPingTimestamp) {
+    if (
+      (message as { timestamp?: number }).timestamp &&
+      this.lastPingTimestamp
+    ) {
       this.metrics.latency = Date.now() - this.lastPingTimestamp;
     }
   }
 
-  private async handleAuthError(message: any): Promise<void> {
+  private async handleAuthError(message: unknown): Promise<void> {
     this.emit('auth_error', message);
 
     // Try to refresh token
-    if (message.code === 'TOKEN_EXPIRED' && this.options.auth.refreshToken) {
+    if (
+      (message as { code?: string }).code === 'TOKEN_EXPIRED' &&
+      this.options.auth.refreshToken
+    ) {
       try {
         const newToken = await this.options.auth.refreshToken();
         this.options.auth.token = newToken;
@@ -416,7 +425,7 @@ export class WebSocketClient extends EventEmitter {
     }, delay);
   }
 
-  private queueMessage(data: any, binary: boolean): boolean {
+  private queueMessage(data: unknown, binary: boolean): boolean {
     if (this.messageQueue.length >= this.options.maxQueueSize) {
       this.emit('queue_full');
       return false;
@@ -436,7 +445,7 @@ export class WebSocketClient extends EventEmitter {
       const message = this.messageQueue.shift();
       if (message) {
         if (message.binary) {
-          this.sendBinary(message.data);
+          this.sendBinary(message.data as ArrayBuffer | Blob);
         } else {
           this.send(message.data);
         }

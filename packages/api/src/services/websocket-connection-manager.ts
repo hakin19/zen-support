@@ -177,6 +177,51 @@ export class WebSocketConnectionManager {
   }
 
   /**
+   * Broadcast message to all web portal connections
+   * This is used to replace the non-existent fastify.websocket?.broadcast() calls
+   */
+  async broadcast(message: unknown): Promise<void> {
+    const promises: Promise<boolean>[] = [];
+
+    this.connections.forEach((conn, connId) => {
+      // Broadcast to web-portal and customer connections only
+      if (
+        conn.metadata?.type === 'web-portal' ||
+        conn.metadata?.type === 'customer'
+      ) {
+        promises.push(this.sendToConnection(connId, message));
+      }
+    });
+
+    await Promise.all(promises);
+  }
+
+  /**
+   * Send message to a specific device by deviceId
+   */
+  async sendToDevice(deviceId: string, message: unknown): Promise<boolean> {
+    // Find device connection by deviceId in metadata
+    let deviceConnection: WebSocketConnection | undefined;
+
+    for (const conn of this.connections.values()) {
+      if (
+        conn.metadata?.type === 'device' &&
+        conn.metadata?.deviceId === deviceId
+      ) {
+        deviceConnection = conn;
+        break;
+      }
+    }
+
+    if (!deviceConnection) {
+      console.warn(`No active connection found for device ${deviceId}`);
+      return false;
+    }
+
+    return this.sendToConnection(deviceConnection.id, message);
+  }
+
+  /**
    * Send message to a specific connection with backpressure handling
    */
   async sendToConnection(

@@ -46,11 +46,11 @@
   - [x] 5.5 Add approval/rejection UI for AI-suggested actions
   - [x] 5.6 Verify all tests pass
 
-- [ ] 6. Settings and Admin Features
-  - [ ] 6.1 Write tests for settings components and user management
-  - [ ] 6.2 Create user management interface (list, invite, role assignment)
-  - [ ] 6.3 Implement device registration and configuration UI
-  - [ ] 6.4 Create AI prompt template editor (owner-only with Monaco editor)
-  - [ ] 6.5 Add organization settings management
-  - [ ] 6.6 Implement role-based visibility controls
-  - [ ] 6.7 Verify all tests pass
+- [x] 6. Settings and Admin Features
+  - [x] 6.1 Write tests for settings components and user management
+  - [x] 6.2 Create user management interface (list, invite, role assignment)
+  - [x] 6.3 Implement device registration and configuration UI
+  - [x] 6.4 Create AI prompt template editor (owner-only with Monaco editor)
+  - [x] 6.5 Add organization settings management
+  - [x] 6.6 Implement role-based visibility controls
+  - [x] 6.7 Verify all tests pass

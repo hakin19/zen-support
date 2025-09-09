@@ -243,7 +243,7 @@ export async function registerWebSocketRoutes(
           });
 
           // Handle errors
-          ws.on('error', error => {
+          ws.on('error', (error: Error) => {
             request.log.error(error, 'WebSocket error');
             // Clean up Redis subscriber to prevent leaks
             void (async (): Promise<void> => {
@@ -288,14 +288,25 @@ export async function registerWebSocketRoutes(
           { unsubscribe: () => Promise<void> }
         > = new Map();
 
-        // Extract JWT from headers
+        // Extract JWT from headers (for non-browser clients) or subprotocol (for browser clients)
         const authHeader = request.headers.authorization;
-        if (!authHeader?.startsWith('Bearer ')) {
+        const protocol = request.headers['sec-websocket-protocol'];
+
+        let token: string | null = null;
+
+        if (authHeader?.startsWith('Bearer ')) {
+          token = authHeader.substring(7);
+        } else if (protocol?.startsWith('auth-')) {
+          // Extract token from subprotocol for browser clients (auth-{token})
+          token = protocol.substring(5);
+          // Accept the subprotocol in the response
+          connection.socket.protocol = protocol;
+        }
+
+        if (!token) {
           ws.close(1008, 'Unauthorized');
           return;
         }
-
-        const token = authHeader.substring(7);
 
         try {
           // Validate JWT with Supabase
@@ -362,36 +373,115 @@ export async function registerWebSocketRoutes(
 
                       // Only allow subscribing to authorized channels
                       if (channel.startsWith('chat:')) {
-                        // TODO: Verify user has access to this chat session
+                        // Extract session ID from channel name (format: "chat:session-id")
+                        const sessionId = channel.substring(5);
 
-                        if (!subscribedChannels.has(channel)) {
-                          const subscription = await redis.createSubscription(
-                            channel,
-                            async (data: unknown) => {
-                              await manager.sendToConnection(
-                                connectionId,
-                                addCorrelationIdToMessage({
-                                  type: 'channel',
-                                  channel,
-                                  data,
-                                })
-                              );
-                            }
-                          );
+                        // Verify user has access to this chat session
+                        const supabaseAdmin = getSupabaseAdminClient();
 
-                          redisSubscriptions.set(channel, subscription);
-                          subscribedChannels.add(channel);
+                        // First, get the user's customer_id
+                        const { data: userData, error: userError } =
+                          await supabaseAdmin
+                            .from('users')
+                            .select('customer_id')
+                            .eq('id', userId)
+                            .single();
 
+                        if (userError || !userData?.customer_id) {
                           await manager.sendToConnection(
                             connectionId,
                             addCorrelationIdToMessage(
                               {
-                                type: 'subscribed',
-                                channel,
+                                type: 'error',
+                                error: 'User not associated with a customer',
                               },
                               requestId
                             )
                           );
+                          break;
+                        }
+
+                        // Verify the session belongs to the user's customer
+                        const { data: session, error: sessionError } =
+                          await supabaseAdmin
+                            .from('chat_sessions')
+                            .select('id, customer_id')
+                            .eq('id', sessionId)
+                            .eq('customer_id', userData.customer_id)
+                            .single();
+
+                        if (sessionError || !session) {
+                          await manager.sendToConnection(
+                            connectionId,
+                            addCorrelationIdToMessage(
+                              {
+                                type: 'error',
+                                error: 'Access denied to this chat session',
+                              },
+                              requestId
+                            )
+                          );
+                          request.log.warn(
+                            {
+                              userId,
+                              sessionId,
+                              customerId: userData.customer_id,
+                            },
+                            'Unauthorized chat subscription attempt'
+                          );
+                          break;
+                        }
+
+                        if (!subscribedChannels.has(channel)) {
+                          try {
+                            const subscription = await redis.createSubscription(
+                              channel,
+                              async (data: unknown) => {
+                                await manager.sendToConnection(
+                                  connectionId,
+                                  addCorrelationIdToMessage({
+                                    type: 'channel',
+                                    channel,
+                                    data,
+                                  })
+                                );
+                              }
+                            );
+
+                            redisSubscriptions.set(channel, subscription);
+                            subscribedChannels.add(channel);
+
+                            await manager.sendToConnection(
+                              connectionId,
+                              addCorrelationIdToMessage(
+                                {
+                                  type: 'subscribed',
+                                  channel,
+                                },
+                                requestId
+                              )
+                            );
+                          } catch (error) {
+                            request.log.error(
+                              {
+                                error,
+                                channel,
+                                connectionId,
+                              },
+                              'Failed to create Redis subscription'
+                            );
+
+                            await manager.sendToConnection(
+                              connectionId,
+                              addCorrelationIdToMessage(
+                                {
+                                  type: 'error',
+                                  error: 'Failed to subscribe to channel',
+                                },
+                                requestId
+                              )
+                            );
+                          }
                         }
                       } else {
                         await manager.sendToConnection(
@@ -499,7 +589,7 @@ export async function registerWebSocketRoutes(
           });
 
           // Handle errors
-          ws.on('error', (error): void => {
+          ws.on('error', (error: Error): void => {
             request.log.error(error, 'WebSocket error');
             // Clean up Redis subscribers to prevent leaks
             void (async (): Promise<void> => {
@@ -557,19 +647,19 @@ export async function registerWebSocketRoutes(
           connectedAt: new Date().toISOString(),
         });
 
-        // Try to extract JWT from headers first (for non-browser clients)
+        // Extract JWT from headers (for non-browser clients) or subprotocol (for browser clients)
         const authHeader = request.headers.authorization;
-
-        // Also check query parameters for browser clients
-        const queryToken = (request.query as { token?: string })?.token;
+        const protocol = request.headers['sec-websocket-protocol'];
 
         let token: string | null = null;
 
         if (authHeader?.startsWith('Bearer ')) {
           token = authHeader.substring(7);
-        } else if (queryToken) {
-          // Use query parameter token for browser clients
-          token = queryToken;
+        } else if (protocol?.startsWith('auth-')) {
+          // Extract token from subprotocol for browser clients (auth-{token})
+          token = protocol.substring(5);
+          // Accept the subprotocol in the response
+          connection.socket.protocol = protocol;
         }
 
         // Function to authenticate and setup customer connection
