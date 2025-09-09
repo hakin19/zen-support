@@ -1,6 +1,7 @@
 import { getRedisClient } from '@aizen/shared/utils/redis-client';
 import { getSupabaseAdminClient } from '@aizen/shared/utils/supabase-client';
 
+import { config } from '../config';
 import { commandQueueService } from '../services/command-queue.service';
 import { WebSocketConnectionManager } from '../services/websocket-connection-manager';
 import {
@@ -33,8 +34,8 @@ let connectionManager: WebSocketConnectionManager;
 export function getConnectionManager(): WebSocketConnectionManager {
   if (!connectionManager) {
     connectionManager = new WebSocketConnectionManager();
-    // Start heartbeat with 30 second interval
-    connectionManager.startHeartbeat(30000);
+    // Start heartbeat with configurable interval
+    connectionManager.startHeartbeat(config.device.heartbeatInterval);
   }
   return connectionManager;
 }
