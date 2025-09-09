@@ -16,7 +16,8 @@
     "lint:fix": "eslint src --ext .ts,.tsx --fix --ignore-pattern '*.test.ts' --ignore-pattern 'test-*.ts'",
     "format": "prettier --write \"src/**/*.{ts,tsx,json,md}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx,json,md}\"",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "seed:device": "tsx src/scripts/seed-test-device.ts"
   },
   "devDependencies": {
     "@types/dotenv": "^6.1.1",

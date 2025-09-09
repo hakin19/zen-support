@@ -88,7 +88,7 @@ export async function registerWebSocketRoutes(
 
         try {
           // Validate session token with type-safe wrapper
-          const sessionKey = `device:session:${sessionToken}`;
+          const sessionKey = `session:${sessionToken}`;
           const session = await getFromRedis<{ deviceId: string }>(
             redis,
             sessionKey

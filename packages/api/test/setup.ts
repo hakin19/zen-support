@@ -86,10 +86,24 @@ const mockRedisClient = {
   }),
 
   // Utility methods
-  getClient: vi.fn().mockReturnValue({}),
-  duplicate: vi.fn().mockReturnValue(mockRedisClient),
+  getClient: vi.fn(),
+  duplicate: vi.fn(),
   isReady: vi.fn().mockReturnValue(true),
 };
+
+// Set up circular reference and getClient after object is created
+mockRedisClient.duplicate.mockReturnValue(mockRedisClient);
+mockRedisClient.getClient.mockReturnValue({
+  get: mockRedisClient.get,
+  set: mockRedisClient.set,
+  setEx: mockRedisClient.setex,
+  del: mockRedisClient.del,
+  exists: mockRedisClient.exists,
+  expire: mockRedisClient.expire,
+  ttl: mockRedisClient.ttl,
+  scan: vi.fn().mockResolvedValue({ cursor: '0', keys: [] }),
+  mGet: vi.fn().mockResolvedValue([]),
+});
 
 vi.mock('@aizen/shared/utils/redis-client', () => ({
   RedisClient: vi.fn().mockImplementation(() => mockRedisClient),

@@ -84,7 +84,7 @@ async function testConnection(): Promise<void> {
       }
     } else {
       console.log(
-        '\n2. Service role key not configured (SUPABASE_SERVICE_KEY missing)'
+        '\n2. Service role key not configured (SUPABASE_SERVICE_ROLE_KEY missing)'
       );
     }
 

@@ -56,6 +56,7 @@ describe('Device Auth Routes', () => {
       expect(res.json()).toEqual({
         token: sessionToken,
         expiresIn: 604800, // 7 days in seconds
+        deviceId,
       });
 
       expect(deviceAuthService.validateCredentials).toHaveBeenCalledWith(
@@ -122,6 +123,7 @@ describe('Device Auth Routes', () => {
       expect(res.json()).toEqual({
         token: 'session-token',
         expiresIn: 604800,
+        deviceId: 'device-123',
       });
 
       expect(sessionService.createSession).toHaveBeenCalledWith({
