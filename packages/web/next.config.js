@@ -27,13 +27,7 @@ const nextConfig = {
   },
   // Redirects and rewrites
   async redirects() {
-    return [
-      {
-        source: '/',
-        destination: '/chat',
-        permanent: false,
-      },
-    ];
+    return [];
   },
   async rewrites() {
     return [
@@ -99,4 +93,4 @@ const nextConfig = {
   },
 };
 
-module.exports = nextConfig;
+export default nextConfig;

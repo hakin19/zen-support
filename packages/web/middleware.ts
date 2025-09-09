@@ -14,8 +14,12 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!supabaseUrl || !supabaseAnonKey) {
-    // Missing Supabase configuration
-    return NextResponse.redirect(new URL('/login', request.url));
+    // Missing Supabase configuration - only redirect if not already on login page
+    if (request.nextUrl.pathname !== '/login') {
+      return NextResponse.redirect(new URL('/login', request.url));
+    }
+    // If already on login page, allow access despite missing config
+    return response;
   }
 
   const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
