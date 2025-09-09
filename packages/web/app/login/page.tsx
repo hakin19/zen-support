@@ -35,7 +35,7 @@ export default function LoginPage(): React.ReactElement {
       } else {
         router.push('/chat');
       }
-    } catch (_err) {
+    } catch {
       setError('An unexpected error occurred');
     } finally {
       setLoading(false);

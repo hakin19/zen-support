@@ -35,11 +35,14 @@ export default function ChatPage(): React.ReactElement {
   } = useChatStore();
 
   // Derive currentSession from sessions and activeSessionId
-  const currentSession = sessions.find(s => s.id === activeSessionId) ?? null;
+  const currentSession: { id: string; title?: string } | null =
+    (sessions as Array<{ id: string; title?: string }>).find(
+      s => s.id === activeSessionId
+    ) ?? null;
 
   const handleSessionCreate = () => {
     // Create a new session with all required fields
-    const sessionId = window.crypto.randomUUID();
+    const sessionId = globalThis.crypto.randomUUID();
     const newSession = {
       id: sessionId,
       title: 'New Session',
@@ -86,10 +89,10 @@ export default function ChatPage(): React.ReactElement {
             {/* Chat header */}
             <div className='border-b p-4'>
               <h2 className='text-lg font-semibold'>
-                {currentSession.title ?? 'Support Session'}
+                {currentSession?.title ?? 'Support Session'}
               </h2>
               <p className='text-sm text-muted-foreground'>
-                Session ID: {currentSession.id}
+                Session ID: {currentSession?.id}
               </p>
             </div>
 

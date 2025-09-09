@@ -55,7 +55,8 @@ export const devicesRoutes: FastifyPluginAsync = async (
   fastify.get(
     '/api/devices',
     {
-      preHandler: webPortalAuthMiddleware,
+      preHandler: (request: FastifyRequest, reply: FastifyReply) =>
+        void webPortalAuthMiddleware(request, reply),
     },
     async (request, reply) => {
       const { user } = request;
@@ -99,7 +100,8 @@ export const devicesRoutes: FastifyPluginAsync = async (
   fastify.post(
     '/api/devices/register',
     {
-      preHandler: webPortalAuthMiddleware,
+      preHandler: (request: FastifyRequest, reply: FastifyReply) =>
+        void webPortalAuthMiddleware(request, reply),
     },
     async (request, reply) => {
       const { user } = request;
@@ -142,19 +144,19 @@ export const devicesRoutes: FastifyPluginAsync = async (
         const deviceData: DeviceInsert = {
           name: body.name,
           device_id: body.serial_number,
-          customer_id: user.organization_id,
+          customer_id: user.organization_id as string,
           location: body.location ?? null,
           status: 'offline',
         };
 
-        const { data: newDevice, error } = await supabase
+        const { data: newDevice, error: insertError } = (await supabase
           .from('devices')
           .insert(deviceData)
           .select()
-          .single();
+          .single()) as { data: DeviceRow | null; error: Error | null };
 
-        if (error) {
-          fastify.log.error('Failed to register device:', error);
+        if (insertError) {
+          fastify.log.error('Failed to register device:', insertError);
           return reply.code(500).send({ error: 'Failed to register device' });
         }
 
@@ -162,7 +164,7 @@ export const devicesRoutes: FastifyPluginAsync = async (
         const connectionManager = getConnectionManager();
         await connectionManager.broadcast({
           type: 'device_registered',
-          device: newDevice,
+          device: newDevice as DeviceRow,
         });
 
         return reply.send({
@@ -181,7 +183,8 @@ export const devicesRoutes: FastifyPluginAsync = async (
   fastify.get(
     '/devices',
     {
-      preHandler: webPortalAuthMiddleware,
+      preHandler: (request: FastifyRequest, reply: FastifyReply) =>
+        void webPortalAuthMiddleware(request, reply),
     },
     async (request, reply) => {
       const { user } = request;
@@ -240,7 +243,7 @@ export const devicesRoutes: FastifyPluginAsync = async (
         return reply.send({
           devices: devices || [],
           firmware_updates: firmwareUpdates,
-          total: count || 0,
+          total: count ?? 0,
           page,
           limit,
         });
@@ -255,7 +258,8 @@ export const devicesRoutes: FastifyPluginAsync = async (
   fastify.post(
     '/devices',
     {
-      preHandler: webPortalAuthMiddleware,
+      preHandler: (request: FastifyRequest, reply: FastifyReply) =>
+        void webPortalAuthMiddleware(request, reply),
     },
     async (request, reply) => {
       const { user } = request;
@@ -278,19 +282,19 @@ export const devicesRoutes: FastifyPluginAsync = async (
         }
 
         // Register device
-        const { data: newDevice, error } = await supabase
+        const { data: newDevice, error: deviceInsertError } = (await supabase
           .from('devices')
           .insert({
             ...body,
-            customer_id: user.organization_id,
+            customer_id: user.organization_id as string,
             status: 'offline',
             registered_by: user.id,
           })
           .select()
-          .single();
+          .single()) as { data: DeviceRow | null; error: Error | null };
 
-        if (error) {
-          fastify.log.error('Failed to register device:', error);
+        if (deviceInsertError) {
+          fastify.log.error('Failed to register device:', deviceInsertError);
           return reply.code(500).send({ error: 'Failed to register device' });
         }
 
@@ -298,10 +302,10 @@ export const devicesRoutes: FastifyPluginAsync = async (
         const connectionManager = getConnectionManager();
         await connectionManager.broadcast({
           type: 'device_registered',
-          device: newDevice,
+          device: newDevice as DeviceRow,
         });
 
-        return reply.send({ device: newDevice });
+        return reply.send({ device: newDevice as DeviceRow });
       } catch (error: unknown) {
         fastify.log.error('Error registering device:', error);
         return reply.code(500).send({ error: 'Internal server error' });
@@ -313,7 +317,8 @@ export const devicesRoutes: FastifyPluginAsync = async (
   fastify.patch(
     '/devices/:deviceId',
     {
-      preHandler: webPortalAuthMiddleware,
+      preHandler: (request: FastifyRequest, reply: FastifyReply) =>
+        void webPortalAuthMiddleware(request, reply),
     },
     async (request, reply) => {
       const { user } = request;
@@ -338,15 +343,15 @@ export const devicesRoutes: FastifyPluginAsync = async (
         }
 
         // Update device
-        const { data: updatedDevice, error } = await supabase
+        const { data: updatedDevice, error: updateError } = (await supabase
           .from('devices')
           .update(body)
           .eq('id', deviceId)
           .select()
-          .single();
+          .single()) as { data: DeviceRow | null; error: Error | null };
 
-        if (error) {
-          fastify.log.error('Failed to update device:', error);
+        if (updateError) {
+          fastify.log.error('Failed to update device:', updateError);
           return reply.code(500).send({ error: 'Failed to update device' });
         }
 
@@ -354,10 +359,10 @@ export const devicesRoutes: FastifyPluginAsync = async (
         const connectionManager = getConnectionManager();
         await connectionManager.broadcast({
           type: 'device_updated',
-          device: updatedDevice,
+          device: updatedDevice as DeviceRow,
         });
 
-        return reply.send({ device: updatedDevice });
+        return reply.send({ device: updatedDevice as DeviceRow });
       } catch (error: unknown) {
         fastify.log.error('Error updating device:', error);
         return reply.code(500).send({ error: 'Internal server error' });
@@ -369,7 +374,8 @@ export const devicesRoutes: FastifyPluginAsync = async (
   fastify.delete(
     '/devices/:deviceId',
     {
-      preHandler: webPortalAuthMiddleware,
+      preHandler: (request: FastifyRequest, reply: FastifyReply) =>
+        void webPortalAuthMiddleware(request, reply),
     },
     async (request, reply) => {
       const { user } = request;
@@ -424,7 +430,8 @@ export const devicesRoutes: FastifyPluginAsync = async (
   fastify.post(
     '/devices/:deviceId/restart',
     {
-      preHandler: webPortalAuthMiddleware,
+      preHandler: (request: FastifyRequest, reply: FastifyReply) =>
+        void webPortalAuthMiddleware(request, reply),
     },
     async (request, reply) => {
       const { user } = request;
@@ -483,7 +490,8 @@ export const devicesRoutes: FastifyPluginAsync = async (
   fastify.post(
     '/devices/:deviceId/firmware',
     {
-      preHandler: webPortalAuthMiddleware,
+      preHandler: (request: FastifyRequest, reply: FastifyReply) =>
+        void webPortalAuthMiddleware(request, reply),
     },
     async (request, reply) => {
       const { user } = request;
@@ -514,20 +522,25 @@ export const devicesRoutes: FastifyPluginAsync = async (
         }
 
         // Create firmware update record
-        const { data: updateRecord, error } = await supabase
+        const { data: updateRecord, error: firmwareError } = (await supabase
           .from('firmware_updates')
           .insert({
             device_id: deviceId,
-            current_version: device.firmware_version,
+            current_version:
+              (device as { firmware_version?: string }).firmware_version ??
+              'unknown',
             target_version: version,
             status: 'pending',
             initiated_by: user.id,
           })
           .select()
-          .single();
+          .single()) as { data: { id: string } | null; error: Error | null };
 
-        if (error) {
-          fastify.log.error('Failed to create firmware update record:', error);
+        if (firmwareError) {
+          fastify.log.error(
+            'Failed to create firmware update record:',
+            firmwareError
+          );
           return reply
             .code(500)
             .send({ error: 'Failed to initiate firmware update' });
@@ -539,7 +552,7 @@ export const devicesRoutes: FastifyPluginAsync = async (
           type: 'command',
           command: 'firmware_update',
           version,
-          update_id: (updateRecord as { id: string }).id,
+          update_id: updateRecord?.id ?? '',
           timestamp: new Date().toISOString(),
         });
 
@@ -559,7 +572,8 @@ export const devicesRoutes: FastifyPluginAsync = async (
   fastify.get(
     '/devices/:deviceId/diagnostics',
     {
-      preHandler: webPortalAuthMiddleware,
+      preHandler: (request: FastifyRequest, reply: FastifyReply) =>
+        void webPortalAuthMiddleware(request, reply),
     },
     async (request, reply) => {
       const { user } = request;
@@ -571,12 +585,12 @@ export const devicesRoutes: FastifyPluginAsync = async (
         const { deviceId } = request.params as { deviceId: string };
 
         // Check device exists and belongs to organization
-        const { data: device } = await supabase
+        const { data: device } = (await supabase
           .from('devices')
           .select('*')
           .eq('id', deviceId)
           .eq('customer_id', user.organization_id)
-          .single();
+          .single()) as { data: DeviceRow | null; error: Error | null };
 
         if (!device) {
           return reply.code(404).send({ error: 'Device not found' });
@@ -600,8 +614,8 @@ export const devicesRoutes: FastifyPluginAsync = async (
 
         return reply.send({
           device,
-          diagnostics: diagnostics || [],
-          events: events || [],
+          diagnostics: diagnostics ?? [],
+          events: events ?? [],
         });
       } catch (error: unknown) {
         fastify.log.error('Error fetching device diagnostics:', error);
@@ -614,7 +628,8 @@ export const devicesRoutes: FastifyPluginAsync = async (
   fastify.get(
     '/api/devices/export',
     {
-      preHandler: webPortalAuthMiddleware,
+      preHandler: (request: FastifyRequest, reply: FastifyReply) =>
+        void webPortalAuthMiddleware(request, reply),
     },
     async (request, reply) => {
       const { user } = request;
@@ -624,14 +639,14 @@ export const devicesRoutes: FastifyPluginAsync = async (
 
       try {
         // Fetch all devices for the organization
-        const { data: devices, error } = await supabase
+        const { data: devices, error: exportError } = await supabase
           .from('devices')
           .select('*')
           .eq('customer_id', user.organization_id)
           .order('created_at', { ascending: false });
 
-        if (error) {
-          fastify.log.error('Failed to fetch devices for export:', error);
+        if (exportError) {
+          fastify.log.error('Failed to fetch devices for export:', exportError);
           return reply.code(500).send({ error: 'Failed to export devices' });
         }
 
@@ -649,18 +664,21 @@ export const devicesRoutes: FastifyPluginAsync = async (
           'Capabilities',
         ];
 
-        const rows = (devices || []).map(device => [
-          device.name || '',
-          device.serial_number || '',
-          device.model || '',
-          device.status || '',
-          device.location || '',
-          device.ip_address || '',
-          device.firmware_version || '',
-          device.last_seen || '',
-          device.registered_at || device.created_at || '',
-          (device.capabilities || []).join('; '),
-        ]);
+        const rows = ((devices as DeviceRow[]) ?? []).map(
+          (device: DeviceRow) => [
+            device.name ?? '',
+            device.device_id ?? '',
+            device.type ?? '',
+            device.status ?? '',
+            device.location ?? '',
+            (device.network_info as { ip_address?: string } | null)
+              ?.ip_address ?? '',
+            '',
+            device.last_heartbeat_at ?? '',
+            device.registered_at ?? device.updated_at ?? '',
+            ((device.configuration as string[] | null) ?? []).join('; '),
+          ]
+        );
 
         // Build CSV string
         const csvContent = [
@@ -703,7 +721,8 @@ export const devicesRoutes: FastifyPluginAsync = async (
   fastify.post(
     '/api/devices/bulk-restart',
     {
-      preHandler: webPortalAuthMiddleware,
+      preHandler: (request: FastifyRequest, reply: FastifyReply) =>
+        void webPortalAuthMiddleware(request, reply),
     },
     async (request, reply) => {
       const { user } = request;
@@ -719,14 +738,14 @@ export const devicesRoutes: FastifyPluginAsync = async (
         }
 
         // Verify all devices belong to organization and are online
-        const { data: devices, error } = await supabase
+        const { data: devices, error: fetchDevicesError } = await supabase
           .from('devices')
           .select('id, status')
           .in('id', device_ids)
           .eq('customer_id', user.organization_id);
 
-        if (error || !devices) {
-          fastify.log.error('Failed to fetch devices:', error);
+        if (fetchDevicesError || !devices) {
+          fastify.log.error('Failed to fetch devices:', fetchDevicesError);
           return reply.code(500).send({ error: 'Failed to fetch devices' });
         }
 
@@ -739,21 +758,23 @@ export const devicesRoutes: FastifyPluginAsync = async (
 
         // Send restart commands to all online devices
         const connectionManager = getConnectionManager();
-        const restartPromises = onlineDevices.map(async device => {
-          await connectionManager.sendToDevice(device.id, {
-            type: 'command',
-            command: 'restart',
-            timestamp: new Date().toISOString(),
-          });
+        const restartPromises = onlineDevices.map(
+          async (device: { id: string; status: string }) => {
+            await connectionManager.sendToDevice(device.id, {
+              type: 'command',
+              command: 'restart',
+              timestamp: new Date().toISOString(),
+            });
 
-          return supabase.from('audit_log').insert({
-            user_id: user.id,
-            action: 'device_restart',
-            resource_type: 'device',
-            resource_id: device.id,
-            details: { device_id: device.id, bulk_action: true },
-          });
-        });
+            return supabase.from('audit_log').insert({
+              user_id: user.id,
+              action: 'device_restart',
+              resource_type: 'device',
+              resource_id: device.id,
+              details: { device_id: device.id, bulk_action: true },
+            });
+          }
+        );
 
         await Promise.all(restartPromises);
 
@@ -773,7 +794,8 @@ export const devicesRoutes: FastifyPluginAsync = async (
   fastify.post(
     '/api/devices/bulk-enable',
     {
-      preHandler: webPortalAuthMiddleware,
+      preHandler: (request: FastifyRequest, reply: FastifyReply) =>
+        void webPortalAuthMiddleware(request, reply),
     },
     async (request, reply) => {
       const { user } = request;
@@ -789,15 +811,15 @@ export const devicesRoutes: FastifyPluginAsync = async (
         }
 
         // Update devices to enable them
-        const { data: updatedDevices, error } = await supabase
+        const { data: updatedDevices, error: enableError } = await supabase
           .from('devices')
           .update({ enabled: true })
           .in('id', device_ids)
           .eq('customer_id', user.organization_id)
           .select();
 
-        if (error) {
-          fastify.log.error('Failed to enable devices:', error);
+        if (enableError) {
+          fastify.log.error('Failed to enable devices:', enableError);
           return reply.code(500).send({ error: 'Failed to enable devices' });
         }
 
@@ -818,13 +840,13 @@ export const devicesRoutes: FastifyPluginAsync = async (
         const connectionManager = getConnectionManager();
         await connectionManager.broadcast({
           type: 'devices_updated',
-          devices: updatedDevices,
+          devices: updatedDevices as DeviceRow[],
         });
 
         return reply.send({
           success: true,
-          message: `Enabled ${updatedDevices?.length || 0} device(s)`,
-          devices_affected: updatedDevices?.length || 0,
+          message: `Enabled ${updatedDevices?.length ?? 0} device(s)`,
+          devices_affected: updatedDevices?.length ?? 0,
         });
       } catch (error: unknown) {
         fastify.log.error('Error in bulk enable:', error);
@@ -837,7 +859,8 @@ export const devicesRoutes: FastifyPluginAsync = async (
   fastify.post(
     '/api/devices/bulk-disable',
     {
-      preHandler: webPortalAuthMiddleware,
+      preHandler: (request: FastifyRequest, reply: FastifyReply) =>
+        void webPortalAuthMiddleware(request, reply),
     },
     async (request, reply) => {
       const { user } = request;
@@ -853,15 +876,15 @@ export const devicesRoutes: FastifyPluginAsync = async (
         }
 
         // Update devices to disable them
-        const { data: updatedDevices, error } = await supabase
+        const { data: updatedDevices, error: disableError } = await supabase
           .from('devices')
           .update({ enabled: false })
           .in('id', device_ids)
           .eq('customer_id', user.organization_id)
           .select();
 
-        if (error) {
-          fastify.log.error('Failed to disable devices:', error);
+        if (disableError) {
+          fastify.log.error('Failed to disable devices:', disableError);
           return reply.code(500).send({ error: 'Failed to disable devices' });
         }
 
@@ -882,13 +905,13 @@ export const devicesRoutes: FastifyPluginAsync = async (
         const connectionManager = getConnectionManager();
         await connectionManager.broadcast({
           type: 'devices_updated',
-          devices: updatedDevices,
+          devices: updatedDevices as DeviceRow[],
         });
 
         return reply.send({
           success: true,
-          message: `Disabled ${updatedDevices?.length || 0} device(s)`,
-          devices_affected: updatedDevices?.length || 0,
+          message: `Disabled ${updatedDevices?.length ?? 0} device(s)`,
+          devices_affected: updatedDevices?.length ?? 0,
         });
       } catch (error: unknown) {
         fastify.log.error('Error in bulk disable:', error);
@@ -901,7 +924,8 @@ export const devicesRoutes: FastifyPluginAsync = async (
   fastify.post(
     '/api/devices/bulk-remove',
     {
-      preHandler: webPortalAuthMiddleware,
+      preHandler: (request: FastifyRequest, reply: FastifyReply) =>
+        void webPortalAuthMiddleware(request, reply),
     },
     async (request, reply) => {
       const { user } = request;
@@ -919,14 +943,14 @@ export const devicesRoutes: FastifyPluginAsync = async (
         }
 
         // Verify all devices belong to organization
-        const { data: devices, error: fetchError } = await supabase
+        const { data: devices, error: verifyFetchError } = await supabase
           .from('devices')
           .select('id')
           .in('id', device_ids)
           .eq('customer_id', user.organization_id);
 
-        if (fetchError) {
-          fastify.log.error('Failed to fetch devices:', fetchError);
+        if (verifyFetchError) {
+          fastify.log.error('Failed to fetch devices:', verifyFetchError);
           return reply.code(500).send({ error: 'Failed to fetch devices' });
         }
 
@@ -934,16 +958,16 @@ export const devicesRoutes: FastifyPluginAsync = async (
           return reply.code(404).send({ error: 'No devices found' });
         }
 
-        const validDeviceIds = devices.map(d => d.id);
+        const validDeviceIds = devices.map((d: { id: string }) => d.id);
 
         // Delete devices
-        const { error } = await supabase
+        const { error: removeError } = await supabase
           .from('devices')
           .delete()
           .in('id', validDeviceIds);
 
-        if (error) {
-          fastify.log.error('Failed to remove devices:', error);
+        if (removeError) {
+          fastify.log.error('Failed to remove devices:', removeError);
           return reply.code(500).send({ error: 'Failed to remove devices' });
         }
 

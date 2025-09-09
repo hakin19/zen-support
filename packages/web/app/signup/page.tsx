@@ -44,11 +44,11 @@ export default function SignupPage(): React.ReactElement {
         setError('Signup failed - no user returned');
       } else {
         setSuccess(true);
-        window.setTimeout(() => {
+        globalThis.setTimeout(() => {
           router.push('/login');
         }, 3000);
       }
-    } catch (err) {
+    } catch {
       setError('An unexpected error occurred');
     } finally {
       setLoading(false);
@@ -79,7 +79,7 @@ export default function SignupPage(): React.ReactElement {
           <p className='text-muted-foreground mt-2'>Sign up for Aizen vNE</p>
         </div>
 
-        <form onSubmit={handleSignup} className='space-y-4'>
+        <form onSubmit={e => void handleSignup(e)} className='space-y-4'>
           {error && (
             <Alert variant='destructive'>
               <AlertDescription>{error}</AlertDescription>
