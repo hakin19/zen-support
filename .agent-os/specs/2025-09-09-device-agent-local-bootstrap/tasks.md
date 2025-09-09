@@ -11,13 +11,13 @@
   - [x] 1.6 Verify all authentication tests pass
   - [x] 1.7 Seed a test device (hashed secret) or provide a dev activation path so `/api/v1/device/auth` succeeds
 
-- [ ] 2. Implement Device Heartbeat System
-  - [ ] 2.1 Write tests for heartbeat endpoint and device status updates
-  - [ ] 2.2 Verify and align POST /api/v1/device/heartbeat (metrics and status updates)
-  - [ ] 2.3 Update device status in DB and broadcast `device_status` events (online/offline) on heartbeat success
-  - [ ] 2.4 Add metrics storage for CPU, memory, and uptime data
-  - [ ] 2.5 Configure heartbeat interval and timeout handling
-  - [ ] 2.6 Verify all heartbeat tests pass
+- [x] 2. Implement Device Heartbeat System
+  - [x] 2.1 Write tests for heartbeat endpoint and device status updates
+  - [x] 2.2 Verify and align POST /api/v1/device/heartbeat (metrics and status updates)
+  - [x] 2.3 Update device status in DB and broadcast `device_status` events (online/offline) on heartbeat success
+  - [x] 2.4 Add metrics storage for CPU, memory, and uptime data
+  - [x] 2.5 Configure heartbeat interval and timeout handling
+  - [x] 2.6 Verify all heartbeat tests pass
 
 - [ ] 3. Establish WebSocket Communication
   - [ ] 3.1 Write tests for WebSocket connection and message handling

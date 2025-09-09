@@ -1,3 +1,4 @@
+import { config } from '../config';
 import { deviceAuthMiddleware } from '../middleware/device-auth.middleware';
 import { deviceAuthService } from '../services/device-auth.service';
 import { sessionService } from '../services/session.service';
@@ -73,12 +74,12 @@ export function registerDeviceAuthRoutes(app: FastifyInstance): void {
       const session = await sessionService.createSession({
         deviceId: result.device?.id as string,
         customerId: result.device?.customerId as string,
-        ttl: 604800, // 7 days
+        ttl: config.device.sessionTtl,
       });
 
       return {
         token: session.token,
-        expiresIn: 604800,
+        expiresIn: config.device.sessionTtl,
         deviceId: result.device?.id as string,
       };
     }

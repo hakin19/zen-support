@@ -70,6 +70,13 @@ export async function createApp(): Promise<FastifyInstance> {
 
   // Register WebSocket routes before chat routes (chat routes depend on websocketConnectionManager)
   await registerWebSocketRoutes(app);
+
+  // Set connection manager in device auth service for broadcasting device status
+  const { setConnectionManager } = await import(
+    './services/device-auth.service'
+  );
+  setConnectionManager(getConnectionManager());
+
   registerChatRoutes(app);
 
   // Start background processes

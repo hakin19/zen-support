@@ -217,3 +217,4 @@ Copy `.env.example` to `.env` and configure:
 - Run appropriate subagents in parallel when beneficial
 - Never skip pre-commit hooks unless explicitly requested
 - Current year context: 2025
+- Read @docs/supabase-migrations-memory.md before working on any database migrations

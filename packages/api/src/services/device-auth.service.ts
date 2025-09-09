@@ -3,6 +3,8 @@ import { randomBytes, createHash } from 'crypto';
 import { getRedisClient } from '@aizen/shared/utils/redis-client';
 import { getSupabaseAdminClient } from '@aizen/shared/utils/supabase-client';
 
+import type { WebSocketConnectionManager } from './websocket-connection-manager';
+
 export interface Device {
   id: string;
   customerId: string;
@@ -59,6 +61,15 @@ function generateDeviceSecret(): string {
 function hashSecret(secret: string): string {
   // Hash the secret for storage (we never store plaintext secrets)
   return createHash('sha256').update(secret).digest('hex');
+}
+
+// Global connection manager instance (will be set by server initialization)
+let connectionManager: WebSocketConnectionManager | null = null;
+
+export function setConnectionManager(
+  manager: WebSocketConnectionManager
+): void {
+  connectionManager = manager;
 }
 
 export const deviceAuthService = {
@@ -254,13 +265,21 @@ export const deviceAuthService = {
   ): Promise<boolean> {
     try {
       const supabase = getSupabaseAdminClient();
+      const newStatus = data.status === 'healthy' ? 'online' : 'offline';
+
+      // Get device's customer ID for broadcasting
+      const { data: device } = await supabase
+        .from('devices')
+        .select('customer_id')
+        .eq('device_id', deviceId)
+        .single();
 
       // Update device last_seen timestamp, status, and metrics in DB
       const { error } = await supabase
         .from('devices')
         .update({
           last_seen: new Date().toISOString(),
-          status: data.status === 'healthy' ? 'online' : 'offline',
+          status: newStatus,
           metrics: data.metrics ?? null,
         })
         .eq('device_id', deviceId);
@@ -268,6 +287,20 @@ export const deviceAuthService = {
       if (error) {
         console.error('Error updating heartbeat:', error);
         return false;
+      }
+
+      // Broadcast device status update to web portal connections
+      if (connectionManager && device?.customer_id) {
+        await connectionManager.broadcastToCustomer(
+          device.customer_id as string,
+          {
+            type: 'device_status',
+            deviceId,
+            status: newStatus,
+            lastSeen: new Date().toISOString(),
+            metrics: data.metrics,
+          }
+        );
       }
 
       // Also store metrics in Redis for real-time monitoring

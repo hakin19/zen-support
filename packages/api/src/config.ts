@@ -28,4 +28,16 @@ export const config = {
     headersTimeout: 56000, // 56 seconds
     requestTimeout: 50000, // 50 seconds
   },
+
+  device: {
+    heartbeatInterval: parseInt(
+      process.env.DEVICE_HEARTBEAT_INTERVAL ?? '30000',
+      10
+    ), // 30 seconds default
+    heartbeatTimeout: parseInt(
+      process.env.DEVICE_HEARTBEAT_TIMEOUT ?? '90000',
+      10
+    ), // 90 seconds default (3 missed heartbeats)
+    sessionTtl: parseInt(process.env.DEVICE_SESSION_TTL ?? '604800', 10), // 7 days default in seconds
+  },
 } as const;
