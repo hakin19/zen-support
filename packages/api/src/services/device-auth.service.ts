@@ -69,20 +69,24 @@ export const deviceAuthService = {
     try {
       const supabase = getSupabaseAdminClient();
 
-      // Fetch device from database
+      // Fetch device from database (only existing schema fields)
       const { data: device, error } = await supabase
         .from('devices')
-        .select('id, customer_id, status, name, device_secret_hash')
-        .eq('id', deviceId)
+        .select('device_id, customer_id, status, name')
+        .eq('device_id', deviceId)
         .single();
 
       if (error ?? !device) {
         return { valid: false };
       }
 
-      // Verify the device secret
+      // Verify the device secret using Redis-backed hash for local/dev bootstrap
+      // Key pattern: device:secret:sha256:{deviceId}
+      const redis = getRedisClient();
       const providedSecretHash = hashSecret(deviceSecret);
-      if (device.device_secret_hash !== providedSecretHash) {
+      const redisKey = `device:secret:sha256:${deviceId}`;
+      const storedHash = await redis.getClient().get(redisKey);
+      if (!storedHash || storedHash !== providedSecretHash) {
         return { valid: false };
       }
 
@@ -91,7 +95,7 @@ export const deviceAuthService = {
         return {
           valid: true,
           device: {
-            id: device.id as string,
+            id: device.device_id as string,
             customerId: device.customer_id as string,
             status: 'maintenance',
             name: device.name as string,
@@ -102,7 +106,7 @@ export const deviceAuthService = {
       return {
         valid: true,
         device: {
-          id: device.id as string,
+          id: device.device_id as string,
           customerId: device.customer_id as string,
           status: device.status as
             | 'online'
@@ -192,7 +196,7 @@ export const deviceAuthService = {
       const { data: existingDevice } = await supabase
         .from('devices')
         .select('id')
-        .eq('id', deviceId)
+        .eq('device_id', deviceId)
         .single();
 
       if (existingDevice) {
@@ -201,14 +205,12 @@ export const deviceAuthService = {
 
       // Generate device secret
       const deviceSecret = generateDeviceSecret();
-      const deviceSecretHash = hashSecret(deviceSecret);
 
-      // Create device record
+      // Create device record (existing schema fields only)
       const { error: insertError } = await supabase.from('devices').insert({
-        id: deviceId,
+        device_id: deviceId,
         customer_id: customerId,
         name: deviceName,
-        device_secret_hash: deviceSecretHash,
         status: 'offline',
         last_seen: new Date().toISOString(),
       });
@@ -224,6 +226,11 @@ export const deviceAuthService = {
         console.error('Error registering device:', insertError);
         throw new Error('Failed to register device');
       }
+
+      // Store secret hash in Redis for validation
+      const redis = getRedisClient();
+      const redisKey = `device:secret:sha256:${deviceId}`;
+      await redis.getClient().set(redisKey, hashSecret(deviceSecret));
 
       return {
         deviceId,
@@ -256,7 +263,7 @@ export const deviceAuthService = {
           status: data.status === 'healthy' ? 'online' : 'offline',
           metrics: data.metrics ?? null,
         })
-        .eq('id', deviceId);
+        .eq('device_id', deviceId);
 
       if (error) {
         console.error('Error updating heartbeat:', error);

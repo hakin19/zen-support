@@ -79,6 +79,7 @@ export function registerDeviceAuthRoutes(app: FastifyInstance): void {
       return {
         token: session.token,
         expiresIn: 604800,
+        deviceId: result.device?.id as string,
       };
     }
   );
