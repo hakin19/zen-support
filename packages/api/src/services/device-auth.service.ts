@@ -212,7 +212,7 @@ export const deviceAuthService = {
         customer_id: customerId,
         name: deviceName,
         status: 'offline',
-        last_heartbeat_at: new Date().toISOString(),
+        last_seen: new Date().toISOString(),
       });
 
       if (insertError) {
@@ -259,9 +259,9 @@ export const deviceAuthService = {
       const { error } = await supabase
         .from('devices')
         .update({
-          last_heartbeat_at: new Date().toISOString(),
+          last_seen: new Date().toISOString(),
           status: data.status === 'healthy' ? 'online' : 'offline',
-          network_info: data.metrics ? { metrics: data.metrics } : null,
+          metrics: data.metrics ?? null,
         })
         .eq('device_id', deviceId);
 

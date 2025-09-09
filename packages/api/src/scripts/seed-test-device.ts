@@ -107,7 +107,7 @@ async function seedTestDevice(): Promise<void> {
         .from('devices')
         .update({
           status: 'offline',
-          last_heartbeat_at: new Date().toISOString(),
+          last_seen: new Date().toISOString(),
         })
         .eq('device_id', TEST_DEVICE_ID);
 
