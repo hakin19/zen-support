@@ -146,7 +146,7 @@ export function MessageList({
     messages.forEach(message => {
       if (!message.created_at) return;
 
-      const createdAt = message.created_at;
+      const createdAt = message.created_at as string;
       if (!createdAt) return;
 
       const messageDate = new Date(String(createdAt)).toDateString();
@@ -199,7 +199,7 @@ export function MessageList({
             {renderDateSeparator(group.date)}
             {group.messages.map(message => (
               <ChatMessage
-                key={message.id}
+                key={(message as { id: string }).id}
                 message={message}
                 deviceActions={deviceActions}
                 onRetry={onRetry}

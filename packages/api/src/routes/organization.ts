@@ -67,7 +67,7 @@ export const organizationRoutes: FastifyPluginAsync = fastify => {
         const { data: org, error } = (await supabase
           .from('customers')
           .select('*')
-          .eq('id', user.organization_id)
+          .eq('id', user.customerId)
           .single()) as { data: Customer | null; error: unknown };
 
         if (error ?? !org) {
@@ -118,18 +118,25 @@ export const organizationRoutes: FastifyPluginAsync = fastify => {
           created_at: String(org.created_at),
           updated_at: String(org.updated_at),
           settings: {
-            allow_sso: settings?.allow_sso ?? false,
-            enforce_2fa: settings?.enforce_2fa ?? false,
-            session_timeout: settings?.session_timeout ?? 3600,
-            ip_whitelist: settings?.ip_whitelist ?? [],
+            allow_sso: (settings?.allow_sso as boolean | undefined) ?? false,
+            enforce_2fa:
+              (settings?.enforce_2fa as boolean | undefined) ?? false,
+            session_timeout:
+              (settings?.session_timeout as number | undefined) ?? 3600,
+            ip_whitelist:
+              (settings?.ip_whitelist as unknown[] | undefined) ?? [],
             notification_preferences: {
-              email_alerts: settings?.email_alerts ?? true,
-              sms_alerts: settings?.sms_alerts ?? false,
-              webhook_url: settings?.webhook_url ?? null,
+              email_alerts:
+                (settings?.email_alerts as boolean | undefined) ?? true,
+              sms_alerts:
+                (settings?.sms_alerts as boolean | undefined) ?? false,
+              webhook_url:
+                (settings?.webhook_url as string | null | undefined) ?? null,
             },
             api_settings: {
-              rate_limit: settings?.rate_limit ?? 1000,
-              allowed_origins: settings?.allowed_origins ?? [],
+              rate_limit: (settings?.rate_limit as number | undefined) ?? 1000,
+              allowed_origins:
+                (settings?.allowed_origins as unknown[] | undefined) ?? [],
             },
           },
           subscription: subscription ?? {
@@ -166,7 +173,7 @@ export const organizationRoutes: FastifyPluginAsync = fastify => {
         const body = organizationSchema.parse(request.body);
 
         // Update organization
-        const { data: updatedOrg, error } = await supabase
+        const { data: updatedOrg, error } = (await supabase
           .from('customers')
           .update({
             business_name: body.name,
@@ -184,9 +191,9 @@ export const organizationRoutes: FastifyPluginAsync = fastify => {
             secondary_color: body.secondary_color,
             updated_at: new Date().toISOString(),
           })
-          .eq('id', user.organization_id)
+          .eq('id', user.customerId)
           .select()
-          .single();
+          .single()) as { data: unknown; error: unknown };
 
         if (error) {
           fastify.log.error('Failed to update organization:', error);
@@ -224,14 +231,19 @@ export const organizationRoutes: FastifyPluginAsync = fastify => {
         const body = securitySettingsSchema.parse(request.body);
 
         // Upsert settings
-        const { error } = await supabase.from('organization_settings').upsert({
-          organization_id: user.organization_id,
-          ...body,
+        const result = await supabase.from('organization_settings').upsert({
+          organization_id: user.customerId,
+          allow_sso: body.allow_sso,
+          enforce_2fa: body.enforce_2fa,
+          session_timeout: body.session_timeout,
           updated_at: new Date().toISOString(),
         });
 
-        if (error) {
-          fastify.log.error('Failed to update security settings:', error);
+        if (result.error) {
+          fastify.log.error(
+            'Failed to update security settings:',
+            result.error
+          );
           return reply.code(500).send({ error: 'Failed to update settings' });
         }
 
@@ -257,16 +269,19 @@ export const organizationRoutes: FastifyPluginAsync = fastify => {
         const body = notificationSettingsSchema.parse(request.body);
 
         // Upsert settings
-        const { error } = await supabase.from('organization_settings').upsert({
-          organization_id: user.organization_id,
+        const result = await supabase.from('organization_settings').upsert({
+          organization_id: user.customerId,
           email_alerts: body.email_alerts,
           sms_alerts: body.sms_alerts,
           webhook_url: body.webhook_url ?? null,
           updated_at: new Date().toISOString(),
         });
 
-        if (error) {
-          fastify.log.error('Failed to update notification settings:', error);
+        if (result.error) {
+          fastify.log.error(
+            'Failed to update notification settings:',
+            result.error
+          );
           return reply.code(500).send({ error: 'Failed to update settings' });
         }
 
@@ -292,14 +307,14 @@ export const organizationRoutes: FastifyPluginAsync = fastify => {
         const body = apiSettingsSchema.parse(request.body);
 
         // Upsert settings
-        const { error } = await supabase.from('organization_settings').upsert({
-          organization_id: user.organization_id,
+        const result = await supabase.from('organization_settings').upsert({
+          organization_id: user.customerId,
           rate_limit: body.rate_limit,
           updated_at: new Date().toISOString(),
         });
 
-        if (error) {
-          fastify.log.error('Failed to update API settings:', error);
+        if (result.error) {
+          fastify.log.error('Failed to update API settings:', result.error);
           return reply.code(500).send({ error: 'Failed to update settings' });
         }
 
@@ -325,18 +340,24 @@ export const organizationRoutes: FastifyPluginAsync = fastify => {
         const body = ipWhitelistSchema.parse(request.body);
 
         // Get current whitelist
-        const { data: settings } = await supabase
+        const { data: settings } = (await supabase
           .from('organization_settings')
           .select('ip_whitelist')
-          .eq('organization_id', user.organization_id)
-          .single();
+          .eq('organization_id', user.customerId)
+          .single()) as { data: { ip_whitelist?: unknown[] } | null };
 
         const currentWhitelist = settings?.ip_whitelist ?? [];
 
+        interface WhitelistEntry {
+          ip: string;
+          description?: string;
+          created_at?: string;
+        }
+
         // Check if IP already exists
         if (
-          (currentWhitelist as any[]).some(
-            (entry: any) => entry.ip === body.ip_address
+          (currentWhitelist as WhitelistEntry[]).some(
+            (entry: WhitelistEntry) => entry.ip === body.ip_address
           )
         ) {
           return reply
@@ -346,7 +367,7 @@ export const organizationRoutes: FastifyPluginAsync = fastify => {
 
         // Add to whitelist
         const newWhitelist = [
-          ...currentWhitelist,
+          ...(currentWhitelist as WhitelistEntry[]),
           {
             ip: body.ip_address,
             description: body.description ?? '',
@@ -354,13 +375,13 @@ export const organizationRoutes: FastifyPluginAsync = fastify => {
           },
         ];
 
-        const { error } = await supabase.from('organization_settings').upsert({
-          organization_id: user.organization_id,
+        const result = await supabase.from('organization_settings').upsert({
+          organization_id: user.customerId,
           ip_whitelist: newWhitelist,
         });
 
-        if (error) {
-          fastify.log.error('Failed to add IP to whitelist:', error);
+        if (result.error) {
+          fastify.log.error('Failed to add IP to whitelist:', result.error);
           return reply.code(500).send({ error: 'Failed to add IP' });
         }
 
@@ -386,24 +407,33 @@ export const organizationRoutes: FastifyPluginAsync = fastify => {
         const { ip } = request.params as { ip: string };
 
         // Get current whitelist
-        const { data: settings } = await supabase
+        const { data: settings } = (await supabase
           .from('organization_settings')
           .select('ip_whitelist')
-          .eq('organization_id', user.organization_id)
-          .single();
+          .eq('organization_id', user.customerId)
+          .single()) as { data: { ip_whitelist?: unknown[] } | null };
+
+        interface WhitelistEntry {
+          ip: string;
+          description?: string;
+          created_at?: string;
+        }
 
         const currentWhitelist = settings?.ip_whitelist ?? [];
-        const newWhitelist = (currentWhitelist as any[]).filter(
-          (entry: any) => entry.ip !== ip
+        const newWhitelist = (currentWhitelist as WhitelistEntry[]).filter(
+          (entry: WhitelistEntry) => entry.ip !== ip
         );
 
-        const { error } = await supabase.from('organization_settings').upsert({
-          organization_id: user.organization_id,
+        const result = await supabase.from('organization_settings').upsert({
+          organization_id: user.customerId,
           ip_whitelist: newWhitelist,
         });
 
-        if (error) {
-          fastify.log.error('Failed to remove IP from whitelist:', error);
+        if (result.error) {
+          fastify.log.error(
+            'Failed to remove IP from whitelist:',
+            result.error
+          );
           return reply.code(500).send({ error: 'Failed to remove IP' });
         }
 
@@ -429,11 +459,11 @@ export const organizationRoutes: FastifyPluginAsync = fastify => {
         const body = allowedOriginSchema.parse(request.body);
 
         // Get current origins
-        const { data: settings } = await supabase
+        const { data: settings } = (await supabase
           .from('organization_settings')
           .select('allowed_origins')
-          .eq('organization_id', user.organization_id)
-          .single();
+          .eq('organization_id', user.customerId)
+          .single()) as { data: { allowed_origins?: string[] } | null };
 
         const currentOrigins = settings?.allowed_origins ?? [];
 
@@ -445,13 +475,13 @@ export const organizationRoutes: FastifyPluginAsync = fastify => {
         // Add origin
         const newOrigins = [...currentOrigins, body.origin];
 
-        const { error } = await supabase.from('organization_settings').upsert({
-          organization_id: user.organization_id,
+        const result = await supabase.from('organization_settings').upsert({
+          organization_id: user.customerId,
           allowed_origins: newOrigins,
         });
 
-        if (error) {
-          fastify.log.error('Failed to add allowed origin:', error);
+        if (result.error) {
+          fastify.log.error('Failed to add allowed origin:', result.error);
           return reply.code(500).send({ error: 'Failed to add origin' });
         }
 
@@ -477,22 +507,22 @@ export const organizationRoutes: FastifyPluginAsync = fastify => {
         const { origin } = request.params as { origin: string };
 
         // Get current origins
-        const { data: settings } = await supabase
+        const { data: settings } = (await supabase
           .from('organization_settings')
           .select('allowed_origins')
-          .eq('organization_id', user.organization_id)
-          .single();
+          .eq('organization_id', user.customerId)
+          .single()) as { data: { allowed_origins?: string[] } | null };
 
         const currentOrigins = settings?.allowed_origins ?? [];
         const newOrigins = currentOrigins.filter((o: string) => o !== origin);
 
-        const { error } = await supabase.from('organization_settings').upsert({
-          organization_id: user.organization_id,
+        const result = await supabase.from('organization_settings').upsert({
+          organization_id: user.customerId,
           allowed_origins: newOrigins,
         });
 
-        if (error) {
-          fastify.log.error('Failed to remove allowed origin:', error);
+        if (result.error) {
+          fastify.log.error('Failed to remove allowed origin:', result.error);
           return reply.code(500).send({ error: 'Failed to remove origin' });
         }
 
@@ -515,7 +545,7 @@ export const organizationRoutes: FastifyPluginAsync = fastify => {
       }
 
       try {
-        const { url } = request.body as { url: string };
+        const { url: _url } = request.body as { url: string };
 
         // TODO: Implement actual webhook testing
         // For now, return success

@@ -56,7 +56,7 @@ export function registerPromptsRoutes(app: FastifyInstance): void {
       return {
         prompt: {
           id: `prompt-${Date.now()}`,
-          ...(body as any),
+          ...body,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
           created_by: user.id,
@@ -84,7 +84,7 @@ export function registerPromptsRoutes(app: FastifyInstance): void {
       return {
         prompt: {
           id,
-          ...(body as any),
+          ...body,
           updated_at: new Date().toISOString(),
           version: 2,
         },
@@ -177,7 +177,9 @@ export function registerPromptsRoutes(app: FastifyInstance): void {
           .code(403)
           .send({ error: 'Access denied. Owner role required.' });
       }
-      const { templates } = request.body as { templates: any[] };
+      const { templates } = request.body as {
+        templates: Record<string, unknown>[];
+      };
       return {
         imported_count: templates.length,
       };

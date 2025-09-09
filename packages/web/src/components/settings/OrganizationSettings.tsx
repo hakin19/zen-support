@@ -238,45 +238,49 @@ export function OrganizationSettings(): JSX.Element {
     try {
       setLoading(true);
       const response = await api.get('/api/organization');
-      const org = response.data.organization;
+      const org = (response.data as { organization: Organization })
+        .organization;
       setOrganization(org);
 
       // Populate form data
+      const orgData = org;
       setFormData({
-        name: org.name ?? '',
-        subdomain: org.subdomain ?? '',
-        contact_email: org.contact_email ?? '',
-        contact_phone: org.contact_phone ?? '',
-        address: org.address ?? '',
-        city: org.city ?? '',
-        state: org.state ?? '',
-        zip: org.zip ?? '',
-        country: org.country ?? '',
-        timezone: org.timezone ?? '',
-        logo_url: org.logo_url ?? '',
-        primary_color: org.primary_color ?? '#007bff',
-        secondary_color: org.secondary_color ?? '#6c757d',
+        name: orgData.name ?? '',
+        subdomain: orgData.subdomain ?? '',
+        contact_email: orgData.contact_email ?? '',
+        contact_phone: orgData.contact_phone ?? '',
+        address: orgData.address ?? '',
+        city: orgData.city ?? '',
+        state: orgData.state ?? '',
+        zip: orgData.zip ?? '',
+        country: orgData.country ?? '',
+        timezone: orgData.timezone ?? '',
+        logo_url: orgData.logo_url ?? '',
+        primary_color: orgData.primary_color ?? '#007bff',
+        secondary_color: orgData.secondary_color ?? '#6c757d',
       });
 
       setSecurityData({
-        allow_sso: org.settings?.allow_sso ?? false,
-        enforce_2fa: org.settings?.enforce_2fa ?? false,
+        allow_sso: orgData.settings?.allow_sso ?? false,
+        enforce_2fa: orgData.settings?.enforce_2fa ?? false,
         session_timeout: Math.floor(
-          (org.settings?.session_timeout ?? 3600) / 60
+          (orgData.settings?.session_timeout ?? 3600) / 60
         ), // Convert to minutes
       });
 
       setNotificationData({
         email_alerts:
-          org.settings?.notification_preferences?.email_alerts ?? true,
-        sms_alerts: org.settings?.notification_preferences?.sms_alerts ?? false,
-        webhook_url: org.settings?.notification_preferences?.webhook_url ?? '',
+          orgData.settings?.notification_preferences?.email_alerts ?? true,
+        sms_alerts:
+          orgData.settings?.notification_preferences?.sms_alerts ?? false,
+        webhook_url:
+          orgData.settings?.notification_preferences?.webhook_url ?? '',
       });
 
       setApiData({
-        rate_limit: org.settings?.api_settings?.rate_limit ?? 1000,
+        rate_limit: orgData.settings?.api_settings?.rate_limit ?? 1000,
       });
-    } catch (error: unknown) {
+    } catch (_error: unknown) {
       toast({
         title: 'Error',
         description: 'Failed to load organization settings. Please try again.',
@@ -288,12 +292,12 @@ export function OrganizationSettings(): JSX.Element {
   }, [toast]);
 
   useEffect(() => {
-    fetchOrganization();
+    void fetchOrganization();
   }, [fetchOrganization]);
 
   // Connect to WebSocket on mount
   useEffect(() => {
-    connect();
+    void connect();
     return () => disconnect();
   }, [connect, disconnect]);
 
@@ -323,23 +327,23 @@ export function OrganizationSettings(): JSX.Element {
         allow_sso: wsOrganization.settings?.allow_sso ?? false,
         enforce_2fa: wsOrganization.settings?.enforce_2fa ?? false,
         session_timeout: Math.floor(
-          (wsOrganization.settings?.session_timeout || 3600) / 60
+          (wsOrganization.settings?.session_timeout ?? 3600) / 60
         ),
       });
 
       setNotificationData({
         email_alerts:
-          wsOrganization.settings?.notification_preferences?.email_alerts ||
+          wsOrganization.settings?.notification_preferences?.email_alerts ??
           true,
         sms_alerts:
-          wsOrganization.settings?.notification_preferences?.sms_alerts ||
+          wsOrganization.settings?.notification_preferences?.sms_alerts ??
           false,
         webhook_url:
-          wsOrganization.settings?.notification_preferences?.webhook_url || '',
+          wsOrganization.settings?.notification_preferences?.webhook_url ?? '',
       });
 
       setApiData({
-        rate_limit: wsOrganization.settings?.api_settings?.rate_limit || 1000,
+        rate_limit: wsOrganization.settings?.api_settings?.rate_limit ?? 1000,
       });
     }
   }, [wsOrganization]);
@@ -366,7 +370,7 @@ export function OrganizationSettings(): JSX.Element {
 
     if (
       formData.contact_phone &&
-      !/^\+?[\d\s\-\(\)]+$/.test(formData.contact_phone)
+      !/^\+?[\d\s\-()]+$/.test(formData.contact_phone)
     ) {
       newErrors.contact_phone = 'Invalid phone format';
     }
@@ -406,8 +410,8 @@ export function OrganizationSettings(): JSX.Element {
       });
 
       // Refresh data
-      fetchOrganization();
-    } catch (error: unknown) {
+      void fetchOrganization();
+    } catch (_error: unknown) {
       toast({
         title: 'Error',
         description: 'Failed to save settings. Please try again.',
@@ -433,8 +437,8 @@ export function OrganizationSettings(): JSX.Element {
         description: 'Security settings saved successfully',
       });
 
-      fetchOrganization();
-    } catch (error: unknown) {
+      void fetchOrganization();
+    } catch (_error: unknown) {
       toast({
         title: 'Error',
         description: 'Failed to save security settings.',
@@ -457,8 +461,8 @@ export function OrganizationSettings(): JSX.Element {
         description: 'Notification settings saved successfully',
       });
 
-      fetchOrganization();
-    } catch (error: unknown) {
+      void fetchOrganization();
+    } catch (_error: unknown) {
       toast({
         title: 'Error',
         description: 'Failed to save notification settings.',
@@ -481,8 +485,8 @@ export function OrganizationSettings(): JSX.Element {
         description: 'API settings saved successfully',
       });
 
-      fetchOrganization();
-    } catch (error: unknown) {
+      void fetchOrganization();
+    } catch (_error: unknown) {
       toast({
         title: 'Error',
         description: 'Failed to save API settings.',

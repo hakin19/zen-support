@@ -422,7 +422,8 @@ export async function registerWebSocketRoutes(
                             {
                               userId,
                               sessionId,
-                              customerId: userData.customer_id,
+                              customerId: (userData as { customer_id: string })
+                                .customer_id,
                             },
                             'Unauthorized chat subscription attempt'
                           );
@@ -1036,7 +1037,7 @@ async function handleDeviceClaimCommand(
         )
       );
     }
-  } catch (_error) {
+  } catch {
     // Log error - will be replaced with proper logger later
     await manager.sendToConnection(
       connectionId,
@@ -1134,7 +1135,7 @@ async function handleDeviceCommandResult(
         requestId
       )
     );
-  } catch (_error) {
+  } catch {
     // Log error - will be replaced with proper logger later
     await manager.sendToConnection(
       connectionId,
@@ -1346,7 +1347,7 @@ async function handleSendCommand(
         requestId
       )
     );
-  } catch (_error) {
+  } catch {
     // Log error - will be replaced with proper logger later
     await manager.sendToConnection(
       connectionId,

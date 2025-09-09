@@ -128,12 +128,12 @@ export const usersRoutes: FastifyPluginAsync = fastify => {
           // User exists in auth.users, check if they're already in this customer
           userId = existingAuthUser.id;
 
-          const { data: existingRole } = await supabase
+          const { data: existingRole } = (await supabase
             .from('user_roles')
             .select('*')
             .eq('user_id', userId)
             .eq('customer_id', user.customerId)
-            .single();
+            .single()) as { data: unknown };
 
           if (existingRole) {
             return reply
@@ -201,12 +201,12 @@ export const usersRoutes: FastifyPluginAsync = fastify => {
         }
 
         // Get the complete user record
-        const { data: newUser } = await supabase
+        const { data: newUser } = (await supabase
           .from('user_management')
           .select('*')
           .eq('id', userId)
           .eq('customer_id', user.customerId)
-          .single();
+          .single()) as { data: unknown };
 
         // TODO: Send invitation email
 
@@ -214,7 +214,7 @@ export const usersRoutes: FastifyPluginAsync = fastify => {
         const connectionManager = getConnectionManager();
         await connectionManager.broadcast({
           type: 'user_added',
-          user: newUser,
+          user: newUser as Record<string, unknown>,
         });
 
         return reply.send({ user: newUser });
@@ -242,18 +242,18 @@ export const usersRoutes: FastifyPluginAsync = fastify => {
         const body = updateRoleSchema.parse(request.body);
 
         // Check if target user exists and get their current role
-        const { data: targetUser } = await supabase
+        const { data: targetUser } = (await supabase
           .from('user_roles')
           .select('*')
           .eq('user_id', userId)
           .eq('customer_id', user.customerId)
-          .single();
+          .single()) as { data: { role: string } | null };
 
         if (!targetUser) {
           return reply.code(404).send({ error: 'User not found' });
         }
 
-        if (targetUser.role === 'owner') {
+        if ((targetUser as { role: string }).role === 'owner') {
           return reply.code(400).send({ error: 'Cannot change owner role' });
         }
 
@@ -273,18 +273,18 @@ export const usersRoutes: FastifyPluginAsync = fastify => {
         }
 
         // Get updated user record
-        const { data: updatedUser } = await supabase
+        const { data: updatedUser } = (await supabase
           .from('user_management')
           .select('*')
           .eq('id', userId)
           .eq('customer_id', user.customerId)
-          .single();
+          .single()) as { data: unknown };
 
         // Broadcast to WebSocket clients
         const connectionManager = getConnectionManager();
         await connectionManager.broadcast({
           type: 'user_update',
-          user: updatedUser,
+          user: updatedUser as Record<string, unknown>,
         });
 
         return reply.send({ user: updatedUser });
@@ -316,18 +316,18 @@ export const usersRoutes: FastifyPluginAsync = fastify => {
         }
 
         // Check target user role
-        const { data: targetUser } = await supabase
+        const { data: targetUser } = (await supabase
           .from('user_roles')
           .select('*')
           .eq('user_id', userId)
           .eq('customer_id', user.customerId)
-          .single();
+          .single()) as { data: { role: string } | null };
 
         if (!targetUser) {
           return reply.code(404).send({ error: 'User not found' });
         }
 
-        if (targetUser.role === 'owner') {
+        if ((targetUser as { role: string }).role === 'owner') {
           return reply.code(400).send({ error: 'Cannot delete owner' });
         }
 
@@ -385,11 +385,13 @@ export const usersRoutes: FastifyPluginAsync = fastify => {
         const body = bulkActionSchema.parse(request.body);
 
         // Get target users and filter out current user and owners
-        const { data: targetUsers } = await supabase
+        const { data: targetUsers } = (await supabase
           .from('user_roles')
           .select('user_id, role')
           .in('user_id', body.userIds)
-          .eq('customer_id', user.customerId);
+          .eq('customer_id', user.customerId)) as {
+          data: { user_id: string; role: string }[] | null;
+        };
 
         const validUserIds = (targetUsers ?? [])
           .filter(u => u.user_id !== user.id && u.role !== 'owner')
@@ -465,7 +467,7 @@ export const usersRoutes: FastifyPluginAsync = fastify => {
       try {
         const { userId } = request.params as { userId: string };
 
-        const { data: targetUser, error } = await supabase
+        const { data: targetUser, error } = (await supabase
           .from('users')
           .update({
             invitation_sent_at: new Date().toISOString(),
@@ -478,7 +480,7 @@ export const usersRoutes: FastifyPluginAsync = fastify => {
           .eq('customer_id', user.customerId)
           .eq('status', 'invited')
           .select()
-          .single();
+          .single()) as { data: unknown; error: unknown };
 
         if (error || !targetUser) {
           return reply.code(404).send({ error: 'Invited user not found' });

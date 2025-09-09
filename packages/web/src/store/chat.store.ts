@@ -21,7 +21,7 @@ interface ChatState {
   // Sessions
   sessions: ChatSession[];
   activeSessionId: string | null;
-  currentSession: ChatSession | null;
+  getCurrentSession: () => ChatSession | null;
   sessionsLoading: boolean;
   sessionsError: string | null;
 
@@ -125,10 +125,14 @@ export const useChatStore = create<ChatState>()(
     (set, get) => ({
       ...initialState,
 
-      // Computed getter for current session
-      get currentSession(): ChatSession | null {
+      // Computed function for current session
+      getCurrentSession: (): ChatSession | null => {
         const state = get();
-        return state.sessions.find(s => s.id === state.activeSessionId) ?? null;
+        return (
+          state.sessions.find(
+            (s: ChatSession) => s.id === state.activeSessionId
+          ) ?? null
+        );
       },
 
       // Session Actions
@@ -146,7 +150,7 @@ export const useChatStore = create<ChatState>()(
       updateSession: (id, updates) =>
         set(
           state => ({
-            sessions: state.sessions.map(s =>
+            sessions: state.sessions.map((s: ChatSession) =>
               s.id === id ? { ...s, ...updates } : s
             ),
           }),
@@ -160,7 +164,7 @@ export const useChatStore = create<ChatState>()(
       archiveSession: id =>
         set(
           state => ({
-            sessions: state.sessions.map(s =>
+            sessions: state.sessions.map((s: ChatSession) =>
               s.id === id ? { ...s, status: 'archived' as const } : s
             ),
           }),
@@ -171,7 +175,7 @@ export const useChatStore = create<ChatState>()(
       deleteSession: id =>
         set(
           state => ({
-            sessions: state.sessions.filter(s => s.id !== id),
+            sessions: state.sessions.filter((s: ChatSession) => s.id !== id),
             activeSessionId:
               state.activeSessionId === id ? null : state.activeSessionId,
           }),
@@ -368,9 +372,21 @@ export const useChatStore = create<ChatState>()(
           // Rollback to original state
           if (originalAction) {
             get().updateDeviceAction(id, {
-              status: originalAction.status,
-              approved_at: originalAction.approved_at,
-              approved_by: originalAction.approved_by,
+              status: originalAction.status as
+                | 'pending'
+                | 'approved'
+                | 'rejected'
+                | 'executing'
+                | 'completed'
+                | 'failed',
+              approved_at: originalAction.approved_at as
+                | string
+                | null
+                | undefined,
+              approved_by: originalAction.approved_by as
+                | string
+                | null
+                | undefined,
             });
           }
           throw error;
@@ -395,9 +411,21 @@ export const useChatStore = create<ChatState>()(
           // Rollback to original state
           if (originalAction) {
             get().updateDeviceAction(id, {
-              status: originalAction.status,
-              rejected_at: originalAction.rejected_at,
-              rejected_by: originalAction.rejected_by,
+              status: originalAction.status as
+                | 'pending'
+                | 'approved'
+                | 'rejected'
+                | 'executing'
+                | 'completed'
+                | 'failed',
+              rejected_at: originalAction.rejected_at as
+                | string
+                | null
+                | undefined,
+              rejected_by: originalAction.rejected_by as
+                | string
+                | null
+                | undefined,
             });
           }
           throw error;
