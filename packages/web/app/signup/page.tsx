@@ -38,22 +38,17 @@ export default function SignupPage(): React.ReactElement {
         password,
       });
 
-      console.log('Signup response:', { data, error });
-
       if (error) {
         setError(error.message);
-        console.error('Signup error:', error);
       } else if (!data.user) {
         setError('Signup failed - no user returned');
       } else {
         setSuccess(true);
-        console.log('Signup successful:', data.user.email);
-        setTimeout(() => {
+        window.setTimeout(() => {
           router.push('/login');
         }, 3000);
       }
     } catch (err) {
-      console.error('Signup exception:', err);
       setError('An unexpected error occurred');
     } finally {
       setLoading(false);

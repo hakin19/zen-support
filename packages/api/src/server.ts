@@ -70,7 +70,7 @@ export async function createApp(): Promise<FastifyInstance> {
 
   // Register WebSocket routes before chat routes (chat routes depend on websocketConnectionManager)
   await registerWebSocketRoutes(app);
-  await registerChatRoutes(app);
+  registerChatRoutes(app);
 
   // Start background processes
   startVisibilityCheck();

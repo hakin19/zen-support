@@ -73,6 +73,6 @@ declare module 'fastify' {
   interface FastifyInstance {
     websocketConnections?: WebSocketConnectionManager;
     websocketConnectionManager?: WebSocketConnectionManager;
-    redis?: any; // Using 'any' for now as RedisClient type would need to be imported
+    redis?: unknown; // Using 'unknown' for now as RedisClient type would need to be imported
   }
 }

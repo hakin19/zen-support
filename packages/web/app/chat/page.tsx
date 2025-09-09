@@ -35,11 +35,11 @@ export default function ChatPage(): React.ReactElement {
   } = useChatStore();
 
   // Derive currentSession from sessions and activeSessionId
-  const currentSession = sessions.find(s => s.id === activeSessionId) || null;
+  const currentSession = sessions.find(s => s.id === activeSessionId) ?? null;
 
   const handleSessionCreate = () => {
     // Create a new session with all required fields
-    const sessionId = crypto.randomUUID();
+    const sessionId = window.crypto.randomUUID();
     const newSession = {
       id: sessionId,
       title: 'New Session',
@@ -86,7 +86,7 @@ export default function ChatPage(): React.ReactElement {
             {/* Chat header */}
             <div className='border-b p-4'>
               <h2 className='text-lg font-semibold'>
-                {currentSession.title || 'Support Session'}
+                {currentSession.title ?? 'Support Session'}
               </h2>
               <p className='text-sm text-muted-foreground'>
                 Session ID: {currentSession.id}
@@ -99,9 +99,13 @@ export default function ChatPage(): React.ReactElement {
                 messages={messages}
                 deviceActions={deviceActions}
                 isTyping={isTyping}
-                onRetry={retryMessage}
-                onApproveAction={approveAction}
-                onRejectAction={rejectAction}
+                onRetry={(messageId: string) => void retryMessage(messageId)}
+                onApproveAction={(actionId: string) =>
+                  void approveAction(actionId)
+                }
+                onRejectAction={(actionId: string) =>
+                  void rejectAction(actionId)
+                }
                 onViewAction={handleViewAction}
                 className='h-full'
               />
@@ -110,7 +114,7 @@ export default function ChatPage(): React.ReactElement {
             {/* Input */}
             <div className='border-t'>
               <ChatInput
-                onSend={sendMessage}
+                onSend={(message: string) => void sendMessage(message)}
                 onTyping={() => setTyping(true)}
                 isSending={isSending}
                 isDisabled={!currentSession}
@@ -138,8 +142,8 @@ export default function ChatPage(): React.ReactElement {
         selectedActionId={selectedActionId}
         isOpen={deviceModalOpen}
         onClose={() => setDeviceModalOpen(false)}
-        onApprove={approveAction}
-        onReject={rejectAction}
+        onApprove={(actionId: string) => void approveAction(actionId)}
+        onReject={(actionId: string) => void rejectAction(actionId)}
         onSelectAction={setSelectedAction}
       />
     </div>

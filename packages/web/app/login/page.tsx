@@ -35,7 +35,7 @@ export default function LoginPage(): React.ReactElement {
       } else {
         router.push('/chat');
       }
-    } catch (err) {
+    } catch (_err) {
       setError('An unexpected error occurred');
     } finally {
       setLoading(false);
@@ -52,7 +52,7 @@ export default function LoginPage(): React.ReactElement {
           </p>
         </div>
 
-        <form onSubmit={handleLogin} className='space-y-4'>
+        <form onSubmit={e => void handleLogin(e)} className='space-y-4'>
           {error && (
             <Alert variant='destructive'>
               <AlertDescription>{error}</AlertDescription>
