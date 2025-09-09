@@ -8,16 +8,6 @@ import type { FastifyRequest, FastifyReply } from 'fastify';
 // Define role types based on database enum
 export type UserRole = 'owner' | 'admin' | 'viewer';
 
-// Extend FastifyRequest interface
-declare module 'fastify' {
-  interface FastifyRequest {
-    userId?: string;
-    customerId?: string;
-    userRole?: UserRole;
-    customerEmail?: string;
-  }
-}
-
 export interface WebPortalAuthOptions {
   requireRole?: UserRole[];
 }
@@ -104,6 +94,14 @@ export async function webPortalAuthMiddleware(
     request.userRole = roleData.role as UserRole;
     request.customerEmail = user.email ?? undefined;
 
+    // Create user object for convenience
+    request.user = {
+      id: user.id,
+      customerId: roleData.customer_id as string,
+      role: roleData.role as UserRole,
+      email: user.email ?? undefined,
+    };
+
     request.log.debug(
       {
         userId: request.userId,
@@ -177,6 +175,14 @@ export async function optionalWebPortalAuthMiddleware(
     request.customerId = roleData.customer_id as string;
     request.userRole = roleData.role as UserRole;
     request.customerEmail = user.email ?? undefined;
+
+    // Create user object for convenience
+    request.user = {
+      id: user.id,
+      customerId: roleData.customer_id as string,
+      role: roleData.role as UserRole,
+      email: user.email ?? undefined,
+    };
 
     request.log.debug(
       {

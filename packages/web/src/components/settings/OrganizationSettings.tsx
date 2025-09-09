@@ -24,7 +24,13 @@ import {
   Check,
   X,
 } from 'lucide-react';
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  useRef,
+} from 'react';
 
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
@@ -69,6 +75,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { api } from '@/lib/api-client';
 import { useAuthStore } from '@/store/auth.store';
+import { useWebSocketStore } from '@/store/websocket.store';
 
 // TypeScript interfaces
 interface OrganizationSettings {
@@ -168,6 +175,12 @@ interface ValidationErrors {
 export function OrganizationSettings() {
   const { user } = useAuthStore();
   const { toast } = useToast();
+  const {
+    organization: wsOrganization,
+    connect,
+    disconnect,
+    setOrganization: setWsOrganization,
+  } = useWebSocketStore();
 
   // State management
   const [organization, setOrganization] = useState<Organization | null>(null);
@@ -299,21 +312,58 @@ export function OrganizationSettings() {
     fetchOrganization();
   }, [fetchOrganization]);
 
-  // WebSocket for real-time updates
+  // Connect to WebSocket on mount
   useEffect(() => {
-    const ws = new WebSocket(
-      process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:3001'
-    );
+    connect();
+    return () => disconnect();
+  }, [connect, disconnect]);
 
-    ws.onmessage = event => {
-      const data = JSON.parse(event.data);
-      if (data.type === 'organization_update') {
-        setOrganization(data.organization);
-      }
-    };
+  // Sync WebSocket organization with local state
+  useEffect(() => {
+    if (wsOrganization) {
+      setOrganization(wsOrganization);
 
-    return () => ws.close();
-  }, []);
+      // Update form data when organization changes via WebSocket
+      setFormData({
+        name: wsOrganization.name || '',
+        subdomain: wsOrganization.subdomain || '',
+        contact_email: wsOrganization.contact_email || '',
+        contact_phone: wsOrganization.contact_phone || '',
+        address: wsOrganization.address || '',
+        city: wsOrganization.city || '',
+        state: wsOrganization.state || '',
+        zip: wsOrganization.zip || '',
+        country: wsOrganization.country || '',
+        timezone: wsOrganization.timezone || '',
+        logo_url: wsOrganization.logo_url || '',
+        primary_color: wsOrganization.primary_color || '#007bff',
+        secondary_color: wsOrganization.secondary_color || '#6c757d',
+      });
+
+      setSecurityData({
+        allow_sso: wsOrganization.settings?.allow_sso || false,
+        enforce_2fa: wsOrganization.settings?.enforce_2fa || false,
+        session_timeout: Math.floor(
+          (wsOrganization.settings?.session_timeout || 3600) / 60
+        ),
+      });
+
+      setNotificationData({
+        email_alerts:
+          wsOrganization.settings?.notification_preferences?.email_alerts ||
+          true,
+        sms_alerts:
+          wsOrganization.settings?.notification_preferences?.sms_alerts ||
+          false,
+        webhook_url:
+          wsOrganization.settings?.notification_preferences?.webhook_url || '',
+      });
+
+      setApiData({
+        rate_limit: wsOrganization.settings?.api_settings?.rate_limit || 1000,
+      });
+    }
+  }, [wsOrganization]);
 
   // Validation
   const validateForm = (): boolean => {

@@ -1,5 +1,6 @@
 export class ApiClient {
   private baseUrl: string;
+  private getAuthToken: (() => Promise<string | null>) | null = null;
 
   constructor(
     baseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001'
@@ -7,17 +8,32 @@ export class ApiClient {
     this.baseUrl = baseUrl;
   }
 
+  setAuthTokenProvider(provider: () => Promise<string | null>) {
+    this.getAuthToken = provider;
+  }
+
   async request<T = unknown>(
     path: string,
     options: RequestInit = {}
-  ): Promise<T> {
+  ): Promise<{ data: T }> {
     const url = `${this.baseUrl}${path}`;
+
+    // Get auth token if provider is set
+    const token = this.getAuthToken ? await this.getAuthToken() : null;
+
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    };
+
+    // Add Authorization header if token is available
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
     const response = await fetch(url, {
       ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
+      headers,
       credentials: 'include',
     });
 
@@ -30,10 +46,41 @@ export class ApiClient {
       );
     }
 
-    return response.json();
+    const data = (await response.json()) as T;
+    return { data };
   }
 
-  get<T = unknown>(path: string, options?: RequestInit): Promise<T> {
+  async getBlob(path: string, options: RequestInit = {}): Promise<Blob> {
+    const url = `${this.baseUrl}${path}`;
+
+    // Get auth token if provider is set
+    const token = this.getAuthToken ? await this.getAuthToken() : null;
+
+    const headers: HeadersInit = {
+      ...options.headers,
+    };
+
+    // Add Authorization header if token is available
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const response = await fetch(url, {
+      ...options,
+      method: 'GET',
+      headers,
+      credentials: 'include',
+    });
+
+    if (!response.ok) {
+      const error = await response.text().catch(() => 'Request failed');
+      throw new Error(error || `Request failed with status ${response.status}`);
+    }
+
+    return response.blob();
+  }
+
+  get<T = unknown>(path: string, options?: RequestInit): Promise<{ data: T }> {
     return this.request<T>(path, { ...options, method: 'GET' });
   }
 
@@ -41,7 +88,7 @@ export class ApiClient {
     path: string,
     data?: unknown,
     options?: RequestInit
-  ): Promise<T> {
+  ): Promise<{ data: T }> {
     return this.request<T>(path, {
       ...options,
       method: 'POST',
@@ -53,7 +100,7 @@ export class ApiClient {
     path: string,
     data?: unknown,
     options?: RequestInit
-  ): Promise<T> {
+  ): Promise<{ data: T }> {
     return this.request<T>(path, {
       ...options,
       method: 'PUT',
@@ -65,7 +112,7 @@ export class ApiClient {
     path: string,
     data?: unknown,
     options?: RequestInit
-  ): Promise<T> {
+  ): Promise<{ data: T }> {
     return this.request<T>(path, {
       ...options,
       method: 'PATCH',
@@ -73,7 +120,10 @@ export class ApiClient {
     });
   }
 
-  delete<T = unknown>(path: string, options?: RequestInit): Promise<T> {
+  delete<T = unknown>(
+    path: string,
+    options?: RequestInit
+  ): Promise<{ data: T }> {
     return this.request<T>(path, { ...options, method: 'DELETE' });
   }
 }

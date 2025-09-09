@@ -76,10 +76,8 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
         return reply.code(401).send({ error: 'Unauthorized' });
       }
 
-      const token = request.headers.authorization?.replace('Bearer ', '');
-      if (!token) {
-        return reply.code(401).send({ error: 'Missing token' });
-      }
+      // Get authenticated Supabase client using the token from middleware
+      const token = request.headers.authorization?.replace('Bearer ', '') || '';
       const supabase = getAuthenticatedSupabaseClient(token);
 
       const { data: session, error } = await supabase
@@ -130,10 +128,8 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
         return reply.code(401).send({ error: 'Unauthorized' });
       }
 
-      const token = request.headers.authorization?.replace('Bearer ', '');
-      if (!token) {
-        return reply.code(401).send({ error: 'Missing token' });
-      }
+      // Get authenticated Supabase client using the token from middleware
+      const token = request.headers.authorization?.replace('Bearer ', '') || '';
       const supabase = getAuthenticatedSupabaseClient(token);
 
       let query = supabase
@@ -177,10 +173,8 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
         return reply.code(401).send({ error: 'Unauthorized' });
       }
 
-      const token = request.headers.authorization?.replace('Bearer ', '');
-      if (!token) {
-        return reply.code(401).send({ error: 'Missing token' });
-      }
+      // Get authenticated Supabase client using the token from middleware
+      const token = request.headers.authorization?.replace('Bearer ', '') || '';
       const supabase = getAuthenticatedSupabaseClient(token);
 
       // Get session
@@ -239,10 +233,8 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
         return reply.code(401).send({ error: 'Unauthorized' });
       }
 
-      const token = request.headers.authorization?.replace('Bearer ', '');
-      if (!token) {
-        return reply.code(401).send({ error: 'Missing token' });
-      }
+      // Get authenticated Supabase client using the token from middleware
+      const token = request.headers.authorization?.replace('Bearer ', '') || '';
       const supabase = getAuthenticatedSupabaseClient(token);
 
       // Verify session ownership
@@ -334,10 +326,8 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
         return reply.code(401).send({ error: 'Unauthorized' });
       }
 
-      const token = request.headers.authorization?.replace('Bearer ', '');
-      if (!token) {
-        return reply.code(401).send({ error: 'Missing token' });
-      }
+      // Get authenticated Supabase client using the token from middleware
+      const token = request.headers.authorization?.replace('Bearer ', '') || '';
       const supabase = getAuthenticatedSupabaseClient(token);
 
       // Verify session ownership
@@ -387,10 +377,8 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
         return reply.code(401).send({ error: 'Unauthorized' });
       }
 
-      const token = request.headers.authorization?.replace('Bearer ', '');
-      if (!token) {
-        return reply.code(401).send({ error: 'Missing token' });
-      }
+      // Get authenticated Supabase client using the token from middleware
+      const token = request.headers.authorization?.replace('Bearer ', '') || '';
       const supabase = getAuthenticatedSupabaseClient(token);
 
       // Verify session ownership
@@ -483,10 +471,8 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
         return reply.code(401).send({ error: 'Unauthorized' });
       }
 
-      const token = request.headers.authorization?.replace('Bearer ', '');
-      if (!token) {
-        return reply.code(401).send({ error: 'Missing token' });
-      }
+      // Get authenticated Supabase client using the token from middleware
+      const token = request.headers.authorization?.replace('Bearer ', '') || '';
       const supabase = getAuthenticatedSupabaseClient(token);
 
       const updateData: any = {};
@@ -533,10 +519,8 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
         return reply.code(401).send({ error: 'Unauthorized' });
       }
 
-      const token = request.headers.authorization?.replace('Bearer ', '');
-      if (!token) {
-        return reply.code(401).send({ error: 'Missing token' });
-      }
+      // Get authenticated Supabase client using the token from middleware
+      const token = request.headers.authorization?.replace('Bearer ', '') || '';
       const supabase = getAuthenticatedSupabaseClient(token);
 
       const { data: session, error } = await supabase
@@ -566,6 +550,48 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
   ): Promise<void> {
     let assistantMessageId: string | null = null;
     let fullResponse = '';
+    const supabase = getAuthenticatedSupabaseClient(token);
+
+    // Throttle configuration
+    let lastUpdateTime = 0;
+    const UPDATE_INTERVAL_MS = 500; // Update DB at most every 500ms
+    let pendingUpdate = false;
+    let updateTimer: NodeJS.Timeout | null = null;
+
+    // Function to perform the DB update
+    const updateDatabase = async () => {
+      if (!assistantMessageId || !pendingUpdate) return;
+
+      pendingUpdate = false;
+      lastUpdateTime = Date.now();
+
+      await supabase
+        .from('chat_messages')
+        .update({
+          content: fullResponse,
+        })
+        .eq('id', assistantMessageId);
+    };
+
+    // Schedule a throttled update
+    const scheduleUpdate = () => {
+      if (!assistantMessageId) return;
+
+      pendingUpdate = true;
+      const timeSinceLastUpdate = Date.now() - lastUpdateTime;
+
+      if (timeSinceLastUpdate >= UPDATE_INTERVAL_MS) {
+        // Enough time has passed, update immediately
+        updateDatabase();
+      } else if (!updateTimer) {
+        // Schedule update for later
+        const delay = UPDATE_INTERVAL_MS - timeSinceLastUpdate;
+        updateTimer = setTimeout(() => {
+          updateTimer = null;
+          updateDatabase();
+        }, delay);
+      }
+    };
 
     try {
       await claudeService.streamQuery(
@@ -579,9 +605,8 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
             if (text) {
               fullResponse += text;
 
-              // Create or update assistant message
+              // Create assistant message on first chunk
               if (!assistantMessageId) {
-                const supabase = getAuthenticatedSupabaseClient(token);
                 const { data: message } = await supabase
                   .from('chat_messages')
                   .insert({
@@ -595,15 +620,11 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
 
                 if (message) {
                   assistantMessageId = message.id;
+                  lastUpdateTime = Date.now();
                 }
               } else {
-                const supabase = getAuthenticatedSupabaseClient(token);
-                await supabase
-                  .from('chat_messages')
-                  .update({
-                    content: fullResponse,
-                  })
-                  .eq('id', assistantMessageId);
+                // Schedule a throttled update
+                scheduleUpdate();
               }
 
               // Broadcast via WebSocket and Redis
@@ -656,11 +677,25 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
           timeout: 60000,
         }
       );
+
+      // Ensure final update is saved and clean up timer
+      if (updateTimer) {
+        clearTimeout(updateTimer);
+        updateTimer = null;
+      }
+      if (assistantMessageId && pendingUpdate) {
+        await updateDatabase();
+      }
     } catch (error) {
       fastify.log.error({ error }, 'AI processing error');
 
+      // Clean up timer on error
+      if (updateTimer) {
+        clearTimeout(updateTimer);
+        updateTimer = null;
+      }
+
       // Save error message
-      const supabase = getAuthenticatedSupabaseClient(token);
       await supabase.from('chat_messages').insert({
         session_id: sessionId,
         role: 'error' as any,

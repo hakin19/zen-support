@@ -102,14 +102,14 @@ export class WebSocketClient extends EventEmitter {
     this.metrics.connectionAttempts++;
 
     try {
-      // For browser environments, append token as query parameter
-      let connectUrl = this.url;
+      // For browser environments, pass token via subprotocol header
+      let protocols: string | string[] | undefined;
       if (this.options.auth.token && typeof window !== 'undefined') {
-        const separator = this.url.includes('?') ? '&' : '?';
-        connectUrl = `${this.url}${separator}token=${encodeURIComponent(this.options.auth.token)}`;
+        // Use subprotocol to securely pass the token
+        protocols = [`auth-${this.options.auth.token}`];
       }
 
-      this.ws = new WebSocket(connectUrl);
+      this.ws = new WebSocket(this.url, protocols);
       this.ws.binaryType = this.options.binaryType;
 
       this.ws.onopen = this.handleOpen.bind(this);

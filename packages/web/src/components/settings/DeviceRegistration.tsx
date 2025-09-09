@@ -377,7 +377,7 @@ export function DeviceRegistration() {
     if (!canManageDevices) return;
 
     try {
-      await api.post(`/api/devices/${deviceId}/update-firmware`);
+      await api.post(`/api/devices/${deviceId}/firmware`);
       toast({
         title: 'Firmware update started',
         description: 'The device will restart automatically when complete',
@@ -394,10 +394,8 @@ export function DeviceRegistration() {
 
   const handleExportDevices = async () => {
     try {
-      const response = await fetch('/api/devices/export');
-      if (!response.ok) throw new Error('Export failed');
+      const blob = await api.getBlob('/api/devices/export');
 
-      const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;

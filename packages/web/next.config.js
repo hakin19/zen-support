@@ -47,6 +47,21 @@ const nextConfig = {
         source: '/api/chat/:path*',
         destination: `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/chat/:path*`,
       },
+      // Users API proxy
+      {
+        source: '/api/users/:path*',
+        destination: `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/users/:path*`,
+      },
+      // Devices API proxy
+      {
+        source: '/api/devices/:path*',
+        destination: `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/devices/:path*`,
+      },
+      // Organization API proxy (already has /api prefix in backend)
+      {
+        source: '/api/organization/:path*',
+        destination: `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/organization/:path*`,
+      },
     ];
   },
   // Security headers

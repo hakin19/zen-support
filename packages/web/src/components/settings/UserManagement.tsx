@@ -16,7 +16,7 @@ import {
   ChevronRight,
   AlertCircle,
 } from 'lucide-react';
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
@@ -72,7 +72,9 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
+import { apiClient } from '@/lib/api-client';
 import { useAuthStore } from '@/store/auth.store';
+import { useWebSocketStore } from '@/store/websocket.store';
 
 type UserRole = 'owner' | 'admin' | 'viewer';
 type UserStatus = 'active' | 'invited' | 'suspended';
@@ -98,6 +100,13 @@ interface InviteUserFormData {
 export function UserManagement() {
   const user = useAuthStore(state => state.user);
   const { toast } = useToast();
+  const {
+    users: wsUsers,
+    connect,
+    disconnect,
+    setUsers,
+    subscribe,
+  } = useWebSocketStore();
 
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
@@ -140,10 +149,7 @@ export function UserManagement() {
       if (roleFilter !== 'all') queryParams.append('role', roleFilter);
       if (statusFilter !== 'all') queryParams.append('status', statusFilter);
 
-      const response = await fetch(`/api/users?${queryParams}`);
-      if (!response.ok) throw new Error('Failed to fetch users');
-
-      const data = await response.json();
+      const { data } = await apiClient.get(`/api/users?${queryParams}`);
       setUsers(data.users);
       setTotalPages(Math.ceil(data.total / itemsPerPage));
     } catch (error) {
@@ -161,26 +167,29 @@ export function UserManagement() {
     fetchUsers();
   }, [fetchUsers]);
 
+  // Connect to WebSocket on mount
   useEffect(() => {
-    const ws = new WebSocket(
-      process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:3001'
-    );
+    connect();
+    return () => disconnect();
+  }, [connect, disconnect]);
 
-    ws.onmessage = event => {
-      const data = JSON.parse(event.data);
-      if (data.type === 'user_update') {
-        setUsers(prevUsers =>
-          prevUsers.map(u => (u.id === data.user.id ? data.user : u))
-        );
-      } else if (data.type === 'user_added') {
-        fetchUsers();
-      } else if (data.type === 'user_removed') {
-        setUsers(prevUsers => prevUsers.filter(u => u.id !== data.userId));
-      }
+  // Subscribe to user-related WebSocket events
+  useEffect(() => {
+    const unsubscribeUserAdded = subscribe('user_added', () => {
+      fetchUsers();
+    });
+
+    return () => {
+      unsubscribeUserAdded();
     };
+  }, [subscribe, fetchUsers]);
 
-    return () => ws.close();
-  }, [fetchUsers]);
+  // Sync WebSocket users with local state
+  useEffect(() => {
+    if (wsUsers.length > 0) {
+      setUsers(wsUsers);
+    }
+  }, [wsUsers]);
 
   const filteredUsers = useMemo(() => {
     return users.filter(u => {
@@ -199,16 +208,7 @@ export function UserManagement() {
 
     try {
       setIsSubmitting(true);
-      const response = await fetch('/api/users/invite', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(inviteFormData),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to send invitation');
-      }
+      await apiClient.post('/api/users/invite', inviteFormData);
 
       toast({
         title: 'Invitation sent',
@@ -235,16 +235,9 @@ export function UserManagement() {
 
     try {
       setIsSubmitting(true);
-      const response = await fetch(
-        `/api/users/${selectedUserForAction.id}/role`,
-        {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ role: newRole }),
-        }
-      );
-
-      if (!response.ok) throw new Error('Failed to update role');
+      await apiClient.patch(`/api/users/${selectedUserForAction.id}/role`, {
+        role: newRole,
+      });
 
       toast({
         title: 'Role updated',
@@ -270,11 +263,7 @@ export function UserManagement() {
 
     try {
       setIsSubmitting(true);
-      const response = await fetch(`/api/users/${selectedUserForAction.id}`, {
-        method: 'DELETE',
-      });
-
-      if (!response.ok) throw new Error('Failed to delete user');
+      await apiClient.delete(`/api/users/${selectedUserForAction.id}`);
 
       toast({
         title: 'User deleted',
@@ -300,16 +289,10 @@ export function UserManagement() {
 
     try {
       setIsSubmitting(true);
-      const response = await fetch('/api/users/bulk', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: bulkAction,
-          userIds: Array.from(selectedUsers),
-        }),
+      await apiClient.post('/api/users/bulk', {
+        action: bulkAction,
+        userIds: Array.from(selectedUsers),
       });
-
-      if (!response.ok) throw new Error(`Failed to ${bulkAction} users`);
 
       toast({
         title: 'Bulk action completed',
@@ -334,11 +317,7 @@ export function UserManagement() {
     if (!canManageUsers) return;
 
     try {
-      const response = await fetch(`/api/users/${userId}/resend-invitation`, {
-        method: 'POST',
-      });
-
-      if (!response.ok) throw new Error('Failed to resend invitation');
+      await apiClient.post(`/api/users/${userId}/resend-invitation`);
 
       toast({
         title: 'Invitation resent',
@@ -357,11 +336,9 @@ export function UserManagement() {
 
   const handleExportUsers = async () => {
     try {
-      const response = await fetch('/api/users/export');
-      if (!response.ok) throw new Error('Failed to export users');
+      const response = await apiClient.getBlob('/api/users/export');
 
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
+      const url = window.URL.createObjectURL(response);
       const a = document.createElement('a');
       a.href = url;
       a.download = `users-${new Date().toISOString().split('T')[0]}.csv`;

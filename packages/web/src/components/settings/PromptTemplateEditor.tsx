@@ -24,7 +24,7 @@ import {
   Clock,
   Code2,
 } from 'lucide-react';
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
@@ -76,6 +76,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { api } from '@/lib/api-client';
 import { useAuthStore } from '@/store/auth.store';
+import { useWebSocketStore } from '@/store/websocket.store';
 
 // TypeScript interfaces for template management
 interface PromptTemplate {
@@ -142,6 +143,12 @@ const DEFAULT_FORM_DATA: TemplateFormData = {
 export function PromptTemplateEditor() {
   const { user } = useAuthStore();
   const { toast } = useToast();
+  const {
+    promptTemplates: wsPromptTemplates,
+    connect,
+    disconnect,
+    setPromptTemplates,
+  } = useWebSocketStore();
 
   // Access control - only owners can manage prompt templates
   if (!user || user.role !== 'owner') {
@@ -217,33 +224,31 @@ export function PromptTemplateEditor() {
     fetchPrompts();
   }, [fetchPrompts]);
 
-  // WebSocket connection for real-time collaboration
+  // Connect to WebSocket on mount
   useEffect(() => {
-    const ws = new WebSocket(
-      process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:3001'
-    );
+    connect();
+    return () => disconnect();
+  }, [connect, disconnect]);
 
-    ws.onmessage = event => {
-      const data = JSON.parse(event.data);
-      if (data.type === 'prompt_template_update') {
-        setPrompts(prev =>
-          prev.map(p => (p.id === data.template.id ? data.template : p))
+  // Sync WebSocket prompt templates with local state
+  useEffect(() => {
+    if (wsPromptTemplates.length > 0) {
+      setPrompts(wsPromptTemplates);
+
+      // Update selected prompt if it was updated via WebSocket
+      if (selectedPrompt) {
+        const updatedPrompt = wsPromptTemplates.find(
+          p => p.id === selectedPrompt.id
         );
-        if (selectedPrompt?.id === data.template.id) {
-          setSelectedPrompt(data.template);
-        }
-      } else if (data.type === 'prompt_template_created') {
-        setPrompts(prev => [...prev, data.template]);
-      } else if (data.type === 'prompt_template_deleted') {
-        setPrompts(prev => prev.filter(p => p.id !== data.templateId));
-        if (selectedPrompt?.id === data.templateId) {
-          setSelectedPrompt(null);
+        if (
+          updatedPrompt &&
+          JSON.stringify(updatedPrompt) !== JSON.stringify(selectedPrompt)
+        ) {
+          setSelectedPrompt(updatedPrompt);
         }
       }
-    };
-
-    return () => ws.close();
-  }, [selectedPrompt?.id]);
+    }
+  }, [wsPromptTemplates, selectedPrompt]);
 
   // Keyboard shortcuts
   useEffect(() => {
