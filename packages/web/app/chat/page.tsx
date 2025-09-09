@@ -9,13 +9,54 @@ import { MessageList } from '@/components/chat/MessageList';
 import { useChatStore } from '@/store/chat.store';
 
 export default function ChatPage(): React.ReactElement {
-  const { currentSession } = useChatStore();
+  const {
+    sessions,
+    activeSessionId,
+    currentSession,
+    setActiveSession,
+    addSession,
+    archiveSession,
+    deleteSession,
+    updateSession,
+    deviceActions,
+    selectedActionId,
+    deviceModalOpen,
+    setDeviceModalOpen,
+    setSelectedAction,
+    approveAction,
+    rejectAction,
+  } = useChatStore();
+
+  const handleSessionCreate = () => {
+    // Create a new session
+    const newSession = {
+      id: crypto.randomUUID(),
+      title: 'New Session',
+      status: 'active' as const,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    addSession(newSession as any);
+    setActiveSession(newSession.id);
+  };
+
+  const handleSessionRename = (id: string, title: string) => {
+    updateSession(id, { title });
+  };
 
   return (
     <div className='flex h-screen bg-background'>
       {/* Sidebar with chat sessions */}
       <div className='w-80 border-r'>
-        <ChatSessionList />
+        <ChatSessionList
+          sessions={sessions}
+          activeSessionId={activeSessionId}
+          onSessionSelect={setActiveSession}
+          onSessionCreate={handleSessionCreate}
+          onSessionArchive={archiveSession}
+          onSessionDelete={deleteSession}
+          onSessionRename={handleSessionRename}
+        />
       </div>
 
       {/* Main chat area */}
@@ -58,7 +99,15 @@ export default function ChatPage(): React.ReactElement {
       </div>
 
       {/* Device Action Modal */}
-      <DeviceActionModal />
+      <DeviceActionModal
+        actions={deviceActions}
+        selectedActionId={selectedActionId}
+        isOpen={deviceModalOpen}
+        onClose={() => setDeviceModalOpen(false)}
+        onApprove={approveAction}
+        onReject={rejectAction}
+        onSelectAction={setSelectedAction}
+      />
     </div>
   );
 }

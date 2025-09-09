@@ -22,6 +22,7 @@ interface ChatState {
   // Sessions
   sessions: ChatSession[];
   activeSessionId: string | null;
+  currentSession: ChatSession | null;
   sessionsLoading: boolean;
   sessionsError: string | null;
 
@@ -124,6 +125,12 @@ export const useChatStore = create<ChatState>()(
   devtools(
     (set, get) => ({
       ...initialState,
+
+      // Computed getter for current session
+      get currentSession() {
+        const state = get();
+        return state.sessions.find(s => s.id === state.activeSessionId) || null;
+      },
 
       // Session Actions
       setSessions: sessions => set({ sessions }, false, 'setSessions'),

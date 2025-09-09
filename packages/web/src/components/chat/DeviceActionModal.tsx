@@ -70,10 +70,11 @@ export function DeviceActionModal({
   const modalRef = useRef<HTMLDivElement>(null);
   const outputRef = useRef<HTMLDivElement>(null);
 
-  const selectedAction = actions.find(a => a.id === selectedActionId);
-  const pendingActions = actions.filter(a => a.status === 'pending');
+  const safeActions = actions || [];
+  const selectedAction = safeActions.find(a => a.id === selectedActionId);
+  const pendingActions = safeActions.filter(a => a.status === 'pending');
   const currentIndex = selectedAction
-    ? actions.findIndex(a => a.id === selectedActionId)
+    ? safeActions.findIndex(a => a.id === selectedActionId)
     : -1;
 
   useEffect(() => {
