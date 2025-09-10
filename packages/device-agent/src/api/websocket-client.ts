@@ -322,9 +322,19 @@ export class WebSocketClient extends EventEmitter {
 
       try {
         await this.establishConnection();
+        // Success - establishConnection will reset isReconnecting
       } catch (error) {
-        // Connection failed, will retry
+        // Connection failed, reset flag and schedule next retry
         console.error('Reconnection failed:', error);
+        this.isReconnecting = false;
+
+        // Schedule next reconnection attempt if we haven't exceeded max attempts
+        if (this.reconnectAttempts < this.options.maxReconnectAttempts) {
+          this.scheduleReconnect();
+        } else {
+          // Max attempts reached, emit failure event
+          this.emit('reconnect:failed');
+        }
       }
     }, delay);
   }
