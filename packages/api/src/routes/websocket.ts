@@ -73,9 +73,19 @@ export async function registerWebSocketRoutes(
     (fastify as any).get(
       '/api/v1/device/ws',
       { websocket: true },
-      async (connection: { socket: WebSocket }, request: FastifyRequest) => {
-        const socket = connection.socket;
-        const ws = socket;
+      async (connection: unknown, request: FastifyRequest) => {
+        const raw = connection as { socket?: WebSocket } | WebSocket;
+        const ws = (raw as { socket?: WebSocket }).socket
+          ? (raw as { socket: WebSocket }).socket
+          : (raw as WebSocket);
+
+        if (
+          !ws ||
+          typeof (ws as unknown as { on?: unknown }).on !== 'function'
+        ) {
+          request.log.error('WebSocket instance not available on connection');
+          return;
+        }
         const connectionId = generateCorrelationId();
         let deviceId: string | null = null;
 
@@ -274,9 +284,19 @@ export async function registerWebSocketRoutes(
     (fastify as any).get(
       '/ws',
       { websocket: true },
-      async (connection: { socket: WebSocket }, request: FastifyRequest) => {
-        const socket = connection.socket;
-        const ws = socket;
+      async (connection: unknown, request: FastifyRequest) => {
+        const raw = connection as { socket?: WebSocket } | WebSocket;
+        const ws = (raw as { socket?: WebSocket }).socket
+          ? (raw as { socket: WebSocket }).socket
+          : (raw as WebSocket);
+
+        if (
+          !ws ||
+          typeof (ws as unknown as { on?: unknown }).on !== 'function'
+        ) {
+          request.log.error('WebSocket instance not available on connection');
+          return;
+        }
         const connectionId = generateCorrelationId();
         let userId: string | null = null;
         const subscribedChannels = new Set<string>();
@@ -297,8 +317,8 @@ export async function registerWebSocketRoutes(
           // Extract token from subprotocol for browser clients (auth-{token})
           token = protocol.substring(5);
           // Accept the subprotocol in the response
-          (connection.socket as WebSocket & { protocol?: string }).protocol =
-            protocol;
+          // Attach accepted protocol if available
+          (ws as WebSocket & { protocol?: string }).protocol = protocol;
         }
 
         if (!token) {

@@ -43,7 +43,7 @@ class DeviceError extends Error {
 }
 
 interface HeartbeatData {
-  status: string;
+  status: string; // accepts 'healthy' | 'degraded' | 'offline' | 'online'
   metrics?: {
     cpu: number;
     memory: number;
@@ -152,7 +152,7 @@ export const deviceAuthService = {
       } catch (queryErr) {
         fs.appendFileSync(
           '/tmp/test-diag.log',
-          `[AUTH] Query threw error: ${queryErr}\n`
+          `[AUTH] Query threw error: ${String(queryErr)}\n`
         );
         throw queryErr;
       }
@@ -264,7 +264,7 @@ export const deviceAuthService = {
       console.error('Error validating device credentials:', error);
       fs.appendFileSync(
         '/tmp/test-diag.log',
-        `[AUTH] Error in validateCredentials: ${error}\n`
+        `[AUTH] Error in validateCredentials: ${String(error)}\n`
       );
       return { valid: false };
     }
@@ -402,7 +402,10 @@ export const deviceAuthService = {
   ): Promise<boolean> {
     try {
       const supabase = getSupabaseAdminClient();
-      const newStatus = data.status === 'healthy' ? 'online' : 'offline';
+      const newStatus =
+        data.status === 'healthy' || data.status === 'online'
+          ? 'online'
+          : 'offline';
 
       // Get device's customer ID for broadcasting
       const { data: device } = await supabase
