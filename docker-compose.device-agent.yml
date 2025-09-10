@@ -1,21 +1,42 @@
 version: "3.8"
 
 services:
+  # Redis for session storage
+  redis:
+    image: redis:7-alpine
+    container_name: aizen-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    networks:
+      - device-network
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+  # Device Agent Container
   device-agent:
     build:
-      context: ../../
+      context: .
       dockerfile: packages/device-agent/Dockerfile
     image: aizen/device-agent:latest
-    platform: linux/arm64 # Emulate Raspberry Pi architecture (comment out for auto-detect)
     container_name: aizen-device-agent-001
     restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
     environment:
       # Device identification
       DEVICE_ID: ${DEVICE_ID:-dev-agent-001}
       DEVICE_SECRET: ${DEVICE_SECRET:-dev-secret-key}
       CUSTOMER_ID: ${CUSTOMER_ID:-customer-001}
 
-      # API configuration
+      # API configuration (API runs on host at port 3001)
       API_URL: ${API_URL:-http://host.docker.internal:3001}
 
       # Agent configuration
@@ -28,22 +49,28 @@ services:
       WEBSOCKET_RECONNECT_INTERVAL: ${WEBSOCKET_RECONNECT_INTERVAL:-5000}
       WEBSOCKET_MAX_RETRIES: ${WEBSOCKET_MAX_RETRIES:-10}
 
+      # Retry and backoff configuration
+      MAX_RETRIES: ${MAX_RETRIES:-3}
+      RETRY_DELAY: ${RETRY_DELAY:-1000}
+      MAX_RECONNECT_ATTEMPTS: ${MAX_RECONNECT_ATTEMPTS:-10}
+      MAX_RECONNECT_INTERVAL: ${MAX_RECONNECT_INTERVAL:-30000}
+
       # Health check port
       PORT: 3000
     ports:
       - "3000:3000" # Health check endpoint
     networks:
-      - agent-network
+      - device-network
     # Platform-specific networking configuration
     extra_hosts:
       # For Mac/Windows, host.docker.internal works out of the box
       # For Linux, this maps it to the host gateway
       - "host.docker.internal:host-gateway"
     volumes:
-      - agent-logs:/app/logs
-      - agent-config:/app/config
+      - device-logs:/app/logs
+      - device-config:/app/config
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1); });"]
       interval: 30s
       timeout: 3s
       retries: 3
@@ -59,16 +86,20 @@ services:
     tmpfs:
       - /tmp
       - /app/tmp
+      - /var/run
+      - /var/cache
 
 networks:
-  agent-network:
+  device-network:
     driver: bridge
     ipam:
       config:
-        - subnet: 172.30.0.0/24
+        - subnet: 172.31.0.0/24
 
 volumes:
-  agent-logs:
+  redis-data:
     driver: local
-  agent-config:
+  device-logs:
+    driver: local
+  device-config:
     driver: local

@@ -139,7 +139,7 @@ describe('DeviceAgent', () => {
       await agent.start();
 
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://api.test.com/api/v1/devices/register',
+        'https://api.test.com/api/v1/device/auth',
         expect.objectContaining({
           method: 'POST',
           headers: expect.objectContaining({
@@ -187,7 +187,7 @@ describe('DeviceAgent', () => {
       let registrationCalls = 0;
       mockFetch.mockImplementation(url => {
         // Only count registration calls
-        if (url.toString().includes('/register')) {
+        if (url.toString().includes('/device/auth')) {
           registrationCalls++;
           if (registrationCalls === 1) {
             return Promise.reject(new Error('Network error'));
@@ -200,6 +200,7 @@ describe('DeviceAgent', () => {
           json: async () => ({
             token: 'jwt-token',
             expiresIn: 86400,
+            deviceId: 'test-device-001',
             heartbeatInterval: 30000,
             acknowledged: true,
             commands: [],
@@ -218,18 +219,191 @@ describe('DeviceAgent', () => {
   describe('heartbeat mechanism', () => {
     it('should update heartbeat interval from server response', async () => {
       agent = new DeviceAgent(config);
-      mockFetch.mockResolvedValue({
+      // Authentication response with heartbeat interval
+      mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({
           token: 'jwt-token',
           expiresIn: 86400,
-          heartbeatInterval: 15000, // Server wants 15 second intervals
+          deviceId: 'test-device-001',
+        }),
+      });
+
+      // Heartbeat response with new interval
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          acknowledged: true,
+          commands: [],
+          nextHeartbeat: 15000, // Server wants 15 second intervals
+        }),
+      });
+
+      await agent.start();
+      await agent['sendHeartbeat']();
+
+      expect(agent.getHeartbeatInterval()).toBe(15000);
+    });
+
+    it('should re-authenticate on 401 error during heartbeat', async () => {
+      agent = new DeviceAgent(config);
+
+      // Initial successful authentication
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          token: 'initial-token',
+          expiresIn: 86400,
+          deviceId: 'test-device-001',
+        }),
+      });
+
+      await agent.start();
+      expect(agent.isRegistered()).toBe(true);
+
+      // First heartbeat succeeds
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          acknowledged: true,
+          commands: [],
+          nextHeartbeat: 5000,
+        }),
+      });
+
+      // Manually trigger heartbeat
+      await agent['sendHeartbeat']();
+
+      // Next heartbeat fails with 401
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        text: async () => 'Unauthorized',
+      });
+
+      // Re-authentication should succeed
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          token: 'new-token',
+          expiresIn: 86400,
+          deviceId: 'test-device-001',
+        }),
+      });
+
+      // Heartbeat after re-auth should succeed
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          acknowledged: true,
+          commands: [],
+          nextHeartbeat: 5000,
+        }),
+      });
+
+      const authFailedHandler = vi.fn();
+      agent.on('auth:failed', authFailedHandler);
+
+      // Trigger heartbeat cycle that will fail with 401 and re-auth
+      const heartbeatPromise = agent['startHeartbeat']();
+
+      // Wait for the heartbeat cycle to process the 401 and re-auth
+      await vi.advanceTimersByTimeAsync(100);
+
+      // Verify no auth:failed event was emitted (successful re-auth)
+      expect(authFailedHandler).not.toHaveBeenCalled();
+
+      // Verify agent is still registered with new token
+      expect(agent.isRegistered()).toBe(true);
+      expect(agent.getAuthToken()).toBe('new-token');
+    });
+
+    it('should emit auth:failed event when re-authentication fails', async () => {
+      agent = new DeviceAgent(config);
+
+      // Initial successful authentication
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          token: 'initial-token',
+          expiresIn: 86400,
+          deviceId: 'test-device-001',
         }),
       });
 
       await agent.start();
 
-      expect(agent.getHeartbeatInterval()).toBe(15000);
+      // Heartbeat fails with 401
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        text: async () => 'Unauthorized',
+      });
+
+      // Re-authentication attempts all fail
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 403,
+        text: async () => 'Forbidden - Invalid credentials',
+      });
+
+      const authFailedHandler = vi.fn();
+      const heartbeatErrorHandler = vi.fn();
+      agent.on('auth:failed', authFailedHandler);
+      agent.on('heartbeat:error', heartbeatErrorHandler);
+
+      // Trigger heartbeat cycle that will fail with 401 and fail re-auth
+      const heartbeatPromise = agent['startHeartbeat']();
+
+      // Wait for the heartbeat cycle to process the 401 and attempt re-auth
+      // The re-auth attempts will take time due to retries (3 attempts with exponential backoff)
+      await vi.advanceTimersByTimeAsync(10000);
+
+      // Verify auth:failed event was emitted
+      expect(authFailedHandler).toHaveBeenCalled();
+      expect(heartbeatErrorHandler).toHaveBeenCalled();
+    });
+
+    it('should handle non-401 errors normally', async () => {
+      agent = new DeviceAgent(config);
+
+      // Initial successful authentication
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          token: 'initial-token',
+          expiresIn: 86400,
+          deviceId: 'test-device-001',
+        }),
+      });
+
+      await agent.start();
+      const initialToken = agent.getAuthToken();
+
+      // Heartbeat fails with 500 error
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        text: async () => 'Internal Server Error',
+      });
+
+      const heartbeatErrorHandler = vi.fn();
+      const authFailedHandler = vi.fn();
+      agent.on('heartbeat:error', heartbeatErrorHandler);
+      agent.on('auth:failed', authFailedHandler);
+
+      // Trigger heartbeat cycle that will fail with 500
+      const heartbeatPromise = agent['startHeartbeat']();
+
+      // Wait for the heartbeat cycle to process the error
+      await vi.advanceTimersByTimeAsync(100);
+
+      // Verify heartbeat error was emitted but no re-auth attempted
+      expect(heartbeatErrorHandler).toHaveBeenCalled();
+      expect(authFailedHandler).not.toHaveBeenCalled();
+
+      // Token should remain unchanged (no re-auth attempted)
+      expect(agent.getAuthToken()).toBe(initialToken);
     });
   });
 
@@ -321,7 +495,7 @@ describe('DeviceAgent', () => {
 
       // Make registration fail with a specific error
       mockFetch.mockRejectedValue(
-        new Error('API call timed out after 30000ms: /api/v1/devices/register')
+        new Error('API call timed out after 30000ms: /api/v1/device/auth')
       );
 
       await expect(agent.start()).rejects.toThrow('API call timed out');
@@ -329,7 +503,7 @@ describe('DeviceAgent', () => {
       const health = agent.getHealthStatus();
       expect(health.status).toBe('unhealthy');
       expect(health.error).toContain('API call timed out after 30000ms');
-      expect(health.error).toContain('/api/v1/devices/register');
+      expect(health.error).toContain('/api/v1/device/auth');
     });
   });
 });

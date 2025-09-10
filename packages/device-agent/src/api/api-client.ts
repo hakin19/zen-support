@@ -11,13 +11,13 @@ import type {
   DeviceRegistrationResponse,
   HeartbeatRequest,
   HeartbeatResponse,
-  DiagnosticResult,
 } from './types.js';
+import type { DiagnosticResult, CommandResultSubmission } from '../types.js';
+import type { WebSocketClient } from './websocket-client.js';
 
 export class ApiClient extends EventEmitter {
   #config: ApiClientConfig;
   #authToken: string | null = null;
-  #refreshToken: string | null = null;
   #tokenExpiry: number | null = null;
   #connectionState: ConnectionState = 'disconnected';
   #lastError: ApiClientError | null = null;
@@ -28,6 +28,8 @@ export class ApiClient extends EventEmitter {
   #reconnectAttempts = 0;
   #maxReconnectAttempts = 10;
   #isReconnecting = false;
+  #wsClient: WebSocketClient | null = null;
+  #sessionData: any = null;
 
   constructor(config: ApiClientConfig) {
     super();
@@ -110,10 +112,11 @@ export class ApiClient extends EventEmitter {
     const url = new globalThis.URL(endpoint, this.#config.apiUrl);
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
+      'User-Agent': `DeviceAgent/${this.#config.deviceId || 'unknown'}`,
     };
 
     if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
+      headers['X-Device-Session'] = token;
     }
 
     const timeout = timeoutMs ?? this.#config.requestTimeout ?? 30000;
@@ -288,17 +291,16 @@ export class ApiClient extends EventEmitter {
       this.setConnectionState('connecting');
 
       const response = await this.makeApiCall<AuthResponse>(
-        '/auth/device',
+        '/api/v1/device/auth',
         'POST',
         {
-          device_id: this.#config.deviceId,
-          device_secret: this.#config.deviceSecret,
+          deviceId: this.#config.deviceId,
+          deviceSecret: this.#config.deviceSecret,
         }
       );
 
-      this.#authToken = response.access_token;
-      this.#refreshToken = response.refresh_token ?? null;
-      this.#tokenExpiry = Date.now() + response.expires_in * 1000;
+      this.#authToken = response.token;
+      this.#tokenExpiry = Date.now() + response.expiresIn * 1000;
 
       this.setConnectionState('connected');
       this.scheduleTokenRefresh();
@@ -314,29 +316,8 @@ export class ApiClient extends EventEmitter {
   }
 
   async refreshToken(): Promise<boolean> {
-    if (!this.#refreshToken) {
-      return this.authenticate();
-    }
-
-    try {
-      const response = await this.makeApiCall<AuthResponse>(
-        '/auth/refresh',
-        'POST',
-        {
-          refresh_token: this.#refreshToken,
-        }
-      );
-
-      this.#authToken = response.access_token;
-      this.#refreshToken = response.refresh_token ?? this.#refreshToken;
-      this.#tokenExpiry = Date.now() + response.expires_in * 1000;
-
-      this.scheduleTokenRefresh();
-      return true;
-    } catch {
-      // If refresh fails, try full authentication
-      return this.authenticate();
-    }
+    // Current API doesn't support refresh tokens, so re-authenticate
+    return this.authenticate();
   }
 
   async registerDevice(): Promise<DeviceRegistrationResponse> {
@@ -385,29 +366,23 @@ export class ApiClient extends EventEmitter {
 
     try {
       const request: HeartbeatRequest = {
-        device_id: this.#config.deviceId,
-        timestamp: new Date().toISOString(),
-        status: 'online',
+        status: 'healthy',
+        metrics: {
+          cpu: 50, // TODO: Get actual CPU usage
+          memory: 512, // TODO: Get actual memory usage
+          uptime: Date.now() / 1000, // Uptime in seconds
+        },
       };
 
       const response = await this.makeApiCall<HeartbeatResponse>(
-        '/devices/heartbeat',
+        '/api/v1/device/heartbeat',
         'POST',
         request,
         this.#authToken
       );
 
-      // Emit any commands received
-      if (response.commands && response.commands.length > 0) {
-        response.commands.forEach(command => {
-          this.emit('command', command);
-        });
-      }
-
-      // Handle configuration updates
-      if (response.configuration_update) {
-        this.emit('configuration_update', response.configuration_update);
-      }
+      // No commands in current API response structure
+      // Commands would be handled through WebSocket connection
 
       return response;
     } catch (error) {
@@ -461,10 +436,30 @@ export class ApiClient extends EventEmitter {
     }
 
     const submit = async (): Promise<unknown> => {
+      // Prepare the submission body in the format expected by the API
+      const submissionBody: CommandResultSubmission = {
+        claimToken: result.claimToken ?? '', // Required by API
+        status:
+          result.status === 'completed'
+            ? 'success'
+            : result.status === 'timeout'
+              ? 'timeout'
+              : 'failure',
+        executedAt: result.executedAt,
+        duration: result.duration,
+      };
+
+      // Add output or error based on status
+      if (result.status === 'completed' && result.results.output) {
+        submissionBody.output = result.results.output;
+      } else if (result.results.error) {
+        submissionBody.error = result.results.error;
+      }
+
       const response = await this.makeApiCall<unknown>(
-        '/diagnostics/results',
+        `/api/v1/device/commands/${result.commandId}/result`,
         'POST',
-        result,
+        submissionBody,
         this.#authToken as string
       );
       return response;
@@ -565,7 +560,6 @@ export class ApiClient extends EventEmitter {
     this.#pendingDelays.clear();
 
     this.#authToken = null;
-    this.#refreshToken = null;
     this.#tokenExpiry = null;
     this.setConnectionState('disconnected');
   }
@@ -595,5 +589,119 @@ export class ApiClient extends EventEmitter {
     ...args: Parameters<ApiClientEvents[K]>
   ): boolean {
     return super.emit(event, ...args);
+  }
+
+  // Additional methods for testing and WebSocket support
+  async disconnect(): Promise<void> {
+    this.stop();
+    this.disconnectWebSocket();
+  }
+
+  getAuthToken(): string | null {
+    return this.#authToken;
+  }
+
+  getSessionData(): any {
+    if (!this.#sessionData) {
+      this.#sessionData = {
+        deviceId: this.#config.deviceId,
+        createdAt: new Date().toISOString(),
+        lastActivity: new Date().toISOString(),
+        metadata: {
+          customerId: this.#config.customerId,
+        },
+      };
+    }
+    // Update last activity
+    this.#sessionData.lastActivity = new Date().toISOString();
+    return { ...this.#sessionData };
+  }
+
+  async connectWebSocket(): Promise<void> {
+    if (!this.#authToken) {
+      throw new ApiClientError(
+        'Not authenticated',
+        'NOT_AUTHENTICATED',
+        undefined,
+        false
+      );
+    }
+
+    try {
+      // Dynamically import WebSocketClient to avoid circular dependencies
+      if (!this.#wsClient) {
+        const { WebSocketClient } = await import('./websocket-client.js');
+        const wsUrl = `${this.#config.apiUrl.replace(/^http/, 'ws')}/api/v1/device/ws`;
+        this.#wsClient = new WebSocketClient(wsUrl, {
+          reconnectInterval: 5000,
+          maxReconnectAttempts: 10,
+          pingInterval: 30000,
+          pongTimeout: 10000,
+        }) as any;
+
+        // Set up WebSocket event handlers
+        const ws = this.#wsClient;
+        if (ws) {
+          ws.on('connected', () => {
+            (this as any).emit('websocket:connected');
+          });
+
+          ws.on('disconnected', (data: any) => {
+            (this as any).emit('websocket:disconnected', data);
+          });
+
+          ws.on('command', (command: any) => {
+            this.emit('command', command);
+          });
+
+          ws.on('error', (error: Error) => {
+            const apiError = new ApiClientError(
+              error.message,
+              'WEBSOCKET_ERROR',
+              error,
+              true
+            );
+            this.emit('error', apiError);
+          });
+
+          ws.on('device:status', (status: any) => {
+            (this as any).emit('device:status', status);
+          });
+
+          ws.on('heartbeat:success', (response: any) => {
+            (this as any).emit('heartbeat:success', response);
+          });
+
+          ws.on('heartbeat:error', (error: any) => {
+            (this as any).emit('heartbeat:error', error);
+          });
+
+          ws.on('command:received', (command: any) => {
+            (this as any).emit('command:received', command);
+          });
+        }
+      }
+
+      if (this.#wsClient) {
+        await this.#wsClient.connect(this.#authToken);
+      }
+    } catch (error) {
+      // Emit structured error for WebSocket connection failures
+      const apiError = new ApiClientError(
+        error instanceof Error ? error.message : 'Failed to connect WebSocket',
+        'WEBSOCKET_ERROR',
+        error instanceof Error ? error : new Error(String(error)),
+        true
+      );
+      this.emit('error', apiError);
+      throw apiError;
+    }
+  }
+
+  disconnectWebSocket(): void {
+    if (this.#wsClient) {
+      this.#wsClient.disconnect();
+      this.#wsClient = null;
+    }
   }
 }

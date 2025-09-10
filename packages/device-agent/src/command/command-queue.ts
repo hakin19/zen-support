@@ -358,16 +358,14 @@ export class CommandQueue extends EventEmitter {
   }
 
   #isCommandExpired(command: DiagnosticCommand): boolean {
+    if (!command.expiresAt) {
+      return false; // No expiry means command never expires
+    }
     return new Date(command.expiresAt).getTime() < Date.now();
   }
 
   #validateCommand(command: DiagnosticCommand): boolean {
-    return !!(
-      command.id &&
-      command.type &&
-      command.createdAt &&
-      command.expiresAt
-    );
+    return !!(command.id && command.type && command.createdAt);
   }
 
   #updateCommandStatus(id: string, status: CommandStatus['status']): void {

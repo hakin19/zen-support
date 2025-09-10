@@ -1,0 +1,44 @@
+# Simple production Dockerfile that builds locally first
+FROM node:20-alpine
+
+# Install network tools
+RUN apk add --no-cache \
+    iputils \
+    bind-tools \
+    curl \
+    net-tools \
+    traceroute \
+    ca-certificates
+
+WORKDIR /app
+
+# Copy built files (assume we build locally first)
+COPY packages/device-agent/dist ./dist
+COPY packages/device-agent/package.json ./
+
+# Install only production dependencies
+RUN npm install --production --no-cache
+
+# Set environment variables
+ENV NODE_ENV=production
+ENV API_URL=http://host.docker.internal:3001
+ENV DEVICE_ID=""
+ENV DEVICE_SECRET=""
+ENV CUSTOMER_ID=""
+ENV MOCK_MODE=false
+ENV PORT=3000
+
+# Create non-root user
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -u 1001 -S nodejs -G nodejs && \
+    chown -R nodejs:nodejs /app
+
+USER nodejs
+
+# Health check - actually check the health endpoint
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD node -e "require('http').get('http://localhost:3000/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1); }).on('error', () => { process.exit(1); });" || exit 1
+
+EXPOSE 3000
+
+CMD ["node", "dist/index.js"]

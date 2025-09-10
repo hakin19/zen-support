@@ -218,3 +218,4 @@ Copy `.env.example` to `.env` and configure:
 - Never skip pre-commit hooks unless explicitly requested
 - Current year context: 2025
 - Read @docs/supabase-migrations-memory.md before working on any database migrations
+- Never ever mark a task as complete, if it is not complete. This is especially important for tasks related to tests. If the tests don't pass, do NOT mark the item as complete.

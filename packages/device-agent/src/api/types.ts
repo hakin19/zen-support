@@ -10,10 +10,9 @@ export interface ApiClientConfig {
 }
 
 export interface AuthResponse {
-  access_token: string;
-  expires_in: number;
-  token_type: string;
-  refresh_token?: string;
+  token: string;
+  expiresIn: number;
+  deviceId: string;
 }
 
 export interface DeviceRegistrationRequest {
@@ -33,17 +32,22 @@ export interface DeviceRegistrationResponse {
 }
 
 export interface HeartbeatRequest {
-  device_id: string;
-  timestamp: string;
-  status: 'online' | 'idle' | 'busy' | 'error';
-  metrics?: DeviceMetrics;
+  status: 'healthy' | 'degraded' | 'offline';
+  metrics?: {
+    cpu: number;
+    memory: number;
+    uptime: number;
+  };
 }
 
 export interface HeartbeatResponse {
-  status: 'online' | 'offline' | 'maintenance';
-  commands: CommandMessage[];
-  server_time: string;
-  configuration_update?: Record<string, unknown>;
+  acknowledged?: boolean;
+  success?: boolean;
+  status?: string;
+  commands?: CommandMessage[];
+  nextHeartbeat?: number;
+  server_time?: string;
+  timestamp?: string;
 }
 
 export interface CommandMessage {
@@ -105,7 +109,14 @@ export interface ApiClientEvents {
   reconnecting: (attempt: number) => void;
   error: (error: ApiClientError) => void;
   command: (command: CommandMessage) => void;
+  'command:received': (command: CommandMessage) => void;
   configuration_update: (config: Record<string, unknown>) => void;
+  'websocket:connected': () => void;
+  'websocket:disconnected': (reason?: any) => void;
+  'websocket:error': (error: Error) => void;
+  'device:status': (status: any) => void;
+  'heartbeat:success': (response: any) => void;
+  'heartbeat:error': (error: any) => void;
 }
 
 export class ApiClientError extends Error {
@@ -125,4 +136,35 @@ export class ApiClientError extends Error {
     this.originalError = originalError;
     this.retryable = retryable;
   }
+}
+
+// WebSocket Client Types
+export interface WebSocketClientOptions {
+  reconnectInterval?: number;
+  maxReconnectAttempts?: number;
+  maxReconnectInterval?: number;
+  pingInterval?: number;
+  pongTimeout?: number;
+  queueMessages?: boolean;
+  maxQueueSize?: number;
+}
+
+export interface WebSocketMessage {
+  type:
+    | 'connected'
+    | 'heartbeat'
+    | 'command'
+    | 'command_result'
+    | 'error'
+    | string;
+  payload?: any;
+}
+
+export interface WebSocketMetrics {
+  messagesSent: number;
+  messagesReceived: number;
+  connectionUptime: number;
+  reconnectCount: number;
+  lastConnectedAt: Date | null;
+  lastDisconnectedAt: Date | null;
 }

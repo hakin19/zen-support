@@ -1,9 +1,9 @@
 # Multi-stage Dockerfile for Aizen vNE Device Agent
 # Supports multi-architecture: linux/amd64 and linux/arm64
-# Uses Debian Bookworm base for better Raspberry Pi compatibility
+# Uses Alpine for smaller image size as per spec
 
 # Stage 1: Dependencies
-FROM node:20-bookworm-slim AS deps
+FROM node:20-alpine AS deps
 WORKDIR /app
 
 # Copy root package files
@@ -15,11 +15,11 @@ COPY tsconfig.base.json ./
 COPY packages/device-agent/package*.json ./packages/device-agent/
 COPY packages/shared/package*.json ./packages/shared/
 
-# Install dependencies
-RUN npm ci --include=dev
+# Install dependencies with timeout
+RUN npm install --include=dev --fetch-timeout=60000 --fetch-retry-maxtimeout=120000
 
 # Stage 2: Builder
-FROM node:20-bookworm-slim AS builder
+FROM node:20-alpine AS builder
 WORKDIR /app
 
 # Copy dependencies from deps stage
@@ -36,20 +36,19 @@ COPY packages/shared ./packages/shared
 RUN cd packages/device-agent && npm run build
 
 # Stage 3: Runner
-FROM node:20-bookworm-slim AS runner
+FROM node:20-alpine AS runner
 WORKDIR /app
 
-# Install runtime dependencies (Debian packages)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    iputils-ping \
-    dnsutils \
+# Install runtime dependencies (Alpine packages)
+RUN apk add --no-cache \
+    iputils \
+    bind-tools \
     curl \
     net-tools \
     traceroute \
     ca-certificates \
-    && rm -rf /var/lib/apt/lists/* \
-    && groupadd -g 1001 nodejs \
-    && useradd -u 1001 -g nodejs -m -s /bin/bash nodejs
+    && addgroup -g 1001 -S nodejs \
+    && adduser -u 1001 -S nodejs -G nodejs
 
 # Copy built application
 COPY --from=builder /app/packages/device-agent/dist ./dist
@@ -71,13 +70,23 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
 ENV NODE_ENV=production \
     PORT=3000 \
     LOG_LEVEL=info \
-    HEARTBEAT_INTERVAL=60000
+    HEARTBEAT_INTERVAL=30000 \
+    MOCK_MODE=false \
+    API_URL=http://host.docker.internal:3001 \
+    DEVICE_ID="" \
+    DEVICE_SECRET="" \
+    WEBSOCKET_RECONNECT_INTERVAL=5000 \
+    WEBSOCKET_MAX_RETRIES=10
 
 # Expose health check port
 EXPOSE 3000
 
 # Handle graceful shutdown
 STOPSIGNAL SIGTERM
+
+# Security constraints
+# Read-only filesystem with specific tmpfs mounts for writable areas
+# Capabilities and security options are set in docker-compose.yml
 
 # Start the agent
 CMD ["node", "dist/index.js"]
