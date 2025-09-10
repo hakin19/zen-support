@@ -1,4 +1,4 @@
-import { randomUUID } from 'crypto';
+import { randomBytes } from 'crypto';
 
 import { getRedisClient } from '@aizen/shared/utils/redis-client';
 
@@ -29,7 +29,8 @@ export const sessionService = {
     ttl?: number;
   }): Promise<Session> {
     const redis = getRedisClient();
-    const token = randomUUID();
+    // Generate a 64-char hex token (32 bytes)
+    const token = randomBytes(32).toString('hex');
     const key = `${SESSION_PREFIX}${token}`;
 
     const sessionData: StoredSession = {

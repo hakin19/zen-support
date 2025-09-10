@@ -42,6 +42,7 @@
     "test:watch": "vitest watch",
     "test:coverage": "vitest run --coverage",
     "test:ui": "vitest --ui",
+    "test:integration:vitest": "vitest run -c vitest.config.integration.ts",
     "test:all": "nx run-many --target=test --all",
     "test:affected": "nx affected --target=test",
     "test:unit": "nx run-many --target=test:unit --all",
@@ -154,7 +155,7 @@
     "@fastify/request-context": "^6.2.1",
     "@fastify/sensible": "^5.6.0",
     "@supabase/supabase-js": "^2.57.0",
-    "fastify": "^5.5.0",
+    "fastify": "^4.28.1",
     "ioredis": "^5.7.0",
     "redis": "^5.8.2",
     "zod": "^4.1.5"

@@ -21,18 +21,23 @@ export async function deviceAuthMiddleware(
 ): Promise<void> {
   try {
     // Extract token from headers
-    // Priority: X-Device-Token > Authorization Bearer
+    // Priority: X-Device-Session > X-Device-Token > Authorization Bearer
     let token: string | undefined;
 
-    const deviceToken = request.headers['x-device-token'];
-    if (deviceToken && typeof deviceToken === 'string') {
-      token = deviceToken;
+    const deviceSession = request.headers['x-device-session'];
+    if (deviceSession && typeof deviceSession === 'string') {
+      token = deviceSession;
     } else {
-      const authHeader = request.headers.authorization;
-      if (authHeader && typeof authHeader === 'string') {
-        const parts = authHeader.split(' ');
-        if (parts.length === 2 && parts[0] === 'Bearer') {
-          token = parts[1];
+      const deviceToken = request.headers['x-device-token'];
+      if (deviceToken && typeof deviceToken === 'string') {
+        token = deviceToken;
+      } else {
+        const authHeader = request.headers.authorization;
+        if (authHeader && typeof authHeader === 'string') {
+          const parts = authHeader.split(' ');
+          if (parts.length === 2 && parts[0] === 'Bearer') {
+            token = parts[1];
+          }
         }
       }
     }
