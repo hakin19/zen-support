@@ -19,14 +19,14 @@
   - [x] 2.5 Configure heartbeat interval and timeout handling
   - [x] 2.6 Verify all heartbeat tests pass
 
-- [ ] 3. Establish WebSocket Communication
-  - [ ] 3.1 Write tests for WebSocket connection and message handling
-  - [ ] 3.2 Verify `/api/v1/device/ws` session authentication via header `X-Device-Session` and key `session:{token}`
-  - [ ] 3.3 Create message handlers for connected, heartbeat, command, and command_result
-  - [ ] 3.4 Add WebSocket reconnection logic with exponential backoff
-  - [ ] 3.5 Broadcast `device_status` events to portal on WS disconnect/timeouts
-  - [ ] 3.6 Verify all WebSocket tests pass
-  - [ ] 3.7 Add dev helper (endpoint or script) to enqueue a mock command to a connected device for WS ack verification
+- [x] 3. Establish WebSocket Communication
+  - [x] 3.1 Write tests for WebSocket connection and message handling
+  - [x] 3.2 Verify `/api/v1/device/ws` session authentication via header `X-Device-Session` and key `session:{token}`
+  - [x] 3.3 Create message handlers for connected, heartbeat, command, and command_result
+  - [x] 3.4 Add WebSocket reconnection logic with exponential backoff
+  - [x] 3.5 Broadcast `device_status` events to portal on WS disconnect/timeouts
+  - [x] 3.6 Verify all WebSocket tests pass
+  - [x] 3.7 Add dev helper (endpoint or script) to enqueue a mock command to a connected device for WS ack verification
 
 - [ ] 4. Build Device Agent Container
   - [ ] 4.1 Write tests for Device Agent authentication and heartbeat logic

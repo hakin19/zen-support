@@ -8,6 +8,7 @@ import { config } from './config';
 import { registerChatRoutes } from './routes/chat';
 import { registerCustomerDeviceRoutes } from './routes/customer-devices';
 import { registerCustomerSessionRoutes } from './routes/customer-sessions';
+import { registerDevHelperRoutes } from './routes/dev-helpers';
 import { registerDeviceAuthRoutes } from './routes/device-auth';
 import { registerDeviceCommandRoutes } from './routes/device-commands';
 import { devicesRoutes } from './routes/devices';
@@ -78,6 +79,9 @@ export async function createApp(): Promise<FastifyInstance> {
   setConnectionManager(getConnectionManager());
 
   registerChatRoutes(app);
+
+  // Register dev helper routes (only in dev/test)
+  registerDevHelperRoutes(app);
 
   // Start background processes
   startVisibilityCheck();

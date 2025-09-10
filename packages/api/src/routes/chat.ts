@@ -609,7 +609,8 @@ export function registerChatRoutes(fastify: FastifyInstance): void {
     try {
       await claudeService.streamQuery(
         prompt,
-        (output: unknown) => {
+        // eslint-disable-next-line @typescript-eslint/no-misused-promises
+        async (output: unknown) => {
           const typedOutput = output as {
             type: string;
             data?: { content?: Array<{ text?: string }> };
