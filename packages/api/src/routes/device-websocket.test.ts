@@ -30,6 +30,7 @@ describe('Device WebSocket Communication', () => {
     mockRedis = {
       get: vi.fn(),
       set: vi.fn(),
+      setEx: vi.fn(),
       del: vi.fn(),
       publish: vi.fn(),
       subscribe: vi.fn(),
@@ -468,10 +469,10 @@ describe('Device WebSocket Communication', () => {
         await new Promise(resolve => setTimeout(resolve, 50));
 
         // Verify status stored in Redis
-        expect(mockRedis.set).toHaveBeenCalledWith(
+        expect(mockRedis.setEx).toHaveBeenCalledWith(
           `device:${deviceId}:status`,
-          expect.stringContaining('"cpu":45.5'),
-          300
+          300,
+          expect.stringContaining('"cpu":45.5')
         );
 
         // Verify broadcast to device updates channel
