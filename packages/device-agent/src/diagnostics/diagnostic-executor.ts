@@ -64,7 +64,8 @@ export class DiagnosticExecutor {
    * Add command to queue
    */
   enqueue(command: DiagnosticCommand): void {
-    this.queue[command.priority].push(command);
+    const priority = command.priority || 'normal';
+    this.queue[priority].push(command);
   }
 
   /**
@@ -95,11 +96,8 @@ export class DiagnosticExecutor {
   private async executePing(
     command: DiagnosticCommand
   ): Promise<DiagnosticResult> {
-    const {
-      target = '8.8.8.8',
-      count = 4,
-      timeout = 5000,
-    } = command.parameters;
+    const params = command.parameters || command.payload || {};
+    const { target = '8.8.8.8', count = 4, timeout = 5000 } = params;
 
     // Detect OS and use appropriate ping command
     const isWindows = process.platform === 'win32';
@@ -155,7 +153,8 @@ export class DiagnosticExecutor {
   private async executeTraceroute(
     command: DiagnosticCommand
   ): Promise<DiagnosticResult> {
-    const { target = '8.8.8.8', timeout = 30000 } = command.parameters;
+    const params = command.parameters || command.payload || {};
+    const { target = '8.8.8.8', timeout = 30000 } = params;
 
     const isWindows = process.platform === 'win32';
     const traceCmd = isWindows
@@ -209,7 +208,8 @@ export class DiagnosticExecutor {
   private async executeDns(
     command: DiagnosticCommand
   ): Promise<DiagnosticResult> {
-    const { target = 'google.com', recordType = 'A' } = command.parameters;
+    const params = command.parameters || command.payload || {};
+    const { target = 'google.com', recordType = 'A' } = params;
     const startTime = Date.now();
 
     try {
@@ -293,7 +293,8 @@ export class DiagnosticExecutor {
   private async executeConnectivity(
     command: DiagnosticCommand
   ): Promise<DiagnosticResult> {
-    const { target, port, timeout = 5000 } = command.parameters;
+    const params = command.parameters || command.payload || {};
+    const { target, port, timeout = 5000 } = params;
 
     if (!target) {
       throw new Error('Target is required for connectivity test');

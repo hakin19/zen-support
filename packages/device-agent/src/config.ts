@@ -11,9 +11,26 @@ export class ConfigLoader {
       deviceSecret: this.getRequiredEnv('DEVICE_SECRET'),
       apiUrl: this.getRequiredEnv('API_URL'),
       customerId: this.getRequiredEnv('CUSTOMER_ID'),
-      heartbeatInterval: this.getOptionalNumber('HEARTBEAT_INTERVAL', 60000),
+      heartbeatInterval: this.getOptionalNumber('HEARTBEAT_INTERVAL', 30000),
       logLevel: this.getLogLevel(),
       mockMode: process.env.MOCK_MODE === 'true',
+      // Additional retry and backoff configurations
+      maxRetries: this.getOptionalNumber('MAX_RETRIES', 3),
+      retryDelay: this.getOptionalNumber('RETRY_DELAY', 1000),
+      maxReconnectAttempts: this.getOptionalNumber(
+        'MAX_RECONNECT_ATTEMPTS',
+        10
+      ),
+      maxReconnectInterval: this.getOptionalNumber(
+        'MAX_RECONNECT_INTERVAL',
+        30000
+      ),
+      // WebSocket configurations
+      websocketReconnectInterval: this.getOptionalNumber(
+        'WEBSOCKET_RECONNECT_INTERVAL',
+        5000
+      ),
+      websocketMaxRetries: this.getOptionalNumber('WEBSOCKET_MAX_RETRIES', 10),
     };
 
     this.validateConfig(config);

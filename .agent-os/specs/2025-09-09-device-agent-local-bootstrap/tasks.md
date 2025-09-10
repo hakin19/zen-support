@@ -28,14 +28,14 @@
   - [x] 3.6 Verify all WebSocket tests pass
   - [x] 3.7 Add dev helper (endpoint or script) to enqueue a mock command to a connected device for WS ack verification
 
-- [ ] 4. Build Device Agent Container
-  - [ ] 4.1 Write tests for Device Agent authentication and heartbeat logic
-  - [ ] 4.2 Review existing Device Agent Dockerfile; ensure healthcheck, capabilities, tmpfs, and logs are correct
-  - [ ] 4.3 Implement MOCK_MODE for simulated device behavior
-  - [ ] 4.4 Implement Device Agent WebSocket client using auth token; add reconnect/backoff; integrate with auth/heartbeat
-  - [ ] 4.5 Configure environment variables and failure backoff policy
-  - [ ] 4.6 Add platform-specific networking (host.docker.internal); document Linux `--add-host=host.docker.internal:host-gateway`
-  - [ ] 4.7 Verify Device Agent tests pass and container builds successfully
+- [x] 4. Build Device Agent Container
+  - [x] 4.1 Write tests for Device Agent authentication and heartbeat logic
+  - [x] 4.2 Review existing Device Agent Dockerfile; ensure healthcheck, capabilities, tmpfs, and logs are correct
+  - [x] 4.3 Implement MOCK_MODE for simulated device behavior
+  - [x] 4.4 Implement Device Agent WebSocket client using auth token; add reconnect/backoff; integrate with auth/heartbeat
+  - [x] 4.5 Configure environment variables and failure backoff policy
+  - [x] 4.6 Add platform-specific networking (host.docker.internal); document Linux `--add-host=host.docker.internal:host-gateway`
+  - [x] 4.7 Verify Device Agent tests pass and container builds successfully
 
 - [ ] 5. Create Local Development Environment
   - [ ] 5.1 Write integration tests for end-to-end device connection flow

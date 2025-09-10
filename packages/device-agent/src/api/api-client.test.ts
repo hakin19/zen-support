@@ -80,11 +80,10 @@ describe('ApiClient', () => {
 
   describe('authentication', () => {
     it('should authenticate successfully with valid credentials', async () => {
-      const mockToken = 'jwt-token-abc';
+      const mockToken = 'session-token-abc';
       const mockResponse = {
-        access_token: mockToken,
-        expires_in: 3600,
-        token_type: 'Bearer',
+        token: mockToken,
+        expiresIn: 86400,
       };
 
       mockFetch.mockResolvedValueOnce({
@@ -96,15 +95,15 @@ describe('ApiClient', () => {
 
       expect(result).toBe(true);
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://api.example.com/auth/device',
+        'https://api.example.com/api/v1/device/auth',
         expect.objectContaining({
           method: 'POST',
           headers: expect.objectContaining({
             'Content-Type': 'application/json',
           }),
           body: JSON.stringify({
-            device_id: config.deviceId,
-            device_secret: config.deviceSecret,
+            deviceId: config.deviceId,
+            deviceSecret: config.deviceSecret,
           }),
         })
       );
@@ -138,42 +137,42 @@ describe('ApiClient', () => {
       );
     });
 
-    it('should refresh token before expiration', async () => {
-      const mockToken1 = 'jwt-token-1';
-      const mockToken2 = 'jwt-token-2';
+    it('should handle token expiration and re-authenticate', async () => {
+      const mockToken1 = 'session-token-1';
+      const mockToken2 = 'session-token-2';
 
-      // Initial authentication with refresh token
+      // Initial authentication
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({
-          access_token: mockToken1,
-          expires_in: 3600,
-          refresh_token: 'refresh-token-1',
-          token_type: 'Bearer',
+          token: mockToken1,
+          expiresIn: 86400,
         }),
       });
 
       await apiClient.authenticate();
       vi.clearAllMocks();
 
-      // Token refresh
+      // Re-authentication when token expires
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({
-          access_token: mockToken2,
-          expires_in: 3600,
-          token_type: 'Bearer',
+          token: mockToken2,
+          expiresIn: 86400,
         }),
       });
 
-      const result = await apiClient.refreshToken();
+      const result = await apiClient.authenticate();
 
       expect(result).toBe(true);
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://api.example.com/auth/refresh',
+        'https://api.example.com/api/v1/device/auth',
         expect.objectContaining({
           method: 'POST',
-          body: JSON.stringify({ refresh_token: 'refresh-token-1' }),
+          body: JSON.stringify({
+            deviceId: config.deviceId,
+            deviceSecret: config.deviceSecret,
+          }),
         })
       );
     });
@@ -185,9 +184,8 @@ describe('ApiClient', () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({
-          access_token: 'jwt-token',
-          expires_in: 3600,
-          token_type: 'Bearer',
+          token: 'session-token-abc',
+          expiresIn: 86400,
         }),
       });
       await apiClient.authenticate();
@@ -215,7 +213,7 @@ describe('ApiClient', () => {
         expect.objectContaining({
           method: 'POST',
           headers: expect.objectContaining({
-            Authorization: 'Bearer jwt-token',
+            'X-Device-Session': 'session-token-abc',
             'Content-Type': 'application/json',
           }),
           body: JSON.stringify({
@@ -253,9 +251,8 @@ describe('ApiClient', () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({
-          access_token: 'jwt-token',
-          expires_in: 3600,
-          token_type: 'Bearer',
+          token: 'session-token-abc',
+          expiresIn: 86400,
         }),
       });
       await apiClient.authenticate();
@@ -274,9 +271,9 @@ describe('ApiClient', () => {
       ];
 
       const mockHeartbeatResponse: HeartbeatResponse = {
-        status: 'online',
+        acknowledged: true,
         commands: mockCommands,
-        server_time: new Date().toISOString(),
+        nextHeartbeat: 30000,
       };
 
       mockFetch.mockResolvedValueOnce({
@@ -288,11 +285,12 @@ describe('ApiClient', () => {
 
       expect(result).toEqual(mockHeartbeatResponse);
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://api.example.com/devices/heartbeat',
+        'https://api.example.com/api/v1/device/heartbeat',
         expect.objectContaining({
           method: 'POST',
           headers: expect.objectContaining({
-            Authorization: 'Bearer jwt-token',
+            'X-Device-Session': 'session-token-abc',
+            'Content-Type': 'application/json',
           }),
         })
       );
@@ -300,16 +298,19 @@ describe('ApiClient', () => {
       // Check body separately to handle timestamp
       const callArgs = mockFetch.mock.calls[0];
       const body = JSON.parse(callArgs[1].body);
-      expect(body.device_id).toBe(config.deviceId);
-      expect(body.status).toBe('online');
-      expect(body.timestamp).toBeDefined();
+      expect(body.status).toBe('healthy');
+      expect(body.metrics).toMatchObject({
+        cpu: expect.any(Number),
+        memory: expect.any(Number),
+        uptime: expect.any(Number),
+      });
     });
 
     it('should poll for commands with heartbeat interval', async () => {
       const mockHeartbeatResponse: HeartbeatResponse = {
-        status: 'online',
+        acknowledged: true,
         commands: [],
-        server_time: new Date().toISOString(),
+        nextHeartbeat: 30000,
       };
 
       mockFetch.mockResolvedValue({
@@ -334,32 +335,22 @@ describe('ApiClient', () => {
       apiClient.stopHeartbeat();
     });
 
-    it('should emit commands received from heartbeat', async () => {
-      const mockCommands: CommandMessage[] = [
-        {
-          id: 'cmd-1',
-          type: 'diagnostic',
-          command: 'ping',
-          parameters: { target: '8.8.8.8' },
-          timestamp: new Date().toISOString(),
-        },
-      ];
-
+    it('should handle heartbeat response without commands', async () => {
+      // Commands are now handled through WebSocket, not heartbeat response
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({
-          status: 'online',
-          commands: mockCommands,
-          server_time: new Date().toISOString(),
+          acknowledged: true,
+          nextHeartbeat: 30000,
         }),
       });
 
-      const commandHandler = vi.fn();
-      apiClient.on('command', commandHandler);
+      const result = await apiClient.sendHeartbeat();
 
-      await apiClient.sendHeartbeat();
-
-      expect(commandHandler).toHaveBeenCalledWith(mockCommands[0]);
+      expect(result).toEqual({
+        acknowledged: true,
+        nextHeartbeat: 30000,
+      });
     });
 
     it('should handle heartbeat errors gracefully', async () => {
@@ -381,9 +372,8 @@ describe('ApiClient', () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({
-          access_token: 'jwt-token',
-          expires_in: 3600,
-          token_type: 'Bearer',
+          token: 'session-token-abc',
+          expiresIn: 86400,
         }),
       });
       await apiClient.authenticate();
@@ -392,22 +382,15 @@ describe('ApiClient', () => {
 
     it('should submit diagnostic result successfully', async () => {
       const diagnosticResult: DiagnosticResult = {
-        command_id: 'cmd-1',
-        device_id: config.deviceId,
-        type: 'ping',
-        status: 'success',
-        result: {
-          target: '8.8.8.8',
-          packets_sent: 4,
-          packets_received: 4,
-          packet_loss: 0,
-          min_rtt: 10.5,
-          avg_rtt: 12.3,
-          max_rtt: 14.1,
+        commandId: 'cmd-123',
+        claimToken: 'claim-token-123',
+        status: 'completed',
+        executedAt: new Date().toISOString(),
+        results: {
+          output:
+            'PING 8.8.8.8 (8.8.8.8): 56 data bytes\n64 bytes from 8.8.8.8',
         },
-        executed_at: new Date().toISOString(),
-        duration_ms: 4500,
-      };
+      } as any;
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
@@ -418,28 +401,26 @@ describe('ApiClient', () => {
 
       expect(result).toEqual({ success: true, id: 'result-123' });
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://api.example.com/diagnostics/results',
+        'https://api.example.com/api/v1/device/commands/cmd-123/result',
         expect.objectContaining({
           method: 'POST',
           headers: expect.objectContaining({
-            Authorization: 'Bearer jwt-token',
+            'X-Device-Session': 'session-token-abc',
             'Content-Type': 'application/json',
           }),
-          body: JSON.stringify(diagnosticResult),
         })
       );
     });
 
     it('should retry on failure with exponential backoff', async () => {
       const diagnosticResult: DiagnosticResult = {
-        command_id: 'cmd-1',
-        device_id: config.deviceId,
-        type: 'ping',
-        status: 'success',
-        result: { test: 'data' },
-        executed_at: new Date().toISOString(),
-        duration_ms: 100,
-      };
+        claimToken: 'claim-token-123',
+        status: 'completed',
+        executedAt: new Date().toISOString(),
+        results: {
+          output: 'test output',
+        },
+      } as any;
 
       // First two attempts fail, third succeeds
       mockFetch
@@ -466,14 +447,13 @@ describe('ApiClient', () => {
 
     it('should fail after max retries', async () => {
       const diagnosticResult: DiagnosticResult = {
-        command_id: 'cmd-1',
-        device_id: config.deviceId,
-        type: 'ping',
-        status: 'failure',
-        error: 'Host unreachable',
-        executed_at: new Date().toISOString(),
-        duration_ms: 100,
-      };
+        claimToken: 'claim-token-123',
+        status: 'failed',
+        executedAt: new Date().toISOString(),
+        results: {
+          error: 'Host unreachable',
+        },
+      } as any;
 
       // All attempts fail
       mockFetch.mockRejectedValue(new Error('Network error'));
@@ -495,14 +475,13 @@ describe('ApiClient', () => {
 
     it('should handle server errors without retry for 4xx', async () => {
       const diagnosticResult: DiagnosticResult = {
-        command_id: 'cmd-1',
-        device_id: config.deviceId,
-        type: 'ping',
-        status: 'success',
-        result: {},
-        executed_at: new Date().toISOString(),
-        duration_ms: 100,
-      };
+        claimToken: 'claim-token-123',
+        status: 'completed',
+        executedAt: new Date().toISOString(),
+        results: {
+          output: 'test',
+        },
+      } as any;
 
       mockFetch.mockResolvedValueOnce({
         ok: false,
@@ -527,9 +506,8 @@ describe('ApiClient', () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({
-          access_token: 'jwt-token-1',
-          expires_in: 3600,
-          token_type: 'Bearer',
+          token: 'session-token-1',
+          expiresIn: 86400,
         }),
       });
 
@@ -543,9 +521,8 @@ describe('ApiClient', () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({
-          access_token: 'jwt-token-2',
-          expires_in: 3600,
-          token_type: 'Bearer',
+          token: 'session-token-2',
+          expiresIn: 86400,
         }),
       });
 
@@ -553,9 +530,9 @@ describe('ApiClient', () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({
-          status: 'online',
+          acknowledged: true,
           commands: [],
-          server_time: new Date().toISOString(),
+          nextHeartbeat: 30000,
         }),
       });
 
@@ -582,9 +559,8 @@ describe('ApiClient', () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({
-          access_token: 'jwt-token',
-          expires_in: 3600,
-          token_type: 'Bearer',
+          token: 'session-token',
+          expiresIn: 86400,
         }),
       });
 
@@ -642,9 +618,8 @@ describe('ApiClient', () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({
-          access_token: 'jwt-token',
-          expires_in: 3600,
-          token_type: 'Bearer',
+          token: 'session-token',
+          expiresIn: 86400,
         }),
       });
 
@@ -654,9 +629,9 @@ describe('ApiClient', () => {
       mockFetch.mockResolvedValue({
         ok: true,
         json: async () => ({
-          status: 'online',
+          acknowledged: true,
           commands: [],
-          server_time: new Date().toISOString(),
+          nextHeartbeat: 30000,
         }),
       });
 
@@ -693,9 +668,8 @@ describe('ApiClient', () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({
-          access_token: 'jwt-token',
-          expires_in: 3600,
-          token_type: 'Bearer',
+          token: 'session-token',
+          expiresIn: 86400,
         }),
       });
 

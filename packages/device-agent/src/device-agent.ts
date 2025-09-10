@@ -1,11 +1,11 @@
 import { EventEmitter } from 'events';
 
+import { ApiClient } from './api/api-client.js';
 import { getDeviceId } from './utils/device-id-generator.js';
 
 import type {
   DeviceConfig,
   DeviceStatus,
-  RegistrationResponse,
   HeartbeatResponse,
   DiagnosticCommand,
   DiagnosticResult,
@@ -19,7 +19,7 @@ import type {
 export class DeviceAgent extends EventEmitter {
   #config: DeviceConfig;
   #status: DeviceStatus = 'initialized';
-  #authToken: string | null = null;
+  #apiClient: ApiClient | null = null;
   #heartbeatTimer: NodeJS.Timeout | null = null;
   #heartbeatInterval: number;
   #isRegistered = false;
@@ -28,6 +28,7 @@ export class DeviceAgent extends EventEmitter {
   #heartbeatCount = 0;
   #heartbeatErrors = 0;
   #lastError: Error | null = null;
+  #mockSimulator: any = null; // Use any to avoid type issues with dynamic import
 
   constructor(config: DeviceConfig) {
     super();
@@ -39,6 +40,104 @@ export class DeviceAgent extends EventEmitter {
     this.validateConfig(configWithDeviceId);
     this.#config = configWithDeviceId;
     this.#heartbeatInterval = config.heartbeatInterval ?? 60000;
+
+    // Initialize API client if not in mock mode
+    if (!config.mockMode) {
+      this.#apiClient = new ApiClient({
+        apiUrl: config.apiUrl,
+        deviceId: configWithDeviceId.deviceId,
+        deviceSecret: config.deviceSecret,
+        customerId: config.customerId,
+        heartbeatInterval: this.#heartbeatInterval,
+      });
+      this.setupApiClientEventHandlers();
+    }
+
+    // Initialize mock simulator if in mock mode
+    if (config.mockMode) {
+      this.initializeMockSimulator().catch(error => {
+        console.error('Failed to initialize mock simulator:', error);
+      });
+    }
+  }
+
+  private setupApiClientEventHandlers(): void {
+    if (!this.#apiClient) return;
+
+    // Forward API client events
+    this.#apiClient.on('connected', () => {
+      this.emit('connected');
+    });
+
+    this.#apiClient.on('disconnected', () => {
+      this.emit('disconnected');
+    });
+
+    this.#apiClient.on('error', error => {
+      this.#lastError = error;
+      this.emit('error', error);
+    });
+
+    // WebSocket events
+    this.#apiClient.on('websocket:connected', () => {
+      console.log('🔌 WebSocket connected');
+      this.emit('websocket:connected');
+    });
+
+    this.#apiClient.on('websocket:disconnected', (reason: any) => {
+      console.log('🔌 WebSocket disconnected:', reason);
+      this.emit('websocket:disconnected', reason);
+    });
+
+    // Command events - convert CommandMessage to DiagnosticCommand format
+    this.#apiClient.on('command', (command: any) => {
+      const diagnosticCommand: DiagnosticCommand = {
+        id: command.id,
+        type: command.type,
+        payload: command.parameters ?? {},
+        createdAt: command.timestamp,
+        claimToken: command.claimToken,
+      };
+      console.log(
+        `📋 Command received via WebSocket: ${diagnosticCommand.type} (${diagnosticCommand.id})`
+      );
+      this.emit('command:received', diagnosticCommand);
+      // Process the command
+      void this.processCommand(diagnosticCommand).catch((error: unknown) => {
+        this.emit('command:error', { command: diagnosticCommand, error });
+      });
+    });
+
+    this.#apiClient.on('command:received', (command: any) => {
+      const diagnosticCommand: DiagnosticCommand = {
+        id: command.id,
+        type: command.type,
+        payload: command.parameters ?? {},
+        createdAt: command.timestamp,
+        claimToken: command.claimToken,
+      };
+      this.emit('command:received', diagnosticCommand);
+      void this.processCommand(diagnosticCommand).catch((error: unknown) => {
+        this.emit('command:error', { command: diagnosticCommand, error });
+      });
+    });
+  }
+
+  private async initializeMockSimulator(): Promise<void> {
+    if (!this.#config.mockMode) return;
+
+    try {
+      const { MockDeviceSimulator } = await import(
+        './utils/mock-device-simulator.js'
+      );
+      this.#mockSimulator = new MockDeviceSimulator(this.#config.deviceId);
+      console.log(
+        '🎭 Mock simulator initialized for device:',
+        this.#config.deviceId
+      );
+    } catch (error) {
+      console.error('Failed to load mock simulator:', error);
+    }
   }
 
   private validateConfig(config: DeviceConfig): void {
@@ -101,9 +200,20 @@ export class DeviceAgent extends EventEmitter {
     }
 
     this.stopHeartbeat();
+
+    // Stop API client
+    if (this.#apiClient) {
+      this.#apiClient.stop();
+    }
+
+    // Cleanup mock simulator if it exists
+    if (this.#mockSimulator?.destroy) {
+      this.#mockSimulator.destroy();
+      this.#mockSimulator = null;
+    }
+
     this.#status = 'stopped';
     this.#isRegistered = false;
-    this.#authToken = null;
 
     this.emit('stopped');
   }
@@ -111,6 +221,15 @@ export class DeviceAgent extends EventEmitter {
   shutdown(): void {
     if (this.#status === 'running') {
       this.stop();
+    } else {
+      // Cleanup resources even if not running
+      if (this.#apiClient) {
+        this.#apiClient.stop();
+      }
+      if (this.#mockSimulator?.destroy) {
+        this.#mockSimulator.destroy();
+        this.#mockSimulator = null;
+      }
     }
   }
 
@@ -135,152 +254,188 @@ export class DeviceAgent extends EventEmitter {
   }
 
   private async register(): Promise<void> {
-    // In mock mode, simulate successful registration
+    // In mock mode, simulate successful authentication
     if (this.#config.mockMode) {
-      console.log('🎭 Mock mode: Simulating registration');
-      this.#authToken = `mock-token-${Date.now()}`;
+      console.log('🎭 Mock mode: Simulating authentication');
       this.#isRegistered = true;
       this.emit('registered');
       return;
     }
 
-    const maxRetries = 3;
-    let lastError: Error | null = null;
-
-    for (let i = 0; i < maxRetries; i++) {
-      try {
-        const response = await this.makeApiCall<RegistrationResponse>(
-          '/api/v1/devices/register',
-          'POST',
-          {
-            deviceId: this.#config.deviceId,
-            deviceSecret: this.#config.deviceSecret,
-            customerId: this.#config.customerId,
-            metadata: {
-              agentVersion: '1.0.0',
-              platform: process.platform,
-              nodeVersion: process.version,
-            },
-          }
-        );
-
-        this.#authToken = response.token;
-        this.#isRegistered = true;
-
-        // Update heartbeat interval if server provides one
-        if (response.heartbeatInterval) {
-          this.#heartbeatInterval = response.heartbeatInterval;
-        }
-
-        this.emit('registered');
-        return;
-      } catch (error) {
-        lastError = error as Error;
-        if (i < maxRetries - 1) {
-          // Wait before retry with exponential backoff
-          await this.delay(Math.pow(2, i) * 1000);
-        }
-      }
+    if (!this.#apiClient) {
+      throw new Error('API client not initialized');
     }
 
-    throw lastError ?? new Error('Registration failed');
+    // Authenticate with the API
+    const authenticated = await this.#apiClient.authenticate();
+    if (!authenticated) {
+      throw new Error('Authentication failed');
+    }
+
+    this.#isRegistered = true;
+
+    // Try to establish WebSocket connection after successful authentication
+    // This is optional - the agent can still work with HTTP polling if WS fails
+    try {
+      await this.#apiClient.connectWebSocket();
+      console.log('✅ WebSocket connection established');
+    } catch (error) {
+      // Log WebSocket connection error but don't fail
+      // The agent can still work with HTTP polling
+      console.error(
+        '⚠️  WebSocket connection failed, falling back to HTTP polling:',
+        error
+      );
+    }
+
+    // Start API client heartbeat
+    this.#apiClient.startHeartbeat();
+
+    this.emit('registered');
   }
 
   private startHeartbeat(): void {
-    this.stopHeartbeat(); // Clear any existing timer
+    // In mock mode, handle heartbeat locally
+    if (this.#config.mockMode) {
+      this.stopHeartbeat(); // Clear any existing timer
 
-    const sendHeartbeatCycle = async (): Promise<void> => {
-      try {
-        await this.sendHeartbeat();
-      } catch (error) {
-        this.#heartbeatErrors++;
-        this.emit('heartbeat:error', error);
+      const sendHeartbeatCycle = async (): Promise<void> => {
+        try {
+          await this.sendHeartbeat();
+        } catch (error) {
+          this.#heartbeatErrors++;
+          this.emit('heartbeat:error', error);
 
-        // Retry after a short delay
-        setTimeout(() => {
-          if (this.#status === 'running') {
-            void sendHeartbeatCycle();
-          }
-        }, 5000);
-        return;
-      }
+          // Retry after a short delay
+          setTimeout(() => {
+            if (this.#status === 'running') {
+              void sendHeartbeatCycle();
+            }
+          }, 5000);
+          return;
+        }
 
-      // Schedule next heartbeat
-      if (this.#status === 'running') {
-        this.#heartbeatTimer = setTimeout(
-          () => void sendHeartbeatCycle(),
-          this.#heartbeatInterval
-        );
-      }
-    };
+        // Schedule next heartbeat
+        if (this.#status === 'running') {
+          this.#heartbeatTimer = setTimeout(
+            () => void sendHeartbeatCycle(),
+            this.#heartbeatInterval
+          );
+        }
+      };
 
-    // Send first heartbeat immediately, then schedule regular intervals
-    void sendHeartbeatCycle();
+      // Send first heartbeat immediately, then schedule regular intervals
+      void sendHeartbeatCycle();
+    }
+    // Otherwise, heartbeat is handled by ApiClient
   }
 
   private stopHeartbeat(): void {
+    // Stop local heartbeat timer if in mock mode
     if (this.#heartbeatTimer) {
       clearTimeout(this.#heartbeatTimer);
       this.#heartbeatTimer = null;
     }
+    // Stop API client heartbeat if not in mock mode
+    if (this.#apiClient) {
+      this.#apiClient.stopHeartbeat();
+    }
   }
 
   private async sendHeartbeat(): Promise<HeartbeatResponse> {
-    if (!this.#authToken) {
-      throw new Error('Not authenticated');
+    // Use API client for real heartbeats
+    if (!this.#config.mockMode && this.#apiClient) {
+      const response = await this.#apiClient.sendHeartbeat();
+      if (response) {
+        this.#lastHeartbeat = new Date();
+        this.#heartbeatCount++;
+        // Convert API response to internal HeartbeatResponse format
+        const heartbeatResponse: HeartbeatResponse = {
+          acknowledged: response.acknowledged ?? response.success ?? true,
+          commands: [],
+          nextHeartbeat: response.nextHeartbeat ?? this.#heartbeatInterval,
+        };
+        this.emit('heartbeat', heartbeatResponse);
+        return heartbeatResponse;
+      }
+      throw new Error('Failed to send heartbeat');
     }
 
-    // In mock mode, simulate successful heartbeat
+    // In mock mode, simulate successful heartbeat with mock metrics
     if (this.#config.mockMode) {
+      // Get metrics from mock simulator if available
+      const metrics = this.#mockSimulator?.getMetrics() ?? {
+        cpu: 25,
+        memory: 512,
+        uptime: this.getUptime(),
+        network: {
+          latency: 50,
+          packetLoss: 0,
+        },
+      };
+
       const mockResponse: HeartbeatResponse = {
         acknowledged: true,
-        commands: [],
+        commands: this.generateMockCommands(),
         nextHeartbeat: this.#heartbeatInterval,
       };
 
+      console.log('🎭 Mock heartbeat sent with metrics:', metrics);
       this.#lastHeartbeat = new Date();
       this.#heartbeatCount++;
       this.emit('heartbeat', mockResponse);
       return mockResponse;
     }
 
-    const response = await this.makeApiCall<HeartbeatResponse>(
-      `/api/v1/devices/${this.#config.deviceId}/heartbeat`,
-      'POST',
-      {
-        status: 'online',
-        metrics: {
-          uptime: this.getUptime(),
-          heartbeatCount: this.#heartbeatCount,
-          memoryUsage: process.memoryUsage(),
-        },
-      },
-      this.#authToken
+    // This should not be reached since non-mock mode uses ApiClient
+    throw new Error(
+      'Heartbeat should be handled by ApiClient in non-mock mode'
     );
+  }
 
-    this.#lastHeartbeat = new Date();
-    this.#heartbeatCount++;
-
-    // Update heartbeat interval if server provides one
-    if (response.nextHeartbeat) {
-      this.#heartbeatInterval = response.nextHeartbeat;
+  private generateMockCommands(): DiagnosticCommand[] {
+    // Randomly generate commands 10% of the time in mock mode
+    if (Math.random() > 0.1) {
+      return [];
     }
 
-    // Process any commands received
-    if (response.commands && response.commands.length > 0) {
-      for (const command of response.commands) {
-        void this.processCommand(command).catch((error: unknown) => {
-          this.emit('command:error', { command, error });
-        });
-      }
-    }
+    const commands = [
+      'ping',
+      'traceroute',
+      'dns',
+      'port_check',
+      'network_scan',
+    ];
+    const commandType = commands[Math.floor(Math.random() * commands.length)];
 
-    this.emit('heartbeat', response);
-    return response;
+    return [
+      {
+        id: `cmd-${Date.now()}`,
+        type: commandType as any, // Type is already validated from the array
+        payload: {
+          target: '8.8.8.8',
+          domain: 'example.com',
+          host: 'localhost',
+          port: 80,
+        },
+        createdAt: new Date().toISOString(),
+      },
+    ];
   }
 
   private async processCommand(command: DiagnosticCommand): Promise<void> {
     this.emit('command:received', command);
+
+    // In mock mode, use the mock simulator to execute commands
+    if (this.#config.mockMode && this.#mockSimulator) {
+      const result = await this.#mockSimulator.executeCommand(command);
+      // Include claimToken if present
+      if (command.claimToken) {
+        result.claimToken = command.claimToken;
+      }
+      await this.submitResult(result);
+      return;
+    }
 
     // Command processing will be implemented in the next task
     // For now, just acknowledge receipt
@@ -293,16 +448,13 @@ export class DeviceAgent extends EventEmitter {
       },
       executedAt: new Date().toISOString(),
       duration: 0,
+      claimToken: command.claimToken, // Include claimToken if present
     };
 
     await this.submitResult(result);
   }
 
   private async submitResult(result: DiagnosticResult): Promise<void> {
-    if (!this.#authToken) {
-      throw new Error('Not authenticated');
-    }
-
     // In mock mode, simulate successful submission
     if (this.#config.mockMode) {
       console.log('🎭 Mock mode: Simulating result submission', result);
@@ -310,68 +462,13 @@ export class DeviceAgent extends EventEmitter {
       return;
     }
 
-    await this.makeApiCall(
-      `/api/v1/devices/${this.#config.deviceId}/diagnostic-results`,
-      'POST',
-      result,
-      this.#authToken
-    );
+    // Use API client to submit result
+    if (!this.#apiClient) {
+      throw new Error('API client not initialized');
+    }
 
+    await this.#apiClient.submitDiagnosticResult(result);
     this.emit('result:submitted', result);
-  }
-
-  private async makeApiCall<T>(
-    endpoint: string,
-    method: string,
-    body?: unknown,
-    token?: string,
-    timeoutMs = 30000 // Default 30 second timeout
-  ): Promise<T> {
-    const url = new globalThis.URL(endpoint, this.#config.apiUrl);
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-
-    // Create AbortController for timeout
-    const controller = new globalThis.AbortController();
-    const timeoutId = setTimeout(() => {
-      controller.abort();
-    }, timeoutMs);
-
-    try {
-      const response = await fetch(url.toString(), {
-        method,
-        headers,
-        body: body ? JSON.stringify(body) : undefined,
-        signal: controller.signal,
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`API call failed: ${response.status} ${errorText}`);
-      }
-
-      return response.json() as Promise<T>;
-    } catch (error) {
-      if (error instanceof Error) {
-        if (error.name === 'AbortError') {
-          throw new Error(
-            `API call timed out after ${timeoutMs}ms: ${endpoint}`
-          );
-        }
-      }
-      throw error;
-    } finally {
-      clearTimeout(timeoutId);
-    }
-  }
-
-  private delay(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
   }
 
   private getUptime(): number {
@@ -399,7 +496,7 @@ export class DeviceAgent extends EventEmitter {
   }
 
   getAuthToken(): string | null {
-    return this.#authToken;
+    return this.#apiClient?.getAuthToken() ?? null;
   }
 
   getHeartbeatInterval(): number {
