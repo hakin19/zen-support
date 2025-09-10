@@ -416,7 +416,9 @@ describe('Device E2E Integration Tests', () => {
 
       expect(data).toHaveProperty('token');
       expect(data).toHaveProperty('expiresIn');
-      expect(data.token).toMatch(/^[a-f0-9]{64}$/); // Session token format
+      expect(data.token).toMatch(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+      ); // UUID format
 
       // Verify session exists in Redis
       const session = await redis.get(`session:${data.token}`);
@@ -474,7 +476,7 @@ describe('Device E2E Integration Tests', () => {
             'X-Device-Session': authToken!,
           },
           body: JSON.stringify({
-            status: 'online',
+            status: 'healthy',
             metrics: {
               cpu: 45.2,
               memory: 62.8,
@@ -484,6 +486,10 @@ describe('Device E2E Integration Tests', () => {
         }
       );
 
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Heartbeat failed:', response.status, errorText);
+      }
       expect(response.ok).toBe(true);
       const data = await response.json();
 
@@ -513,7 +519,7 @@ describe('Device E2E Integration Tests', () => {
             'X-Device-Session': 'invalid-token',
           },
           body: JSON.stringify({
-            status: 'online',
+            status: 'healthy',
             metrics: {
               cpu: 45.2,
               memory: 62.8,
@@ -898,7 +904,7 @@ describe('Device E2E Integration Tests', () => {
             'X-Device-Session': authData.token,
           },
           body: JSON.stringify({
-            status: 'online',
+            status: 'healthy',
             metrics: {
               cpu: 45.2,
               memory: 62.8,
