@@ -44,6 +44,15 @@ export function registerDeviceAuthRoutes(app: FastifyInstance): void {
     async (request, reply) => {
       const { deviceId, deviceSecret } = request.body;
 
+      // Log for debugging
+      if (process.env.NODE_ENV === 'test') {
+        const fs = await import('fs');
+        fs.appendFileSync(
+          '/tmp/test-diag.log',
+          `[ROUTE] Auth request for device: ${deviceId}\n`
+        );
+      }
+
       // Validate device credentials
       const result = await deviceAuthService.validateCredentials(
         deviceId,

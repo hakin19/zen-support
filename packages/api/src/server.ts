@@ -1,8 +1,15 @@
 import { randomUUID } from 'crypto';
+import * as fs from 'fs';
 
 import fastify from 'fastify';
 
 import { getRedisClient } from '@aizen/shared/utils/redis-client';
+
+// Diagnostic: Check environment when server module loads
+if (process.env.NODE_ENV === 'test') {
+  const diagLog = `[SERVER] Test mode - SUPABASE_URL: ${process.env.SUPABASE_URL}, REDIS_HOST: ${process.env.REDIS_HOST || 'localhost'}\n`;
+  fs.appendFileSync('/tmp/test-diag.log', diagLog);
+}
 
 import { config } from './config';
 import { registerChatRoutes } from './routes/chat';
@@ -30,6 +37,27 @@ export async function createServer(): Promise<FastifyInstance> {
 }
 
 export async function createApp(): Promise<FastifyInstance> {
+  // Initialize external clients if not already initialized (for tests)
+  const { initializeSupabase } = await import(
+    '@aizen/shared/utils/supabase-client'
+  );
+  const { initializeRedis } = await import('@aizen/shared/utils/redis-client');
+  const { config } = await import('./config');
+
+  if (config.supabase.url && config.supabase.anonKey) {
+    initializeSupabase({
+      url: config.supabase.url,
+      anonKey: config.supabase.anonKey,
+      serviceRoleKey: config.supabase.serviceRoleKey,
+    });
+  }
+
+  // Initialize Redis if not already initialized
+  initializeRedis({
+    host: config.redis.host,
+    port: config.redis.port,
+    password: config.redis.password,
+  });
   const app = fastify({
     logger: config.logger,
     trustProxy: true, // Important for ALB and proper IP handling

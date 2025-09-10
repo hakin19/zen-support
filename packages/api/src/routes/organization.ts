@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { webPortalAuthMiddleware } from '../middleware/web-portal-auth.middleware';
+import { webPortalAuth } from '../middleware/web-portal-auth.middleware';
 import { supabase } from '../services/supabase';
 
 import { getConnectionManager } from './websocket';
@@ -51,11 +51,11 @@ const allowedOriginSchema = z.object({
   origin: z.string().url(),
 });
 
-export const organizationRoutes: FastifyPluginAsync = fastify => {
+export const organizationRoutes: FastifyPluginAsync = async fastify => {
   // Get organization
   fastify.get(
     '/api/organization',
-    { preHandler: [webPortalAuthMiddleware] },
+    { preHandler: [webPortalAuth] },
     async (request, reply) => {
       const { user } = request;
       if (!user) {
@@ -162,7 +162,7 @@ export const organizationRoutes: FastifyPluginAsync = fastify => {
   // Update organization
   fastify.patch(
     '/api/organization',
-    { preHandler: [webPortalAuthMiddleware] },
+    { preHandler: [webPortalAuth] },
     async (request, reply) => {
       const { user } = request;
       if (!user || (user.role !== 'owner' && user.role !== 'admin')) {
@@ -220,7 +220,7 @@ export const organizationRoutes: FastifyPluginAsync = fastify => {
   // Update security settings
   fastify.patch(
     '/api/organization/settings',
-    { preHandler: [webPortalAuthMiddleware] },
+    { preHandler: [webPortalAuth] },
     async (request, reply) => {
       const { user } = request;
       if (!user || (user.role !== 'owner' && user.role !== 'admin')) {
@@ -258,7 +258,7 @@ export const organizationRoutes: FastifyPluginAsync = fastify => {
   // Update notification settings
   fastify.patch(
     '/api/organization/notifications',
-    { preHandler: [webPortalAuthMiddleware] },
+    { preHandler: [webPortalAuth] },
     async (request, reply) => {
       const { user } = request;
       if (!user || (user.role !== 'owner' && user.role !== 'admin')) {
@@ -296,7 +296,7 @@ export const organizationRoutes: FastifyPluginAsync = fastify => {
   // Update API settings
   fastify.patch(
     '/api/organization/api-settings',
-    { preHandler: [webPortalAuthMiddleware] },
+    { preHandler: [webPortalAuth] },
     async (request, reply) => {
       const { user } = request;
       if (!user || (user.role !== 'owner' && user.role !== 'admin')) {
@@ -329,7 +329,7 @@ export const organizationRoutes: FastifyPluginAsync = fastify => {
   // Add IP to whitelist
   fastify.post(
     '/api/organization/ip-whitelist',
-    { preHandler: [webPortalAuthMiddleware] },
+    { preHandler: [webPortalAuth] },
     async (request, reply) => {
       const { user } = request;
       if (!user || (user.role !== 'owner' && user.role !== 'admin')) {
@@ -396,7 +396,7 @@ export const organizationRoutes: FastifyPluginAsync = fastify => {
   // Remove IP from whitelist
   fastify.delete(
     '/api/organization/ip-whitelist/:ip',
-    { preHandler: [webPortalAuthMiddleware] },
+    { preHandler: [webPortalAuth] },
     async (request, reply) => {
       const { user } = request;
       if (!user || (user.role !== 'owner' && user.role !== 'admin')) {
@@ -448,7 +448,7 @@ export const organizationRoutes: FastifyPluginAsync = fastify => {
   // Add allowed origin
   fastify.post(
     '/api/organization/allowed-origins',
-    { preHandler: [webPortalAuthMiddleware] },
+    { preHandler: [webPortalAuth] },
     async (request, reply) => {
       const { user } = request;
       if (!user || (user.role !== 'owner' && user.role !== 'admin')) {
@@ -496,7 +496,7 @@ export const organizationRoutes: FastifyPluginAsync = fastify => {
   // Remove allowed origin
   fastify.delete(
     '/api/organization/allowed-origins/:origin',
-    { preHandler: [webPortalAuthMiddleware] },
+    { preHandler: [webPortalAuth] },
     async (request, reply) => {
       const { user } = request;
       if (!user || (user.role !== 'owner' && user.role !== 'admin')) {
@@ -537,7 +537,7 @@ export const organizationRoutes: FastifyPluginAsync = fastify => {
   // Test webhook
   fastify.post(
     '/api/organization/test-webhook',
-    { preHandler: [webPortalAuthMiddleware] },
+    { preHandler: [webPortalAuth] },
     async (request, reply) => {
       const { user } = request;
       if (!user || (user.role !== 'owner' && user.role !== 'admin')) {
@@ -562,7 +562,7 @@ export const organizationRoutes: FastifyPluginAsync = fastify => {
   // Get billing portal URL
   fastify.post(
     '/api/organization/billing-portal',
-    { preHandler: [webPortalAuthMiddleware] },
+    { preHandler: [webPortalAuth] },
     async (request, reply) => {
       const { user } = request;
       if (!user || user.role !== 'owner') {
@@ -587,7 +587,7 @@ export const organizationRoutes: FastifyPluginAsync = fastify => {
   // Delete organization
   fastify.delete(
     '/api/organization',
-    { preHandler: [webPortalAuthMiddleware] },
+    { preHandler: [webPortalAuth] },
     async (request, reply) => {
       const { user } = request;
       if (!user || user.role !== 'owner') {

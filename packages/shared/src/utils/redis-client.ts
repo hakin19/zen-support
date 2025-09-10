@@ -40,6 +40,16 @@ export class RedisClient {
       port: config.port ?? 6379,
     };
 
+    // Diagnostic logging to debug test issues
+    console.log(
+      '[REDIS INIT] Initializing with host:',
+      this.config.host,
+      'port:',
+      this.config.port,
+      'db:',
+      this.config.db
+    );
+
     this.client = createClient({
       socket: {
         host: this.config.host,

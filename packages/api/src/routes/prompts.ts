@@ -1,4 +1,4 @@
-import { webPortalAuthMiddleware } from '../middleware/web-portal-auth.middleware';
+import { webPortalAuth } from '../middleware/web-portal-auth.middleware';
 
 import type { FastifyInstance } from 'fastify';
 
@@ -7,7 +7,7 @@ export function registerPromptsRoutes(app: FastifyInstance): void {
   app.get(
     '/api/prompts',
     {
-      preHandler: [webPortalAuthMiddleware],
+      preHandler: [webPortalAuth],
     },
     async (request, reply) => {
       const { user } = request;
@@ -43,7 +43,7 @@ export function registerPromptsRoutes(app: FastifyInstance): void {
   app.post(
     '/api/prompts',
     {
-      preHandler: [webPortalAuthMiddleware],
+      preHandler: [webPortalAuth],
     },
     async (request, reply) => {
       const { user } = request;
@@ -70,7 +70,7 @@ export function registerPromptsRoutes(app: FastifyInstance): void {
   app.patch(
     '/api/prompts/:id',
     {
-      preHandler: [webPortalAuthMiddleware],
+      preHandler: [webPortalAuth],
     },
     async (request, reply) => {
       const { user } = request;
@@ -96,7 +96,7 @@ export function registerPromptsRoutes(app: FastifyInstance): void {
   app.delete(
     '/api/prompts/:id',
     {
-      preHandler: [webPortalAuthMiddleware],
+      preHandler: [webPortalAuth],
     },
     async (request, reply) => {
       const { user } = request;
@@ -113,7 +113,7 @@ export function registerPromptsRoutes(app: FastifyInstance): void {
   app.post(
     '/api/prompts/test',
     {
-      preHandler: [webPortalAuthMiddleware],
+      preHandler: [webPortalAuth],
     },
     async (request, reply) => {
       const { user } = request;
@@ -134,7 +134,7 @@ export function registerPromptsRoutes(app: FastifyInstance): void {
   app.post(
     '/api/prompts/export',
     {
-      preHandler: [webPortalAuthMiddleware],
+      preHandler: [webPortalAuth],
     },
     async (request, reply) => {
       const { user } = request;
@@ -168,7 +168,7 @@ export function registerPromptsRoutes(app: FastifyInstance): void {
   app.post(
     '/api/prompts/import',
     {
-      preHandler: [webPortalAuthMiddleware],
+      preHandler: [webPortalAuth],
     },
     async (request, reply) => {
       const { user } = request;
@@ -190,7 +190,7 @@ export function registerPromptsRoutes(app: FastifyInstance): void {
   app.get(
     '/api/prompts/:id/history',
     {
-      preHandler: [webPortalAuthMiddleware],
+      preHandler: [webPortalAuth],
     },
     async (request, reply) => {
       const { user } = request;

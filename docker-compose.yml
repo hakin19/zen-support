@@ -1,0 +1,170 @@
+# Local Development Environment - Docker Compose Configuration
+# 
+# This configuration provides a hybrid development setup:
+# - Redis and Device Agent run in Docker
+# - API and Web services run via npm dev commands on the host
+#
+# Quick Start:
+# 1. Start Docker services: docker-compose up -d
+# 2. Start API (separate terminal): npm run dev:api  (runs on port 3001)
+# 3. Start Web (separate terminal): npm run dev:web  (runs on port 3000)
+#
+# The hybrid approach allows for faster development with hot-reload for API/Web
+# while maintaining containerized isolation for Redis and Device Agent.
+
+version: "3.8"
+
+services:
+  # Redis for session storage and real-time data caching
+  redis:
+    image: redis:7-alpine
+    container_name: aizen-redis-dev
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    networks:
+      - aizen-dev
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Device Agent Container (simulated Raspberry Pi device)
+  device-agent:
+    build:
+      context: .
+      dockerfile: packages/device-agent/Dockerfile
+      args:
+        NODE_ENV: development
+    image: aizen/device-agent:dev
+    container_name: aizen-device-agent-dev
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      # Device identification
+      DEVICE_ID: ${DEVICE_ID:-dev-device-001}
+      DEVICE_SECRET: ${DEVICE_SECRET:-dev-secret-key}
+      CUSTOMER_ID: ${CUSTOMER_ID:-dev-customer-123}
+      
+      # API configuration - connects to host machine API
+      API_URL: http://host.docker.internal:3001
+      
+      # WebSocket URL for real-time communication
+      WEBSOCKET_URL: ws://host.docker.internal:3001/api/v1/device/ws
+      
+      # Agent configuration
+      HEARTBEAT_INTERVAL: ${HEARTBEAT_INTERVAL:-30000}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      NODE_ENV: development
+      MOCK_MODE: ${MOCK_MODE:-false}
+      
+      # Retry configuration
+      MAX_RETRIES: 3
+      RETRY_DELAY: 1000
+      MAX_RECONNECT_ATTEMPTS: 10
+      MAX_RECONNECT_INTERVAL: 30000
+      
+      # Health check port
+      PORT: 3002
+    ports:
+      - "3002:3002" # Health check endpoint (different from Web port 3000)
+    networks:
+      - aizen-dev
+    # Platform-specific networking configuration
+    extra_hosts:
+      # For Mac/Windows: host.docker.internal works out of the box
+      # For Linux: add --add-host=host.docker.internal:host-gateway
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - device-logs:/app/logs
+      - ./packages/device-agent/config:/app/config:ro
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3002/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_RAW # Required for ping diagnostics
+      - NET_ADMIN # Required for network diagnostics
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /app/tmp
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Optional: Multiple device agents for testing concurrent connections
+  # Uncomment to add a second device agent
+  # device-agent-2:
+  #   extends: device-agent
+  #   container_name: aizen-device-agent-dev-002
+  #   environment:
+  #     DEVICE_ID: dev-device-002
+  #     DEVICE_SECRET: dev-secret-key-2
+  #     CUSTOMER_ID: dev-customer-123
+  #     API_URL: http://host.docker.internal:3001
+  #     WEBSOCKET_URL: ws://host.docker.internal:3001/api/v1/device/ws
+  #     PORT: 3003
+  #   ports:
+  #     - "3003:3003"
+
+networks:
+  aizen-dev:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+
+volumes:
+  redis-data:
+    driver: local
+  device-logs:
+    driver: local
+
+# Usage Notes:
+# 
+# 1. Platform-specific setup:
+#    - Mac/Windows: docker-compose up -d (works out of the box)
+#    - Linux: docker-compose up -d (host.docker.internal mapping included)
+#
+# 2. View logs:
+#    - All services: docker-compose logs -f
+#    - Redis only: docker-compose logs -f redis
+#    - Device Agent: docker-compose logs -f device-agent
+#
+# 3. Stop services:
+#    - docker-compose down
+#    - docker-compose down -v (also removes volumes)
+#
+# 4. Rebuild device agent after code changes:
+#    - docker-compose build device-agent
+#    - docker-compose up -d device-agent
+#
+# 5. Access Redis CLI:
+#    - docker exec -it aizen-redis-dev redis-cli
+#
+# 6. Monitor device agent health:
+#    - curl http://localhost:3002/health
+#
+# 7. Environment variables:
+#    - Copy .env.example to .env for custom configuration
+#    - Device credentials should match what's seeded in the database

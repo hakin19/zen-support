@@ -202,6 +202,16 @@ export async function optionalWebPortalAuthMiddleware(
 }
 
 /**
+ * Wrapper for use in preHandler arrays (without options)
+ */
+export const webPortalAuth = async (
+  request: FastifyRequest,
+  reply: FastifyReply
+): Promise<void> => {
+  await webPortalAuthMiddleware(request, reply);
+};
+
+/**
  * Role-based middleware factories
  */
 export const requireOwnerRole = (
