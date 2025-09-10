@@ -8,6 +8,7 @@ import { config } from './config';
 import { registerChatRoutes } from './routes/chat';
 import { registerCustomerDeviceRoutes } from './routes/customer-devices';
 import { registerCustomerSessionRoutes } from './routes/customer-sessions';
+import { registerDevRoutes } from './routes/dev';
 import { registerDeviceAuthRoutes } from './routes/device-auth';
 import { registerDeviceCommandRoutes } from './routes/device-commands';
 import { devicesRoutes } from './routes/devices';
@@ -67,6 +68,11 @@ export async function createApp(): Promise<FastifyInstance> {
   registerPromptsRoutes(app);
   await app.register(devicesRoutes);
   await app.register(usersRoutes);
+
+  // Register development helper routes (non-production only)
+  if (process.env.NODE_ENV !== 'production') {
+    registerDevRoutes(app);
+  }
 
   // Register WebSocket routes before chat routes (chat routes depend on websocketConnectionManager)
   await registerWebSocketRoutes(app);

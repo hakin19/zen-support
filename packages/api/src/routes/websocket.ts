@@ -235,6 +235,34 @@ export async function registerWebSocketRoutes(
                 }
                 manager.removeConnection(connectionId);
                 request.log.info(`Device ${String(deviceId)} disconnected`);
+
+                // Broadcast device offline status to portal subscribers
+                try {
+                  if (deviceId) {
+                    const { data: device } = await supabase
+                      .from('devices')
+                      .select('customer_id')
+                      .eq('device_id', deviceId)
+                      .single();
+
+                    if (device?.customer_id) {
+                      await manager.broadcastToCustomer(
+                        device.customer_id as string,
+                        {
+                          type: 'device_status',
+                          deviceId,
+                          status: 'offline',
+                          lastSeen: new Date().toISOString(),
+                        }
+                      );
+                    }
+                  }
+                } catch (broadcastError) {
+                  request.log.error(
+                    broadcastError,
+                    'Failed to broadcast device offline status'
+                  );
+                }
               } catch (error) {
                 request.log.error(error, 'Error during connection close');
               }
