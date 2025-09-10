@@ -104,7 +104,7 @@ export function UserManagement(): JSX.Element {
     users: wsUsers,
     connect,
     disconnect,
-    setUsers: setWsUsers,
+    setUsers: _setWsUsers,
     subscribe,
   } = useWebSocketStore();
 
@@ -150,9 +150,10 @@ export function UserManagement(): JSX.Element {
       if (statusFilter !== 'all') queryParams.append('status', statusFilter);
 
       const { data } = await apiClient.get(`/api/users?${queryParams}`);
-      setLocalUsers(data.users);
+      setLocalUsers((data as { users: User[] }).users);
       setTotalPages(Math.ceil(data.total / itemsPerPage));
-    } catch (_error: unknown) {
+    } catch (error: unknown) {
+      console.error('Failed to load users:', error);
       toast({
         title: 'Error',
         description: 'Failed to load users. Please try again.',
@@ -164,7 +165,7 @@ export function UserManagement(): JSX.Element {
   }, [currentPage, searchQuery, roleFilter, statusFilter, toast]);
 
   useEffect(() => {
-    fetchUsers();
+    void fetchUsers();
   }, [fetchUsers]);
 
   // Connect to WebSocket on mount
@@ -218,7 +219,7 @@ export function UserManagement(): JSX.Element {
       setIsInviteDialogOpen(false);
       setInviteFormData({ email: '', role: 'viewer', full_name: '' });
       void fetchUsers();
-    } catch (error: unknown) {
+    } catch (_error: unknown) {
       toast({
         title: 'Error',
         description:
@@ -247,7 +248,7 @@ export function UserManagement(): JSX.Element {
       setIsRoleDialogOpen(false);
       setSelectedUserForAction(null);
       void fetchUsers();
-    } catch (error: unknown) {
+    } catch (_error: unknown) {
       toast({
         title: 'Error',
         description: 'Failed to update user role',
@@ -273,7 +274,7 @@ export function UserManagement(): JSX.Element {
       setIsDeleteDialogOpen(false);
       setSelectedUserForAction(null);
       void fetchUsers();
-    } catch (error: unknown) {
+    } catch (_error: unknown) {
       toast({
         title: 'Error',
         description: 'Failed to delete user',
@@ -302,7 +303,7 @@ export function UserManagement(): JSX.Element {
       setSelectedUsers(new Set());
       setBulkAction(null);
       void fetchUsers();
-    } catch (error: unknown) {
+    } catch (_error: unknown) {
       toast({
         title: 'Error',
         description: `Failed to ${bulkAction} selected users`,
@@ -325,7 +326,7 @@ export function UserManagement(): JSX.Element {
       });
 
       void fetchUsers();
-    } catch (error: unknown) {
+    } catch (_error: unknown) {
       toast({
         title: 'Error',
         description: 'Failed to resend invitation',
@@ -351,7 +352,7 @@ export function UserManagement(): JSX.Element {
         title: 'Export successful',
         description: 'User list has been exported',
       });
-    } catch (error: unknown) {
+    } catch (_error: unknown) {
       toast({
         title: 'Error',
         description: 'Failed to export user list',
@@ -500,7 +501,7 @@ export function UserManagement(): JSX.Element {
               <Button
                 variant='outline'
                 size='icon'
-                onClick={handleExportUsers}
+                onClick={() => void handleExportUsers()}
                 aria-label='Export users'
               >
                 <Download className='h-4 w-4' />
@@ -594,7 +595,7 @@ export function UserManagement(): JSX.Element {
                       <TableCell>
                         <div>
                           <div className='font-medium'>
-                            {u.full_name || 'No name'}
+                            {u.full_name ?? 'No name'}
                           </div>
                           <div className='text-sm text-muted-foreground'>
                             {u.email}
@@ -808,7 +809,7 @@ export function UserManagement(): JSX.Element {
                 Cancel
               </Button>
               <Button
-                onClick={handleInviteUser}
+                onClick={() => void handleInviteUser()}
                 disabled={isSubmitting || !inviteFormData.email}
               >
                 Send Invitation
@@ -847,7 +848,10 @@ export function UserManagement(): JSX.Element {
               >
                 Cancel
               </Button>
-              <Button onClick={handleChangeRole} disabled={isSubmitting}>
+              <Button
+                onClick={() => void handleChangeRole()}
+                disabled={isSubmitting}
+              >
                 Update Role
               </Button>
             </DialogFooter>
@@ -869,7 +873,7 @@ export function UserManagement(): JSX.Element {
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>
               <AlertDialogAction
-                onClick={handleDeleteUser}
+                onClick={() => void handleDeleteUser()}
                 disabled={isSubmitting}
               >
                 Delete User

@@ -280,7 +280,8 @@ export function OrganizationSettings(): JSX.Element {
       setApiData({
         rate_limit: orgData.settings?.api_settings?.rate_limit ?? 1000,
       });
-    } catch (_error: unknown) {
+    } catch (error: unknown) {
+      console.error('Failed to load organization settings:', error);
       toast({
         title: 'Error',
         description: 'Failed to load organization settings. Please try again.',
@@ -324,26 +325,34 @@ export function OrganizationSettings(): JSX.Element {
       });
 
       setSecurityData({
-        allow_sso: wsOrganization.settings?.allow_sso ?? false,
-        enforce_2fa: wsOrganization.settings?.enforce_2fa ?? false,
+        allow_sso:
+          (wsOrganization.settings as OrganizationSettingsData)?.allow_sso ??
+          false,
+        enforce_2fa:
+          (wsOrganization.settings as OrganizationSettingsData)?.enforce_2fa ??
+          false,
         session_timeout: Math.floor(
-          (wsOrganization.settings?.session_timeout ?? 3600) / 60
+          ((wsOrganization.settings as OrganizationSettingsData)
+            ?.session_timeout ?? 3600) / 60
         ),
       });
 
       setNotificationData({
         email_alerts:
-          wsOrganization.settings?.notification_preferences?.email_alerts ??
-          true,
+          (wsOrganization.settings as OrganizationSettingsData)
+            ?.notification_preferences?.email_alerts ?? true,
         sms_alerts:
-          wsOrganization.settings?.notification_preferences?.sms_alerts ??
-          false,
+          (wsOrganization.settings as OrganizationSettingsData)
+            ?.notification_preferences?.sms_alerts ?? false,
         webhook_url:
-          wsOrganization.settings?.notification_preferences?.webhook_url ?? '',
+          (wsOrganization.settings as OrganizationSettingsData)
+            ?.notification_preferences?.webhook_url ?? '',
       });
 
       setApiData({
-        rate_limit: wsOrganization.settings?.api_settings?.rate_limit ?? 1000,
+        rate_limit:
+          (wsOrganization.settings as OrganizationSettingsData)?.api_settings
+            ?.rate_limit ?? 1000,
       });
     }
   }, [wsOrganization]);
@@ -411,7 +420,8 @@ export function OrganizationSettings(): JSX.Element {
 
       // Refresh data
       void fetchOrganization();
-    } catch (_error: unknown) {
+    } catch (error: unknown) {
+      console.error('Failed to save basic info:', error);
       toast({
         title: 'Error',
         description: 'Failed to save settings. Please try again.',
@@ -438,7 +448,8 @@ export function OrganizationSettings(): JSX.Element {
       });
 
       void fetchOrganization();
-    } catch (_error: unknown) {
+    } catch (error: unknown) {
+      console.error('Failed to save security settings:', error);
       toast({
         title: 'Error',
         description: 'Failed to save security settings.',
@@ -462,7 +473,8 @@ export function OrganizationSettings(): JSX.Element {
       });
 
       void fetchOrganization();
-    } catch (_error: unknown) {
+    } catch (error: unknown) {
+      console.error('Failed to save notification settings:', error);
       toast({
         title: 'Error',
         description: 'Failed to save notification settings.',
@@ -486,7 +498,8 @@ export function OrganizationSettings(): JSX.Element {
       });
 
       void fetchOrganization();
-    } catch (_error: unknown) {
+    } catch (error: unknown) {
+      console.error('Failed to save API settings:', error);
       toast({
         title: 'Error',
         description: 'Failed to save API settings.',
@@ -518,8 +531,9 @@ export function OrganizationSettings(): JSX.Element {
       setNewIP('');
       setNewIPDescription('');
       setIsIPDialogOpen(false);
-      fetchOrganization();
+      void fetchOrganization();
     } catch (error: unknown) {
+      console.error('Failed to add IP:', error);
       toast({
         title: 'Error',
         description: 'Failed to add IP address.',
@@ -541,8 +555,9 @@ export function OrganizationSettings(): JSX.Element {
         description: 'IP address removed from whitelist',
       });
 
-      fetchOrganization();
+      void fetchOrganization();
     } catch (error: unknown) {
+      console.error('Failed to remove IP:', error);
       toast({
         title: 'Error',
         description: 'Failed to remove IP address.',
@@ -570,8 +585,9 @@ export function OrganizationSettings(): JSX.Element {
 
       setNewOrigin('');
       setIsOriginDialogOpen(false);
-      fetchOrganization();
+      void fetchOrganization();
     } catch (error: unknown) {
+      console.error('Failed to add origin:', error);
       toast({
         title: 'Error',
         description: 'Failed to add origin.',
@@ -593,8 +609,9 @@ export function OrganizationSettings(): JSX.Element {
         description: 'Origin removed successfully',
       });
 
-      fetchOrganization();
+      void fetchOrganization();
     } catch (error: unknown) {
+      console.error('Failed to remove origin:', error);
       toast({
         title: 'Error',
         description: 'Failed to remove origin.',
@@ -619,6 +636,7 @@ export function OrganizationSettings(): JSX.Element {
         description: 'Webhook test successful',
       });
     } catch (error: unknown) {
+      console.error('Webhook test failed:', error);
       setWebhookTestResult('Webhook test failed');
       toast({
         title: 'Error',
@@ -637,10 +655,11 @@ export function OrganizationSettings(): JSX.Element {
     try {
       const response = await api.post('/api/organization/billing-portal');
       // Redirect to billing portal
-      if (response.data.url) {
-        window.location.href = response.data.url;
+      if ((response.data as { url?: string }).url) {
+        window.location.href = (response.data as { url: string }).url;
       }
     } catch (error: unknown) {
+      console.error('Failed to access billing portal:', error);
       toast({
         title: 'Error',
         description: 'Failed to access billing portal.',
@@ -665,6 +684,7 @@ export function OrganizationSettings(): JSX.Element {
       // Redirect or handle post-deletion logic
       window.location.href = '/';
     } catch (error: unknown) {
+      console.error('Failed to delete organization:', error);
       toast({
         title: 'Error',
         description: 'Failed to delete organization.',
@@ -679,7 +699,7 @@ export function OrganizationSettings(): JSX.Element {
   const handleEnforce2FA = () => {
     if (!securityData.enforce_2fa) {
       setSecurityData(prev => ({ ...prev, enforce_2fa: true }));
-      handleSaveSecuritySettings();
+      void handleSaveSecuritySettings();
     } else {
       setIs2FADialogOpen(true);
     }
@@ -688,7 +708,7 @@ export function OrganizationSettings(): JSX.Element {
   const confirmEnforce2FA = () => {
     setSecurityData(prev => ({ ...prev, enforce_2fa: true }));
     setIs2FADialogOpen(false);
-    handleSaveSecuritySettings();
+    void handleSaveSecuritySettings();
   };
 
   if (loading) {
@@ -712,7 +732,7 @@ export function OrganizationSettings(): JSX.Element {
             Failed to load organization settings. Please try again.
           </AlertDescription>
         </Alert>
-        <Button onClick={fetchOrganization} className='mt-4'>
+        <Button onClick={() => void fetchOrganization()} className='mt-4'>
           <RefreshCw className='h-4 w-4 mr-2' />
           Retry
         </Button>
@@ -904,7 +924,10 @@ export function OrganizationSettings(): JSX.Element {
           </div>
 
           {canEdit && (
-            <Button onClick={handleSaveBasicInfo} disabled={saving}>
+            <Button
+              onClick={() => void handleSaveBasicInfo()}
+              disabled={saving}
+            >
               <Save className='h-4 w-4 mr-2' />
               Save Changes
             </Button>
@@ -1013,7 +1036,10 @@ export function OrganizationSettings(): JSX.Element {
           </div>
 
           {canEdit && (
-            <Button onClick={handleSaveBasicInfo} disabled={saving}>
+            <Button
+              onClick={() => void handleSaveBasicInfo()}
+              disabled={saving}
+            >
               <Save className='h-4 w-4 mr-2' />
               Save Changes
             </Button>
@@ -1089,7 +1115,7 @@ export function OrganizationSettings(): JSX.Element {
             </div>
 
             <Button
-              onClick={handleSaveSecuritySettings}
+              onClick={() => void handleSaveSecuritySettings()}
               disabled={saving || isReadOnly}
             >
               <Save className='h-4 w-4 mr-2' />
@@ -1145,7 +1171,7 @@ export function OrganizationSettings(): JSX.Element {
                     <Button
                       variant='ghost'
                       size='sm'
-                      onClick={() => handleRemoveIP(entry.ip)}
+                      onClick={() => void handleRemoveIP(entry.ip)}
                       disabled={isReadOnly}
                       className='text-red-600 hover:text-red-700'
                     >
@@ -1231,7 +1257,7 @@ export function OrganizationSettings(): JSX.Element {
               />
               <Button
                 variant='outline'
-                onClick={handleTestWebhook}
+                onClick={() => void handleTestWebhook()}
                 disabled={
                   isReadOnly || !notificationData.webhook_url || testingWebhook
                 }
@@ -1255,7 +1281,10 @@ export function OrganizationSettings(): JSX.Element {
           </div>
 
           {canEdit && (
-            <Button onClick={handleSaveNotifications} disabled={saving}>
+            <Button
+              onClick={() => void handleSaveNotifications()}
+              disabled={saving}
+            >
               <Save className='h-4 w-4 mr-2' />
               Save Changes
             </Button>
@@ -1321,7 +1350,7 @@ export function OrganizationSettings(): JSX.Element {
                       <Button
                         variant='ghost'
                         size='sm'
-                        onClick={() => handleRemoveOrigin(origin)}
+                        onClick={() => void handleRemoveOrigin(origin)}
                         disabled={isReadOnly}
                         className='text-red-600'
                       >
@@ -1335,7 +1364,10 @@ export function OrganizationSettings(): JSX.Element {
           </div>
 
           {canEdit && (
-            <Button onClick={handleSaveAPISettings} disabled={saving}>
+            <Button
+              onClick={() => void handleSaveAPISettings()}
+              disabled={saving}
+            >
               <Save className='h-4 w-4 mr-2' />
               Save Changes
             </Button>
@@ -1396,7 +1428,7 @@ export function OrganizationSettings(): JSX.Element {
             )}
 
             {canManageBilling && (
-              <Button onClick={handleManageBilling}>
+              <Button onClick={() => void handleManageBilling()}>
                 <CreditCard className='h-4 w-4 mr-2' />
                 Manage Billing
               </Button>
@@ -1475,7 +1507,7 @@ export function OrganizationSettings(): JSX.Element {
             <Button variant='outline' onClick={() => setIsIPDialogOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleAddIP}>Add</Button>
+            <Button onClick={() => void handleAddIP()}>Add</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1509,7 +1541,7 @@ export function OrganizationSettings(): JSX.Element {
             >
               Cancel
             </Button>
-            <Button onClick={handleAddOrigin}>Add</Button>
+            <Button onClick={() => void handleAddOrigin()}>Add</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1553,7 +1585,7 @@ export function OrganizationSettings(): JSX.Element {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
-                if (ipToRemove) handleRemoveIP(ipToRemove);
+                if (ipToRemove) void handleRemoveIP(ipToRemove);
                 setIPToRemove(null);
               }}
             >
@@ -1593,7 +1625,7 @@ export function OrganizationSettings(): JSX.Element {
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction
-              onClick={handleDeleteOrganization}
+              onClick={() => void handleDeleteOrganization()}
               disabled={deleteConfirmation !== 'DELETE' || saving}
               className='bg-red-600 hover:bg-red-700'
             >

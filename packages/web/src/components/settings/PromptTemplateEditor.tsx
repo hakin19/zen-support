@@ -198,7 +198,7 @@ export function PromptTemplateEditor() {
     try {
       setLoading(true);
       const response = await api.get('/api/prompts');
-      setPrompts(response.data.prompts);
+      setPrompts((response.data as { prompts: PromptTemplate[] }).prompts);
     } catch {
       toast({
         title: 'Error',
