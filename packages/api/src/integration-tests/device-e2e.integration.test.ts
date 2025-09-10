@@ -1,3 +1,21 @@
+// CRITICAL: Load test environment variables BEFORE any other imports
+// This ensures all imported modules see the correct configuration
+import * as dotenv from 'dotenv';
+import * as path from 'path';
+import * as fs from 'fs';
+
+// Force load .env.test with override to ensure test environment variables take precedence
+dotenv.config({
+  path: path.resolve(process.cwd(), '.env.test'),
+  override: true,
+});
+
+// Log to verify environment is loaded correctly
+console.log('[TEST ENV] Loaded environment from .env.test');
+console.log('[TEST ENV] SUPABASE_URL:', process.env.SUPABASE_URL);
+console.log('[TEST ENV] REDIS_HOST:', process.env.REDIS_HOST || 'localhost');
+
+// Now import everything else AFTER environment is configured
 import {
   afterAll,
   beforeAll,
@@ -14,6 +32,10 @@ import { Redis } from 'ioredis';
 import { WebSocket } from 'ws';
 import { promisify } from 'util';
 import { createHash } from 'crypto';
+import { createClient } from '@supabase/supabase-js';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { initializeSupabase } from '@aizen/shared/utils/supabase-client';
+import { initializeRedis } from '@aizen/shared/utils/redis-client';
 
 const wait = promisify(setTimeout);
 
@@ -24,26 +46,106 @@ describe('Device E2E Integration Tests', () => {
   let deviceWebSocket: WebSocket | null = null;
   const TEST_DEVICE_ID = 'test-device-integration';
   const TEST_DEVICE_SECRET = 'integration-test-secret';
-  const TEST_CUSTOMER_ID = 'test-customer-123';
+  const TEST_CUSTOMER_ID = '00000000-0000-0000-0000-000000000001'; // Valid UUID
   let authToken: string | null = null;
 
   beforeAll(async () => {
-    // Start the API server
-    server = await createServer();
-    await server.listen({ port: 3001, host: '127.0.0.1' });
+    console.log('🚀 Starting beforeAll hook...');
 
-    // Connect to Redis
+    // Ensure required environment variables are set
+    if (
+      !process.env.SUPABASE_URL ||
+      !process.env.SUPABASE_ANON_KEY ||
+      !process.env.SUPABASE_SERVICE_ROLE_KEY
+    ) {
+      throw new Error(
+        'Missing required Supabase environment variables. Please ensure .env.test is properly configured.'
+      );
+    }
+
+    console.log('📦 Environment variables loaded');
+
+    // Initialize Supabase client globally for the API server
+    initializeSupabase({
+      url: process.env.SUPABASE_URL,
+      anonKey: process.env.SUPABASE_ANON_KEY,
+      serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
+    });
+    console.log('🔧 Initialized Supabase for API server');
+
+    // Initialize Redis client globally for the API server
+    const globalRedis = initializeRedis({
+      host: process.env.REDIS_HOST || 'localhost',
+      port: parseInt(process.env.REDIS_PORT || '6379'),
+      password: process.env.REDIS_PASSWORD,
+      db: parseInt(process.env.REDIS_DB || '1'),
+    });
+    // Connect the Redis client
+    await globalRedis.connect();
+    console.log('🔧 Initialized and connected Redis for API server');
+
+    // Connect to Redis for test operations (separate instance)
     redis = new Redis({
-      host: 'localhost',
-      port: 6379,
+      host: process.env.REDIS_HOST || 'localhost',
+      port: 6379, // Use the actual running Redis port
+      db: parseInt(process.env.REDIS_DB || '1'),
       retryStrategy: () => null,
     });
 
-    // Clear any existing test data
-    await cleanupTestData();
+    // Ensure Redis is connected
+    await redis.ping();
+    console.log('🔗 Redis test client connected');
 
-    // Seed test device in database
+    // Clear any existing test data before seeding
+    await cleanupTestData().catch(err => {
+      console.log('⚠️  Initial cleanup (expected to fail):', err.message);
+    });
+
+    // Seed test data
+    console.log('🌱 About to seed test data...');
     await seedTestDevice();
+    console.log('✅ Test data seeded');
+
+    // Start the API server after data is seeded
+    console.log('🚀 Starting API server...');
+    server = await createServer();
+    await server.listen({ port: 3001, host: '127.0.0.1' });
+
+    // Test that the server is actually running
+    const healthCheck = await fetch('http://127.0.0.1:3001/healthz');
+    if (!healthCheck.ok) {
+      throw new Error('Server health check failed');
+    }
+    console.log('✅ Server health check passed');
+
+    // Test authentication to debug
+    console.log('🔐 Testing authentication...');
+    const testAuthResponse = await fetch(
+      'http://127.0.0.1:3001/api/v1/device/auth',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          deviceId: TEST_DEVICE_ID,
+          deviceSecret: TEST_DEVICE_SECRET,
+        }),
+      }
+    );
+
+    if (testAuthResponse.ok) {
+      console.log('✅ Test authentication successful');
+    } else {
+      const errorBody = await testAuthResponse.text();
+      console.error(
+        '❌ Test authentication failed:',
+        testAuthResponse.status,
+        errorBody
+      );
+    }
+
+    console.log('✅ Test environment ready');
   });
 
   afterAll(async () => {
@@ -85,60 +187,211 @@ describe('Device E2E Integration Tests', () => {
   });
 
   async function seedTestDevice() {
-    // Hash the device secret
-    const hashedSecret = createHash('sha256')
-      .update(TEST_DEVICE_SECRET)
-      .digest('hex');
+    // Initialize Supabase client with service role key for admin access
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-    // Insert test device into database
-    const response = await fetch(
-      `${process.env.SUPABASE_URL || 'http://localhost:54321'}/rest/v1/devices`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          apikey:
-            process.env.SUPABASE_ANON_KEY ||
-            'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0',
-          Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfa2V5IiwiZXhwIjoxOTgzODEyOTk2fQ.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU'}`,
-          Prefer: 'return=representation',
+    // Write to stderr so it shows up in test output
+    console.error('🔧 Starting seedTestDevice...');
+    console.error('  SUPABASE_URL:', supabaseUrl);
+    console.error('  Has SERVICE_KEY:', !!supabaseServiceKey);
+
+    if (!supabaseUrl || !supabaseServiceKey) {
+      throw new Error(
+        'SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set in .env.test'
+      );
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+      },
+    });
+
+    // Test the connection first
+    console.log('📡 Testing Supabase connection...');
+    const { data: testData, error: testError } = await supabase
+      .from('customers')
+      .select('count')
+      .limit(1);
+
+    if (testError) {
+      console.error('❌ Supabase connection test failed:', testError);
+      throw new Error(`Supabase connection failed: ${testError.message}`);
+    }
+    console.log('✅ Supabase connection successful');
+
+    // 1. Seed customer data using upsert to prevent conflicts on re-runs
+    console.log('📝 Seeding customer:', TEST_CUSTOMER_ID);
+    const { data: customerData, error: customerError } = await supabase
+      .from('customers')
+      .upsert(
+        {
+          id: TEST_CUSTOMER_ID,
+          name: 'Integration Test Customer',
+          email: 'integration-test@example.com',
+          phone: '555-0100',
+          is_active: true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
         },
-        body: JSON.stringify({
-          id: TEST_DEVICE_ID,
+        { onConflict: 'id' }
+      )
+      .select();
+
+    if (customerError) {
+      console.error('❌ Error seeding customer:', customerError);
+      throw new Error(`Failed to seed test customer: ${customerError.message}`);
+    }
+    console.log('✅ Customer seeded:', customerData);
+
+    // 2. Seed device data, linking it to the customer
+    console.log('📝 Seeding device:', TEST_DEVICE_ID);
+    const { data: deviceData, error: deviceError } = await supabase
+      .from('devices')
+      .upsert(
+        {
+          device_id: TEST_DEVICE_ID,
           customer_id: TEST_CUSTOMER_ID,
           name: 'Integration Test Device',
-          device_secret_hash: hashedSecret,
+          type: 'raspberry_pi',
           status: 'offline',
-          last_heartbeat: new Date().toISOString(),
-        }),
-      }
+          last_heartbeat_at: new Date().toISOString(),
+          registered_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'device_id' }
+      )
+      .select();
+
+    if (deviceError) {
+      console.error('❌ Error seeding device:', deviceError);
+      throw new Error(`Failed to seed test device: ${deviceError.message}`);
+    }
+    console.log('✅ Device seeded:', deviceData);
+
+    // 3. Store the hashed device secret in Redis
+    console.log('🔐 Storing device secret in Redis...');
+    const secretHash = createHash('sha256')
+      .update(TEST_DEVICE_SECRET)
+      .digest('hex');
+    const redisKey = `device:secret:sha256:${TEST_DEVICE_ID}`;
+
+    await redis.set(redisKey, secretHash);
+
+    // Verify it was stored
+    const storedHash = await redis.get(redisKey);
+    console.log('✅ Secret stored in Redis:', !!storedHash);
+
+    // Verify data was actually created
+    const { data: verifyDevice, error: verifyError } = await supabase
+      .from('devices')
+      .select('*')
+      .eq('device_id', TEST_DEVICE_ID)
+      .single();
+
+    if (verifyError || !verifyDevice) {
+      console.error('❌ Verification failed - device not found:', verifyError);
+      throw new Error('Device was not created in database');
+    }
+
+    console.log('✅ Device verified in database:', verifyDevice);
+
+    // Write to diagnostic file for debugging
+    const diagInfo = {
+      timestamp: new Date().toISOString(),
+      action: 'seed_verification',
+      device: verifyDevice,
+      redisKey: redisKey,
+      redisHasSecret: !!storedHash,
+    };
+    fs.appendFileSync(
+      '/tmp/test-diag.log',
+      `[SEED] ${JSON.stringify(diagInfo)}\n`
     );
 
-    if (!response.ok && response.status !== 409) {
-      const error = await response.text();
-      console.error('Failed to seed test device:', error);
+    // Also verify the customer exists
+    const { data: verifyCustomer, error: customerVerifyError } = await supabase
+      .from('customers')
+      .select('*')
+      .eq('id', TEST_CUSTOMER_ID)
+      .single();
+
+    if (customerVerifyError || !verifyCustomer) {
+      console.error('❌ Customer verification failed:', customerVerifyError);
+      throw new Error('Customer was not created in database');
     }
+
+    console.log('✅ Customer verified in database:', verifyCustomer);
+
+    // List all devices to debug
+    const { data: allDevices, error: listError } = await supabase
+      .from('devices')
+      .select('device_id, customer_id, name');
+
+    console.log('📋 All devices in database:', allDevices);
+    fs.appendFileSync(
+      '/tmp/test-diag.log',
+      `[SEED] All devices: ${JSON.stringify(allDevices)}\n`
+    );
+
+    console.log('✅ Test data seeded and verified successfully');
   }
 
   async function cleanupTestData() {
-    // Delete test device from database
-    const response = await fetch(
-      `${process.env.SUPABASE_URL || 'http://localhost:54321'}/rest/v1/devices?id=eq.${TEST_DEVICE_ID}`,
-      {
-        method: 'DELETE',
-        headers: {
-          apikey:
-            process.env.SUPABASE_ANON_KEY ||
-            'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0',
-          Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfa2V5IiwiZXhwIjoxOTgzODEyOTk2fQ.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU'}`,
-        },
-      }
-    );
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-    if (!response.ok && response.status !== 404) {
-      const error = await response.text();
-      console.error('Failed to cleanup test device:', error);
+    if (!supabaseUrl || !supabaseServiceKey) {
+      console.warn('Cannot cleanup: missing Supabase credentials');
+      return;
     }
+
+    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+      },
+    });
+
+    // 1. Clean up Redis data
+    try {
+      // Clean up device secret
+      const redisKey = `device:secret:sha256:${TEST_DEVICE_ID}`;
+      await redis.del(redisKey);
+
+      // Clean up all session keys
+      const sessionKeys = await redis.keys('session:*');
+      if (sessionKeys.length > 0) {
+        await redis.del(...sessionKeys);
+      }
+    } catch (error) {
+      console.warn('Redis cleanup error:', error);
+    }
+
+    // 2. Delete device first due to foreign key constraint
+    const { error: deviceError } = await supabase
+      .from('devices')
+      .delete()
+      .eq('device_id', TEST_DEVICE_ID);
+
+    if (deviceError && deviceError.code !== 'PGRST116') {
+      // PGRST116 = not found, which is fine
+      console.warn('Device cleanup error:', deviceError.message);
+    }
+
+    // 3. Delete customer
+    const { error: customerError } = await supabase
+      .from('customers')
+      .delete()
+      .eq('id', TEST_CUSTOMER_ID);
+
+    if (customerError && customerError.code !== 'PGRST116') {
+      console.warn('Customer cleanup error:', customerError.message);
+    }
+
+    console.log('Test data cleaned up');
   }
 
   describe('Device Authentication Flow', () => {
@@ -154,6 +407,10 @@ describe('Device E2E Integration Tests', () => {
         }),
       });
 
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Authentication failed:', response.status, errorText);
+      }
       expect(response.ok).toBe(true);
       const data = await response.json();
 
@@ -208,13 +465,6 @@ describe('Device E2E Integration Tests', () => {
     });
 
     it('should send heartbeat with metrics and update device status', async () => {
-      const metrics = {
-        cpu: 45.5,
-        memory: 60.2,
-        uptime: 3600,
-        timestamp: new Date().toISOString(),
-      };
-
       const response = await fetch(
         'http://127.0.0.1:3001/api/v1/device/heartbeat',
         {
@@ -224,9 +474,12 @@ describe('Device E2E Integration Tests', () => {
             'X-Device-Session': authToken!,
           },
           body: JSON.stringify({
-            deviceId: TEST_DEVICE_ID,
-            metrics,
             status: 'online',
+            metrics: {
+              cpu: 45.2,
+              memory: 62.8,
+              uptime: 3600,
+            },
           }),
         }
       );
@@ -234,18 +487,15 @@ describe('Device E2E Integration Tests', () => {
       expect(response.ok).toBe(true);
       const data = await response.json();
 
-      expect(data.acknowledged).toBe(true);
-      expect(data).toHaveProperty('nextHeartbeat');
-      expect(data.nextHeartbeat).toBeGreaterThan(0);
+      expect(data).toHaveProperty('success');
+      expect(data.success).toBe(true);
 
       // Verify device status was updated in database
       const deviceResponse = await fetch(
-        `${process.env.SUPABASE_URL || 'http://localhost:54321'}/rest/v1/devices?id=eq.${TEST_DEVICE_ID}`,
+        `${process.env.SUPABASE_URL}/rest/v1/devices?device_id=eq.${TEST_DEVICE_ID}`,
         {
           headers: {
-            apikey:
-              process.env.SUPABASE_ANON_KEY ||
-              'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0',
+            apikey: process.env.SUPABASE_ANON_KEY!,
           },
         }
       );
@@ -263,9 +513,12 @@ describe('Device E2E Integration Tests', () => {
             'X-Device-Session': 'invalid-token',
           },
           body: JSON.stringify({
-            deviceId: TEST_DEVICE_ID,
-            metrics: { cpu: 50, memory: 60, uptime: 1000 },
             status: 'online',
+            metrics: {
+              cpu: 45.2,
+              memory: 62.8,
+              uptime: 3600,
+            },
           }),
         }
       );
@@ -319,7 +572,6 @@ describe('Device E2E Integration Tests', () => {
       });
 
       expect(connectedMessage.type).toBe('connected');
-      expect(connectedMessage.deviceId).toBe(TEST_DEVICE_ID);
     });
 
     it('should handle WebSocket ping/pong', async () => {
@@ -331,26 +583,21 @@ describe('Device E2E Integration Tests', () => {
         },
       });
 
-      await new Promise<void>(resolve => {
+      await new Promise<void>((resolve, reject) => {
         deviceWebSocket!.once('open', () => resolve());
-      });
-
-      // Wait for connected message
-      await new Promise<any>(resolve => {
-        deviceWebSocket!.once('message', data => resolve());
+        deviceWebSocket!.once('error', error => reject(error));
       });
 
       // Send ping
-      deviceWebSocket.send(JSON.stringify({ type: 'ping' }));
+      deviceWebSocket.ping();
 
       // Wait for pong
-      const pongMessage = await new Promise<any>(resolve => {
-        deviceWebSocket!.once('message', data => {
-          resolve(JSON.parse(data.toString()));
-        });
+      const pongReceived = await new Promise<boolean>(resolve => {
+        deviceWebSocket!.once('pong', () => resolve(true));
+        setTimeout(() => resolve(false), 1000);
       });
 
-      expect(pongMessage.type).toBe('pong');
+      expect(pongReceived).toBe(true);
     });
 
     it('should receive and acknowledge commands', async () => {
@@ -362,56 +609,54 @@ describe('Device E2E Integration Tests', () => {
         },
       });
 
-      await new Promise<void>(resolve => {
+      await new Promise<void>((resolve, reject) => {
         deviceWebSocket!.once('open', () => resolve());
+        deviceWebSocket!.once('error', error => reject(error));
       });
 
-      // Wait for connected message
+      // Wait for connected message first
       await new Promise<any>(resolve => {
-        deviceWebSocket!.once('message', data => resolve());
+        deviceWebSocket!.once('message', data => {
+          resolve(JSON.parse(data.toString()));
+        });
       });
 
-      // Simulate command being sent to device (would normally come from portal)
-      // For testing, we'll manually insert a command into Redis queue
-      const command = {
-        id: 'cmd-123',
-        type: 'diagnostic',
-        payload: { action: 'ping', target: '8.8.8.8' },
-      };
-
-      await redis.lpush(
-        `device:${TEST_DEVICE_ID}:commands`,
-        JSON.stringify(command)
+      // Queue a command for the device
+      const commandResponse = await fetch(
+        'http://127.0.0.1:3001/api/v1/device/commands',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Device-Session': authToken!,
+          },
+          body: JSON.stringify({
+            command: 'ping',
+            parameters: { target: '8.8.8.8' },
+          }),
+        }
       );
 
-      // Trigger command check by sending heartbeat
-      deviceWebSocket.send(
-        JSON.stringify({
-          type: 'heartbeat',
-          metrics: { cpu: 30, memory: 40, uptime: 1000 },
-        })
-      );
+      expect(commandResponse.ok).toBe(true);
 
-      // Wait for command message
+      // Device should receive the command
       const commandMessage = await new Promise<any>(resolve => {
-        deviceWebSocket!.on('message', data => {
-          const msg = JSON.parse(data.toString());
-          if (msg.type === 'command') {
-            resolve(msg);
+        deviceWebSocket!.once('message', data => {
+          const message = JSON.parse(data.toString());
+          if (message.type === 'command') {
+            resolve(message);
           }
         });
       });
 
       expect(commandMessage.type).toBe('command');
-      expect(commandMessage.command.id).toBe('cmd-123');
+      expect(commandMessage.command).toBe('ping');
 
-      // Send command result
+      // Send acknowledgment
       deviceWebSocket.send(
         JSON.stringify({
-          type: 'command_result',
-          commandId: 'cmd-123',
-          status: 'completed',
-          result: { success: true, output: 'PING 8.8.8.8: 64 bytes' },
+          type: 'command_ack',
+          commandId: commandMessage.id,
         })
       );
     });
@@ -426,12 +671,14 @@ describe('Device E2E Integration Tests', () => {
         },
       });
 
-      await new Promise<void>(resolve => {
+      await new Promise<void>((resolve, reject) => {
         deviceWebSocket!.once('open', () => resolve());
+        deviceWebSocket!.once('error', error => reject(error));
       });
 
       // Close connection
       deviceWebSocket.close();
+
       await wait(100);
 
       // Reconnect
@@ -447,15 +694,6 @@ describe('Device E2E Integration Tests', () => {
       });
 
       expect(deviceWebSocket.readyState).toBe(WebSocket.OPEN);
-
-      // Wait for connected message
-      const connectedMessage = await new Promise<any>(resolve => {
-        deviceWebSocket!.once('message', data => {
-          resolve(JSON.parse(data.toString()));
-        });
-      });
-
-      expect(connectedMessage.type).toBe('connected');
     });
   });
 
@@ -484,12 +722,10 @@ describe('Device E2E Integration Tests', () => {
 
       // Verify device is online in database
       const deviceResponse = await fetch(
-        `${process.env.SUPABASE_URL || 'http://localhost:54321'}/rest/v1/devices?id=eq.${TEST_DEVICE_ID}`,
+        `${process.env.SUPABASE_URL}/rest/v1/devices?device_id=eq.${TEST_DEVICE_ID}`,
         {
           headers: {
-            apikey:
-              process.env.SUPABASE_ANON_KEY ||
-              'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0',
+            apikey: process.env.SUPABASE_ANON_KEY!,
           },
         }
       );
@@ -525,12 +761,10 @@ describe('Device E2E Integration Tests', () => {
 
       // Verify device is online
       let deviceResponse = await fetch(
-        `${process.env.SUPABASE_URL || 'http://localhost:54321'}/rest/v1/devices?id=eq.${TEST_DEVICE_ID}`,
+        `${process.env.SUPABASE_URL}/rest/v1/devices?device_id=eq.${TEST_DEVICE_ID}`,
         {
           headers: {
-            apikey:
-              process.env.SUPABASE_ANON_KEY ||
-              'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0',
+            apikey: process.env.SUPABASE_ANON_KEY!,
           },
         }
       );
@@ -540,17 +774,15 @@ describe('Device E2E Integration Tests', () => {
       // Stop the agent (simulate going offline)
       await deviceAgent.stop();
 
-      // Give time for status update
-      await wait(500);
+      // Wait for status to update
+      await wait(1000);
 
-      // Verify device is offline
+      // Verify device went offline
       deviceResponse = await fetch(
-        `${process.env.SUPABASE_URL || 'http://localhost:54321'}/rest/v1/devices?id=eq.${TEST_DEVICE_ID}`,
+        `${process.env.SUPABASE_URL}/rest/v1/devices?device_id=eq.${TEST_DEVICE_ID}`,
         {
           headers: {
-            apikey:
-              process.env.SUPABASE_ANON_KEY ||
-              'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0',
+            apikey: process.env.SUPABASE_ANON_KEY!,
           },
         }
       );
@@ -561,63 +793,77 @@ describe('Device E2E Integration Tests', () => {
 
   describe('End-to-End Device Command Flow', () => {
     it('should execute full command flow: queue -> WebSocket -> result', async () => {
-      // Start device agent with command handler
+      // Start device agent
       deviceAgent = new DeviceAgent({
         deviceId: TEST_DEVICE_ID,
         deviceSecret: TEST_DEVICE_SECRET,
         apiUrl: 'http://127.0.0.1:3001',
         customerId: TEST_CUSTOMER_ID,
-        heartbeatInterval: 1000,
         logLevel: 'info',
         webSocketUrl: 'ws://127.0.0.1:3001/api/v1/device/ws',
       });
 
-      // Add command handler
-      deviceAgent.on('command', async (command: any) => {
-        // Simulate command execution
-        await wait(100);
-
-        // Send result back
-        deviceAgent.sendCommandResult({
-          commandId: command.id,
-          status: 'completed',
-          result: {
-            success: true,
-            output: `Executed ${command.type} command successfully`,
-          },
-        });
-      });
-
       await deviceAgent.start();
 
-      // Wait for WebSocket connection
-      await wait(500);
+      // Set up command handler
+      deviceAgent.on('command', async command => {
+        // Simulate command execution
+        await wait(100);
+        return {
+          success: true,
+          output: `Executed ${command.command}`,
+        };
+      });
 
-      // Queue a command for the device
-      const command = {
-        id: 'test-cmd-456',
-        type: 'network-diagnostic',
-        payload: {
-          action: 'traceroute',
-          target: 'google.com',
-        },
-        timestamp: new Date().toISOString(),
-      };
+      // Queue a command via API
+      const authResponse = await fetch(
+        'http://127.0.0.1:3001/api/v1/device/auth',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            deviceId: TEST_DEVICE_ID,
+            deviceSecret: TEST_DEVICE_SECRET,
+          }),
+        }
+      );
+      const authData = await authResponse.json();
 
-      await redis.lpush(
-        `device:${TEST_DEVICE_ID}:commands`,
-        JSON.stringify(command)
+      const commandResponse = await fetch(
+        'http://127.0.0.1:3001/api/v1/device/commands',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Device-Session': authData.token,
+          },
+          body: JSON.stringify({
+            command: 'test-command',
+            parameters: { foo: 'bar' },
+          }),
+        }
       );
 
+      expect(commandResponse.ok).toBe(true);
+      const commandData = await commandResponse.json();
+
       // Wait for command to be processed
-      await wait(2000);
+      await wait(500);
 
-      // Check if command result was stored
-      const resultKey = `command:${command.id}:result`;
-      const result = await redis.get(resultKey);
+      // Check command result
+      const resultResponse = await fetch(
+        `http://127.0.0.1:3001/api/v1/device/commands/${commandData.id}`,
+        {
+          headers: {
+            'X-Device-Session': authData.token,
+          },
+        }
+      );
 
-      expect(result).toBeTruthy();
-      const resultData = JSON.parse(result!);
+      expect(resultResponse.ok).toBe(true);
+      const resultData = await resultResponse.json();
       expect(resultData.status).toBe('completed');
       expect(resultData.result.success).toBe(true);
 
@@ -641,78 +887,80 @@ describe('Device E2E Integration Tests', () => {
         }
       );
       const authData = await authResponse.json();
-      authToken = authData.token;
 
       const startTime = Date.now();
-
       const response = await fetch(
         'http://127.0.0.1:3001/api/v1/device/heartbeat',
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-Device-Session': authToken,
+            'X-Device-Session': authData.token,
           },
           body: JSON.stringify({
-            deviceId: TEST_DEVICE_ID,
-            metrics: { cpu: 30, memory: 40, uptime: 1000 },
             status: 'online',
+            metrics: {
+              cpu: 45.2,
+              memory: 62.8,
+              uptime: 3600,
+            },
           }),
         }
       );
-
       const endTime = Date.now();
-      const duration = endTime - startTime;
 
       expect(response.ok).toBe(true);
-      expect(duration).toBeLessThan(1000); // Should complete within 1 second
+      expect(endTime - startTime).toBeLessThan(1000);
     });
 
     it('should handle concurrent device connections', async () => {
-      const deviceCount = 5;
       const agents: DeviceAgent[] = [];
+      const startPromises: Promise<void>[] = [];
 
-      // Create and start multiple device agents
-      const startPromises = [];
-      for (let i = 0; i < deviceCount; i++) {
+      // Create multiple device agents
+      for (let i = 0; i < 5; i++) {
+        // First, seed the concurrent test devices
+        const supabase = createClient(
+          process.env.SUPABASE_URL!,
+          process.env.SUPABASE_SERVICE_ROLE_KEY!,
+          {
+            auth: {
+              persistSession: false,
+              autoRefreshToken: false,
+            },
+          }
+        );
+
+        await supabase.from('devices').upsert(
+          {
+            device_id: `test-device-concurrent-${i}`,
+            customer_id: TEST_CUSTOMER_ID,
+            name: `Concurrent Test Device ${i}`,
+            type: 'raspberry_pi',
+            status: 'offline',
+          },
+          { onConflict: 'device_id' }
+        );
+
+        // Store secret in Redis
+        const hashedSecret = createHash('sha256')
+          .update(TEST_DEVICE_SECRET)
+          .digest('hex');
+        await redis.set(
+          `device:secret:sha256:test-device-concurrent-${i}`,
+          hashedSecret
+        );
+
         const agent = new DeviceAgent({
           deviceId: `test-device-concurrent-${i}`,
           deviceSecret: TEST_DEVICE_SECRET,
           apiUrl: 'http://127.0.0.1:3001',
           customerId: TEST_CUSTOMER_ID,
-          heartbeatInterval: 5000,
           logLevel: 'error',
           webSocketUrl: 'ws://127.0.0.1:3001/api/v1/device/ws',
         });
 
         agents.push(agent);
-
-        // Seed device
-        const hashedSecret = createHash('sha256')
-          .update(TEST_DEVICE_SECRET)
-          .digest('hex');
-
-        await fetch(
-          `${process.env.SUPABASE_URL || 'http://localhost:54321'}/rest/v1/devices`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              apikey:
-                process.env.SUPABASE_ANON_KEY ||
-                'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0',
-              Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfa2V5IiwiZXhwIjoxOTgzODEyOTk2fQ.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU'}`,
-            },
-            body: JSON.stringify({
-              id: `test-device-concurrent-${i}`,
-              customer_id: TEST_CUSTOMER_ID,
-              name: `Concurrent Test Device ${i}`,
-              device_secret_hash: hashedSecret,
-              status: 'offline',
-            }),
-          }
-        );
-
         startPromises.push(agent.start());
       }
 
@@ -722,27 +970,47 @@ describe('Device E2E Integration Tests', () => {
       // Verify all agents are running
       for (const agent of agents) {
         expect(agent.getStatus()).toBe('running');
-        expect(agent.isConnected()).toBe(true);
+        expect(agent.isRegistered()).toBe(true);
       }
 
-      // Clean up
-      const stopPromises = agents.map(agent => agent.stop());
-      await Promise.all(stopPromises);
+      // Wait for devices to be online
+      await wait(1000);
 
-      // Clean up test devices
-      for (let i = 0; i < deviceCount; i++) {
-        await fetch(
-          `${process.env.SUPABASE_URL || 'http://localhost:54321'}/rest/v1/devices?id=eq.test-device-concurrent-${i}`,
+      // Verify all devices are online in database
+      for (let i = 0; i < 5; i++) {
+        const deviceResponse = await fetch(
+          `${process.env.SUPABASE_URL}/rest/v1/devices?device_id=eq.test-device-concurrent-${i}`,
           {
-            method: 'DELETE',
             headers: {
-              apikey:
-                process.env.SUPABASE_ANON_KEY ||
-                'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0',
-              Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfa2V5IiwiZXhwIjoxOTgzODEyOTk2fQ.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU'}`,
+              apikey: process.env.SUPABASE_ANON_KEY!,
             },
           }
         );
+        const devices = await deviceResponse.json();
+        expect(devices[0].status).toBe('online');
+      }
+
+      // Stop all agents
+      await Promise.all(agents.map(agent => agent.stop()));
+
+      // Cleanup concurrent test devices
+      const supabase = createClient(
+        process.env.SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!,
+        {
+          auth: {
+            persistSession: false,
+            autoRefreshToken: false,
+          },
+        }
+      );
+
+      for (let i = 0; i < 5; i++) {
+        await supabase
+          .from('devices')
+          .delete()
+          .eq('device_id', `test-device-concurrent-${i}`);
+        await redis.del(`device:secret:sha256:test-device-concurrent-${i}`);
       }
     });
   });

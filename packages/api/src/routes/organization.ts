@@ -51,7 +51,7 @@ const allowedOriginSchema = z.object({
   origin: z.string().url(),
 });
 
-export const organizationRoutes: FastifyPluginAsync = fastify => {
+export const organizationRoutes: FastifyPluginAsync = async fastify => {
   // Get organization
   fastify.get(
     '/api/organization',

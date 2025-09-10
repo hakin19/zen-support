@@ -39,7 +39,7 @@ const queryParamsSchema = z.object({
   status: userStatusSchema.optional(),
 });
 
-export const usersRoutes: FastifyPluginAsync = fastify => {
+export const usersRoutes: FastifyPluginAsync = async fastify => {
   // Get users list
   fastify.get(
     '/users',

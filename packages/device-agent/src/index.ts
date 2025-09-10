@@ -144,12 +144,14 @@ async function main(): Promise<void> {
   }
 }
 
-// Start the application
-void main().catch((error: unknown) => {
-  console.error('❌ Fatal error:', error);
-  process.exit(1);
-});
+// Start the application only if this is the main module
+if (import.meta.url === `file://${process.argv[1]}`) {
+  void main().catch((error: unknown) => {
+    console.error('❌ Fatal error:', error);
+    process.exit(1);
+  });
+}
 
 // Export for testing purposes
 export { DeviceAgent, ConfigLoader };
-export type { DeviceConfig } from './types.js';
+export type { DeviceConfig, DeviceStatus } from './types.js';
