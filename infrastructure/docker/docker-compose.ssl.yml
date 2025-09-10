@@ -6,14 +6,14 @@ services:
   # API Gateway Service with HTTPS
   api-gateway:
     ports:
-      - "3000:3000"  # HTTP
-      - "3443:3443"  # HTTPS
+      - "3000:3000" # HTTP
+      - "3443:3443" # HTTPS
     environment:
       HTTPS_ENABLED: "true"
       HTTPS_PORT: 3443
       SSL_CERT_PATH: /app/ssl/cert.pem
       SSL_KEY_PATH: /app/ssl/key.pem
-      NODE_TLS_REJECT_UNAUTHORIZED: "0"  # For development only
+      NODE_TLS_REJECT_UNAUTHORIZED: "0" # For development only
     volumes:
       - ../ssl/cert.pem:/app/ssl/cert.pem:ro
       - ../ssl/key.pem:/app/ssl/key.pem:ro
@@ -28,14 +28,14 @@ services:
   # Web Portal Service with HTTPS
   web-portal:
     ports:
-      - "3001:3001"  # HTTP
-      - "3444:3444"  # HTTPS
+      - "3001:3001" # HTTP
+      - "3444:3444" # HTTPS
     environment:
       HTTPS_ENABLED: "true"
       HTTPS_PORT: 3444
       SSL_CERT_PATH: /app/ssl/cert.pem
       SSL_KEY_PATH: /app/ssl/key.pem
-      NODE_TLS_REJECT_UNAUTHORIZED: "0"  # For development only
+      NODE_TLS_REJECT_UNAUTHORIZED: "0" # For development only
       NEXT_PUBLIC_API_URL: https://api.aizen.local:3443
     volumes:
       - ../ssl/cert.pem:/app/ssl/cert.pem:ro
@@ -52,14 +52,14 @@ services:
   # Device Agent Service with HTTPS
   device-agent:
     ports:
-      - "3002:3002"  # HTTP
-      - "3445:3445"  # HTTPS
+      - "3002:3002" # HTTP
+      - "3445:3445" # HTTPS
     environment:
       HTTPS_ENABLED: "true"
       HTTPS_PORT: 3445
       SSL_CERT_PATH: /app/ssl/cert.pem
       SSL_KEY_PATH: /app/ssl/key.pem
-      NODE_TLS_REJECT_UNAUTHORIZED: "0"  # For development only
+      NODE_TLS_REJECT_UNAUTHORIZED: "0" # For development only
       API_GATEWAY_URL: https://api-gateway:3443
     volumes:
       - ../ssl/cert.pem:/app/ssl/cert.pem:ro
@@ -75,14 +75,14 @@ services:
   # AI Orchestrator Service with HTTPS
   ai-orchestrator:
     ports:
-      - "3003:3003"  # HTTP
-      - "3446:3446"  # HTTPS
+      - "3003:3003" # HTTP
+      - "3446:3446" # HTTPS
     environment:
       HTTPS_ENABLED: "true"
       HTTPS_PORT: 3446
       SSL_CERT_PATH: /app/ssl/cert.pem
       SSL_KEY_PATH: /app/ssl/key.pem
-      NODE_TLS_REJECT_UNAUTHORIZED: "0"  # For development only
+      NODE_TLS_REJECT_UNAUTHORIZED: "0" # For development only
       API_GATEWAY_URL: https://api-gateway:3443
     volumes:
       - ../ssl/cert.pem:/app/ssl/cert.pem:ro
@@ -109,7 +109,7 @@ services:
     ports:
       - "80:80"
       - "443:443"
-      - "8080:8080"  # Traefik dashboard
+      - "8080:8080" # Traefik dashboard
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ../ssl:/etc/traefik/certs:ro

@@ -7,63 +7,68 @@ This is the API specification for the spec detailed in @.agent-os/specs/2025-09-
 ### POST /api/v1/devices/register
 
 **Purpose:** Register a new device agent with the cloud service
-**Parameters:** 
+**Parameters:**
+
 - Body: `{ deviceId: string, deviceSecret: string, customerId: string, metadata: object }`
-**Response:** 
+  **Response:**
 - Success (200): `{ success: true, token: string, expiresIn: number, heartbeatInterval: number }`
 - Error (401): `{ error: "Invalid device credentials" }`
 - Error (409): `{ error: "Device already registered" }`
-**Errors:** 401 Unauthorized, 409 Conflict, 500 Internal Server Error
+  **Errors:** 401 Unauthorized, 409 Conflict, 500 Internal Server Error
 
 ### POST /api/v1/devices/:deviceId/heartbeat
 
 **Purpose:** Maintain device connection status and receive pending commands
 **Parameters:**
+
 - Path: `deviceId` - Unique device identifier
 - Headers: `Authorization: Bearer <token>`
 - Body: `{ status: 'online' | 'idle' | 'busy', metrics: object }`
-**Response:**
+  **Response:**
 - Success (200): `{ acknowledged: true, commands: DiagnosticCommand[], nextHeartbeat: number }`
 - Error (401): `{ error: "Invalid or expired token" }`
 - Error (404): `{ error: "Device not found" }`
-**Errors:** 401 Unauthorized, 404 Not Found, 500 Internal Server Error
+  **Errors:** 401 Unauthorized, 404 Not Found, 500 Internal Server Error
 
 ### POST /api/v1/devices/:deviceId/diagnostic-results
 
 **Purpose:** Submit results from executed diagnostic commands
 **Parameters:**
-- Path: `deviceId` - Unique device identifier  
+
+- Path: `deviceId` - Unique device identifier
 - Headers: `Authorization: Bearer <token>`
 - Body: `{ commandId: string, status: 'completed' | 'failed' | 'timeout', results: object, executedAt: string, duration: number }`
-**Response:**
+  **Response:**
 - Success (200): `{ received: true, nextCommand?: DiagnosticCommand }`
 - Error (400): `{ error: "Invalid result format" }`
 - Error (404): `{ error: "Command not found" }`
-**Errors:** 400 Bad Request, 401 Unauthorized, 404 Not Found, 500 Internal Server Error
+  **Errors:** 400 Bad Request, 401 Unauthorized, 404 Not Found, 500 Internal Server Error
 
 ### GET /api/v1/devices/:deviceId/commands
 
 **Purpose:** Retrieve pending diagnostic commands for the device
 **Parameters:**
+
 - Path: `deviceId` - Unique device identifier
 - Headers: `Authorization: Bearer <token>`
 - Query: `limit` (optional) - Maximum number of commands to retrieve
-**Response:**
+  **Response:**
 - Success (200): `{ commands: DiagnosticCommand[], count: number }`
 - Error (401): `{ error: "Invalid or expired token" }`
-**Errors:** 401 Unauthorized, 404 Not Found, 500 Internal Server Error
+  **Errors:** 401 Unauthorized, 404 Not Found, 500 Internal Server Error
 
 ### POST /api/v1/devices/:deviceId/status
 
 **Purpose:** Update device status and report errors or issues
 **Parameters:**
+
 - Path: `deviceId` - Unique device identifier
 - Headers: `Authorization: Bearer <token>`
 - Body: `{ status: 'online' | 'offline' | 'error' | 'maintenance', message?: string, metadata?: object }`
-**Response:**
+  **Response:**
 - Success (200): `{ updated: true, timestamp: string }`
 - Error (400): `{ error: "Invalid status" }`
-**Errors:** 400 Bad Request, 401 Unauthorized, 404 Not Found, 500 Internal Server Error
+  **Errors:** 400 Bad Request, 401 Unauthorized, 404 Not Found, 500 Internal Server Error
 
 ## Data Models
 
@@ -110,6 +115,7 @@ interface DiagnosticResult {
 ### DeviceController
 
 **Actions:**
+
 - `register()` - Validate device credentials, create session, return JWT token
 - `heartbeat()` - Update last seen timestamp, check command queue, return pending commands
 - `submitResults()` - Validate and store diagnostic results, trigger analysis if needed
@@ -119,6 +125,7 @@ interface DiagnosticResult {
 ### AuthMiddleware
 
 **Actions:**
+
 - `validateToken()` - Verify JWT token, check expiration, refresh if needed
 - `authorizeDevice()` - Ensure device belongs to customer, check permissions
 - `rateLimiting()` - Implement rate limits per device to prevent abuse
@@ -130,6 +137,7 @@ interface DiagnosticResult {
 **Purpose:** Real-time bidirectional communication for live diagnostics
 **Protocol:** WebSocket with JWT authentication
 **Messages:**
+
 - Client → Server: `{ type: 'auth', token: string }`
 - Server → Client: `{ type: 'command', command: DiagnosticCommand }`
 - Client → Server: `{ type: 'result', result: DiagnosticResult }`

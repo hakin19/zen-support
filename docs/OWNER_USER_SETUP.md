@@ -3,6 +3,7 @@
 ## Overview
 
 The Aizen vNE system uses a role-based access control (RBAC) system with three roles:
+
 - **Owner**: Full administrative access, can manage all aspects of the organization
 - **Admin**: Can manage most features but cannot delete the organization or change owner
 - **Viewer**: Read-only access to the system
@@ -14,6 +15,7 @@ The Aizen vNE system uses a role-based access control (RBAC) system with three r
 **The first user to sign up for an organization automatically becomes the owner.**
 
 When a new user signs up via the standard signup flow:
+
 1. They create an account at `/signup`
 2. The system checks if any users exist for their organization
 3. If they are the **first user**, they are automatically assigned the **owner** role
@@ -24,6 +26,7 @@ This is handled by the database trigger `handle_new_user()` which runs automatic
 ### 2. Manual Role Assignment
 
 Existing owners can promote other users:
+
 1. Navigate to **Settings** → **User Management**
 2. Find the user you want to promote
 3. Click the role dropdown and select "Owner"
@@ -56,7 +59,7 @@ If your organization already has users but no owner (edge case), run this SQL co
 ```sql
 -- Make the first user of a customer an owner
 INSERT INTO user_roles (user_id, customer_id, role, created_by)
-SELECT 
+SELECT
     u.id,
     u.customer_id,
     'owner'::user_role,
@@ -65,7 +68,7 @@ FROM users u
 WHERE u.customer_id = 'YOUR_CUSTOMER_ID'
 ORDER BY u.created_at ASC
 LIMIT 1
-ON CONFLICT (user_id, customer_id) 
+ON CONFLICT (user_id, customer_id)
 DO UPDATE SET role = 'owner'::user_role;
 ```
 
@@ -77,6 +80,7 @@ The owner role is managed through two tables:
 2. **`user_roles` table**: Contains role assignments (owner/admin/viewer)
 
 The relationship:
+
 - One user can have one role per customer organization
 - The first user automatically gets the owner role
 - At least one owner must exist per organization (enforced by database trigger)
@@ -93,7 +97,8 @@ The relationship:
 ### "Access Denied" Errors
 
 If you're getting access denied errors:
-1. Check your role in the database: 
+
+1. Check your role in the database:
    ```sql
    SELECT * FROM user_roles WHERE user_id = 'YOUR_USER_ID';
    ```
@@ -102,12 +107,14 @@ If you're getting access denied errors:
 ### No Owner Exists
 
 If somehow no owner exists (should not happen):
+
 1. Run the migration: `012_auto_assign_first_owner.sql`
 2. This will automatically assign the first user as owner
 
 ### Multiple Organizations
 
 If you need to manage multiple organizations:
+
 - Each organization has its own set of users and roles
 - You can be an owner in one organization and a viewer in another
 - Switch between organizations using the organization selector (if implemented)
@@ -123,15 +130,17 @@ If you need to manage multiple organizations:
 ## API Integration
 
 When integrating with the API, the owner role is checked via:
+
 - Middleware: `webPortalAuthMiddleware`
 - Role check: `user.role === 'owner'`
 - Database function: `has_role_or_higher(customer_id, 'owner'::user_role)`
 
 Example API check:
+
 ```typescript
 if (!user || user.role !== 'owner') {
-  return reply.code(403).send({ 
-    error: 'Access denied. Owner role required.' 
+  return reply.code(403).send({
+    error: 'Access denied. Owner role required.',
   });
 }
 ```
