@@ -29,6 +29,7 @@ npx tsx packages/api/src/scripts/seed-test-device.ts
 **Output:**
 
 The script will output the credentials needed for testing:
+
 - Device ID and Secret for direct authentication
 - Activation code for registration flow
 - Example API calls for authentication
@@ -36,6 +37,7 @@ The script will output the credentials needed for testing:
 **Environment Requirements:**
 
 Requires the following environment variables:
+
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
 

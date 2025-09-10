@@ -8,13 +8,13 @@ This document describes the testing and coverage reporting infrastructure for th
 
 The project maintains the following minimum coverage thresholds:
 
-| Package | Required Coverage | Rationale |
-|---------|-------------------|-----------|
-| **Global** | 60% | Baseline for all code |
-| **@aizen/shared** | 70% | Critical shared utilities require higher coverage |
-| **@aizen/api** | 65% | Backend services need robust testing |
-| **@aizen/web** | 60% | Frontend code with standard coverage |
-| **@aizen/device-agent** | 60% | Device agent with standard coverage |
+| Package                 | Required Coverage | Rationale                                         |
+| ----------------------- | ----------------- | ------------------------------------------------- |
+| **Global**              | 60%               | Baseline for all code                             |
+| **@aizen/shared**       | 70%               | Critical shared utilities require higher coverage |
+| **@aizen/api**          | 65%               | Backend services need robust testing              |
+| **@aizen/web**          | 60%               | Frontend code with standard coverage              |
+| **@aizen/device-agent** | 60%               | Device agent with standard coverage               |
 
 ## Running Tests with Coverage
 
@@ -79,6 +79,7 @@ npm run coverage:aggregate
 ```
 
 Reports are saved to `coverage/aggregated/` with:
+
 - `coverage-aggregated.json` - Raw aggregated data
 - `coverage-detailed.json` - Detailed package breakdown
 - `COVERAGE_REPORT.md` - Markdown report
@@ -93,6 +94,7 @@ npm run quality:check
 ```
 
 This command:
+
 1. Validates coverage against configured thresholds
 2. Checks for coverage regression
 3. Generates quality reports
@@ -101,6 +103,7 @@ This command:
 ### Quality Gate Reports
 
 Reports are generated in multiple formats:
+
 - `coverage/quality-report.json` - Machine-readable report
 - `coverage/quality-report.md` - Human-readable markdown
 - `coverage/history/` - Historical coverage data
@@ -176,28 +179,31 @@ git commit --no-verify -m "Emergency fix"
 
 ### Coverage Interpretation
 
-| Coverage % | Status | Interpretation |
-|------------|--------|----------------|
-| 80-100% | 🟢 Excellent | Well-tested, production-ready |
-| 60-79% | 🟡 Good | Acceptable, room for improvement |
-| 40-59% | 🟠 Fair | Needs attention, add more tests |
-| 0-39% | 🔴 Poor | High risk, prioritize testing |
+| Coverage % | Status       | Interpretation                   |
+| ---------- | ------------ | -------------------------------- |
+| 80-100%    | 🟢 Excellent | Well-tested, production-ready    |
+| 60-79%     | 🟡 Good      | Acceptable, room for improvement |
+| 40-59%     | 🟠 Fair      | Needs attention, add more tests  |
+| 0-39%      | 🔴 Poor      | High risk, prioritize testing    |
 
 ### What to Test
 
 **Priority 1 - Critical Path**:
+
 - Authentication and authorization
 - Data validation and sanitization
 - Error handling and recovery
 - Core business logic
 
 **Priority 2 - Important Features**:
+
 - API endpoints and responses
 - State management
 - Data transformations
 - Integration points
 
 **Priority 3 - Nice to Have**:
+
 - UI components
 - Utility functions
 - Configuration loading
@@ -316,7 +322,7 @@ coverage: {
     '**/*.d.ts',
     'test/**',
     'src/types/**', // Generated types
-  ]
+  ];
 }
 ```
 
@@ -330,11 +336,11 @@ coverage: {
     'text',
     'json',
     'html',
-    'lcov',        // For CI integration
-    'cobertura',   // For Jenkins
-    'clover',      // For IDEs
-    'teamcity',    // For TeamCity
-  ]
+    'lcov', // For CI integration
+    'cobertura', // For Jenkins
+    'clover', // For IDEs
+    'teamcity', // For TeamCity
+  ];
 }
 ```
 
@@ -358,6 +364,7 @@ Coverage is automatically collected in CI:
 ### Coverage Services
 
 The project can integrate with:
+
 - **Codecov**: Detailed coverage tracking
 - **Coveralls**: Coverage history and badges
 - **SonarQube**: Code quality and security

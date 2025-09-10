@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   # Redis service (shared)
@@ -150,17 +150,17 @@ networks:
   aizen-network:
     driver: bridge
     name: aizen-network-multi
-  
+
   agent-1-network:
     driver: bridge
     internal: true
     name: agent-1-isolated
-  
+
   agent-2-network:
     driver: bridge
     internal: true
     name: agent-2-isolated
-  
+
   agent-3-network:
     driver: bridge
     internal: true
