@@ -333,18 +333,20 @@ export class DeviceAgent extends EventEmitter {
     let authenticated = false;
     let lastError: Error | null = null;
     for (let i = 0; i < attempts; i++) {
-      // eslint-disable-next-line no-await-in-loop
       authenticated = await this.#apiClient.authenticate();
       if (authenticated) break;
       const last = this.#apiClient.getLastError();
-      lastError = last?.originalError ?? (last ?? null) ?? null;
+      lastError = last?.originalError ?? last ?? null ?? null;
       const retryable = last?.retryable ?? true;
       if (!retryable) break; // Do not retry non-retryable errors (e.g., 4xx)
     }
     if (!authenticated) {
       const last = this.#apiClient.getLastError();
       const msg =
-        last?.originalError?.message ?? last?.message ?? lastError?.message ?? 'Authentication failed';
+        last?.originalError?.message ??
+        last?.message ??
+        lastError?.message ??
+        'Authentication failed';
       throw new Error(msg);
     }
 
@@ -379,7 +381,10 @@ export class DeviceAgent extends EventEmitter {
         const response = await this.sendHeartbeat();
         // Schedule next cycle using server-provided interval if available
         if (this.#status === 'running') {
-          this.#heartbeatTimer = setTimeout(() => void runCycle(), this.#heartbeatInterval);
+          this.#heartbeatTimer = setTimeout(
+            () => void runCycle(),
+            this.#heartbeatInterval
+          );
         }
         return;
       } catch (error) {
@@ -444,7 +449,9 @@ export class DeviceAgent extends EventEmitter {
   private async handleHeartbeatFailure(): Promise<boolean> {
     if (!this.#apiClient) return false;
     const last = this.#apiClient.getLastError();
-    const is401 = Boolean(last?.code === 'HTTP_401' || /401/.test(last?.message ?? ''));
+    const is401 = Boolean(
+      last?.code === 'HTTP_401' || /401/.test(last?.message ?? '')
+    );
 
     if (!is401) {
       // Non-401 failure: emit heartbeat error and do not attempt re-auth
@@ -457,13 +464,13 @@ export class DeviceAgent extends EventEmitter {
     const attempts = 3;
     for (let i = 0; i < attempts; i++) {
       const backoff = 100 * Math.pow(2, i); // 100ms, 200ms, 400ms
-      // eslint-disable-next-line no-await-in-loop
+
       await new Promise(resolve => setTimeout(resolve, backoff));
-      // eslint-disable-next-line no-await-in-loop
+
       const ok = await this.#apiClient.refreshToken();
       if (ok) {
         // Retry heartbeat immediately
-        // eslint-disable-next-line no-await-in-loop
+
         const retry = await this.#apiClient.sendHeartbeat();
         if (retry) {
           this.#lastHeartbeat = new Date();

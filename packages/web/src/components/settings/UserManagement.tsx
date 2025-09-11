@@ -433,7 +433,9 @@ export function UserManagement(): JSX.Element {
     <Card>
       <CardHeader>
         <CardTitle>User Management</CardTitle>
-        <CardDescription>Manage team members and their permissions</CardDescription>
+        <CardDescription>
+          Manage team members and their permissions
+        </CardDescription>
       </CardHeader>
       <CardContent>
         <div className='space-y-4'>
@@ -541,7 +543,10 @@ export function UserManagement(): JSX.Element {
               </Button>
 
               {canManageUsers && (
-                <Button onClick={() => setIsInviteDialogOpen(true)} aria-label='Invite User'>
+                <Button
+                  onClick={() => setIsInviteDialogOpen(true)}
+                  aria-label='Invite User'
+                >
                   <UserPlus className='mr-2 h-4 w-4' />
                   Invite User
                 </Button>
