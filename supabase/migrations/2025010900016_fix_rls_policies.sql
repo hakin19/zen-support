@@ -19,3 +19,4 @@ ALTER FUNCTION handle_new_user() SECURITY DEFINER SET search_path = public, auth
 GRANT SELECT ON user_roles TO authenticated;
 GRANT SELECT ON customers TO authenticated;
 GRANT SELECT, UPDATE ON users TO authenticated;
+
