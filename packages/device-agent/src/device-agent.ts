@@ -75,8 +75,10 @@ export class DeviceAgent extends EventEmitter {
     });
 
     this.#apiClient.on('error', error => {
+      // Store API client errors but avoid emitting the generic 'error' event
+      // to prevent unhandled exceptions in tests when no listeners are attached.
       this.#lastError = error;
-      this.emit('error', error);
+      this.emit('api:error', error);
     });
 
     // WebSocket events

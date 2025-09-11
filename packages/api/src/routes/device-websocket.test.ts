@@ -17,6 +17,8 @@ vi.mock('../services/command-queue.service', () => ({
     submitResult: vi.fn(),
     addCommand: vi.fn(),
   },
+  startVisibilityCheck: vi.fn(),
+  stopVisibilityCheck: vi.fn(),
 }));
 
 describe('Device WebSocket Communication', () => {

@@ -254,9 +254,8 @@ export class WebSocketClient extends EventEmitter {
     this.reconnectAttempts = 0;
     this.metrics.connectedAt = new Date();
 
-    // Send auth message only if not in browser (browser uses query param)
-    // or if token wasn't sent via query parameter
-    if (this.options.auth.token && typeof window === 'undefined') {
+    // Send auth message when a token is provided
+    if (this.options.auth.token) {
       this.send({ type: 'auth', token: this.options.auth.token });
     }
 

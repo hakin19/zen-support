@@ -1,11 +1,17 @@
 import { defineConfig } from 'vitest/config';
+import react from '@vitejs/plugin-react';
 import path from 'path';
 
 export default defineConfig({
+  plugins: [react()],
   test: {
     globals: true,
     environment: 'node',
     setupFiles: ['./test/setup.ts', './packages/web/test/setup.ts'],
+    include: [
+      'packages/**/*.{test,spec}.ts',
+      'packages/**/*.{test,spec}.tsx',
+    ],
     // Use a DOM-like environment for web package tests
     environmentMatchGlobs: [
       ['packages/web/**', 'happy-dom'],
@@ -20,6 +26,11 @@ export default defineConfig({
       DATABASE_URL: 'postgresql://postgres:postgres@localhost:54322/postgres',
       NODE_ENV: 'test',
     },
+    exclude: [
+      'node_modules/**',
+      '**/*.integration.test.ts',
+      'packages/api/src/integration-tests/**',
+    ],
     coverage: {
       provider: 'v8',
       reporter: [

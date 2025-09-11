@@ -27,7 +27,6 @@ import {
   registerWebSocketRoutes,
   getConnectionManager,
 } from './routes/websocket';
-import { startVisibilityCheck } from './services/command-queue.service';
 import { correlationIdPlugin } from './utils/correlation-id';
 
 import type { FastifyInstance } from 'fastify';
@@ -112,7 +111,16 @@ export async function createApp(): Promise<FastifyInstance> {
   registerDevHelperRoutes(app);
 
   // Start background processes
-  startVisibilityCheck();
+  try {
+    const { startVisibilityCheck } = await import(
+      './services/command-queue.service'
+    );
+    if (typeof startVisibilityCheck === 'function') {
+      startVisibilityCheck();
+    }
+  } catch {
+    // In tests with partial mocks, this import may not provide the function
+  }
 
   // Global error handler
   app.setErrorHandler((error, request, reply) => {

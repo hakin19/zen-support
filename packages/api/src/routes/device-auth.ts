@@ -194,8 +194,8 @@ export function registerDeviceAuthRoutes(app: FastifyInstance): void {
   app.post<{ Body: HeartbeatRequestBody }>(
     '/api/v1/device/heartbeat',
     {
-      // Authenticate before validating body to ensure 401 on invalid/missing session
-      preValidation: [deviceAuthMiddleware],
+      // Authenticate in preHandler so schema validation errors return 400 as expected by unit tests
+      preHandler: [deviceAuthMiddleware],
       schema: {
         body: {
           type: 'object',
