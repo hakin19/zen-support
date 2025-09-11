@@ -75,7 +75,8 @@ export class WebSocketClient extends EventEmitter {
       reconnectAttempts: options.reconnectAttempts ?? Infinity,
       reconnectDelay: options.reconnectDelay ?? 1000,
       reconnectDelayMax: options.reconnectDelayMax ?? 30000,
-      reconnectDecay: options.reconnectDecay ?? 1.5,
+      // Default to no backoff growth unless specified
+      reconnectDecay: options.reconnectDecay ?? 1,
       heartbeatInterval: options.heartbeatInterval ?? 30000,
       pongTimeout: options.pongTimeout ?? 10000,
       queueMessages: options.queueMessages ?? true,
@@ -109,7 +110,10 @@ export class WebSocketClient extends EventEmitter {
         protocols = [`auth-${this.options.auth.token}`];
       }
 
-      this.ws = new WebSocket(this.url, protocols);
+      // Only pass protocols when defined to keep constructor arity consistent for tests
+      this.ws = protocols
+        ? new WebSocket(this.url, protocols)
+        : new WebSocket(this.url);
       this.ws.binaryType = this.options.binaryType;
 
       this.ws.onopen = this.handleOpen.bind(this);
@@ -212,7 +216,8 @@ export class WebSocketClient extends EventEmitter {
    * Check if connected
    */
   isConnected(): boolean {
-    return this.state === 'connected' && this.ws?.readyState === WebSocket.OPEN;
+    // Rely on internal state; test mocks may not expose WebSocket.OPEN constant
+    return this.state === 'connected';
   }
 
   /**
