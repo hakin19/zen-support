@@ -5,7 +5,11 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    setupFiles: ['./test/setup.ts'],
+    setupFiles: ['./test/setup.ts', './packages/web/test/setup.ts'],
+    // Use a DOM-like environment for web package tests
+    environmentMatchGlobs: [
+      ['packages/web/**', 'happy-dom'],
+    ],
     env: {
       // Use local Supabase for tests
       SUPABASE_URL: 'http://localhost:54321',
@@ -101,6 +105,7 @@ export default defineConfig({
       '@aizen/shared': path.resolve(__dirname, './packages/shared/src'),
       '@aizen/api': path.resolve(__dirname, './packages/api/src'),
       '@aizen/web': path.resolve(__dirname, './packages/web/src'),
+      '@': path.resolve(__dirname, './packages/web/src'),
       '@aizen/device-agent': path.resolve(
         __dirname,
         './packages/device-agent/src'
