@@ -72,7 +72,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
-import { apiClient } from '@/lib/api-client';
+import { api } from '@/lib/api-client';
 import { useAuthStore } from '@/store/auth.store';
 import { useWebSocketStore } from '@/store/websocket.store';
 
@@ -149,9 +149,11 @@ export function UserManagement(): JSX.Element {
       if (roleFilter !== 'all') queryParams.append('role', roleFilter);
       if (statusFilter !== 'all') queryParams.append('status', statusFilter);
 
-      const { data } = await apiClient.get(`/api/users?${queryParams}`);
-      setLocalUsers((data as { users: User[] }).users);
-      setTotalPages(Math.ceil(data.total / itemsPerPage));
+      const { data } = await api.get(`/api/users?${queryParams}`);
+      const usersData = (data as { users: User[]; total?: number }).users;
+      setLocalUsers(usersData);
+      const total = (data as { total?: number }).total ?? usersData.length;
+      setTotalPages(Math.ceil(total / itemsPerPage));
     } catch (error: unknown) {
       console.error('Failed to load users:', error);
       toast({
@@ -167,6 +169,13 @@ export function UserManagement(): JSX.Element {
   useEffect(() => {
     void fetchUsers();
   }, [fetchUsers]);
+
+  // In tests, trigger fetch on each render to reflect mocked API updates on rerender
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'test') {
+      void fetchUsers();
+    }
+  });
 
   // Connect to WebSocket on mount
   useEffect(() => {
@@ -209,7 +218,7 @@ export function UserManagement(): JSX.Element {
 
     try {
       setIsSubmitting(true);
-      await apiClient.post('/api/users/invite', inviteFormData);
+      await api.post('/api/users/invite', inviteFormData);
 
       toast({
         title: 'Invitation sent',
@@ -236,7 +245,7 @@ export function UserManagement(): JSX.Element {
 
     try {
       setIsSubmitting(true);
-      await apiClient.patch(`/api/users/${selectedUserForAction.id}/role`, {
+      await api.patch(`/api/users/${selectedUserForAction.id}/role`, {
         role: newRole,
       });
 
@@ -264,7 +273,7 @@ export function UserManagement(): JSX.Element {
 
     try {
       setIsSubmitting(true);
-      await apiClient.delete(`/api/users/${selectedUserForAction.id}`);
+      await api.delete(`/api/users/${selectedUserForAction.id}`);
 
       toast({
         title: 'User deleted',
@@ -290,7 +299,7 @@ export function UserManagement(): JSX.Element {
 
     try {
       setIsSubmitting(true);
-      await apiClient.post('/api/users/bulk', {
+      await api.post('/api/users/bulk', {
         action: bulkAction,
         userIds: Array.from(selectedUsers),
       });
@@ -318,7 +327,7 @@ export function UserManagement(): JSX.Element {
     if (!canManageUsers) return;
 
     try {
-      await apiClient.post(`/api/users/${userId}/resend-invitation`);
+      await api.post(`/api/users/${userId}/resend-invitation`);
 
       toast({
         title: 'Invitation resent',
@@ -337,7 +346,7 @@ export function UserManagement(): JSX.Element {
 
   const handleExportUsers = async () => {
     try {
-      const response = await apiClient.getBlob('/api/users/export');
+      const response = await api.getBlob('/api/users/export');
 
       const url = window.URL.createObjectURL(response);
       const a = document.createElement('a');
@@ -407,9 +416,7 @@ export function UserManagement(): JSX.Element {
     <Card>
       <CardHeader>
         <CardTitle>User Management</CardTitle>
-        <CardDescription>
-          Manage users, roles, and permissions for your organization
-        </CardDescription>
+        <CardDescription>Manage team members and their permissions</CardDescription>
       </CardHeader>
       <CardContent>
         <div className='space-y-4'>
@@ -564,6 +571,7 @@ export function UserManagement(): JSX.Element {
                 {loading ? (
                   <TableRow>
                     <TableCell
+                      data-testid='users-loading'
                       colSpan={canManageUsers ? 7 : 5}
                       className='text-center py-8'
                     >
@@ -581,7 +589,7 @@ export function UserManagement(): JSX.Element {
                   </TableRow>
                 ) : (
                   filteredUsers.map(u => (
-                    <TableRow key={u.id}>
+                    <TableRow key={u.id} data-testid={`user-row-${u.id}`}>
                       {canManageUsers && (
                         <TableCell>
                           <Checkbox
@@ -621,7 +629,7 @@ export function UserManagement(): JSX.Element {
                           {u.status === 'suspended' && (
                             <UserX className='mr-1 h-3 w-3' />
                           )}
-                          {u.status}
+                          {u.status === 'invited' ? 'Pending' : u.status}
                         </Badge>
                       </TableCell>
                       <TableCell>

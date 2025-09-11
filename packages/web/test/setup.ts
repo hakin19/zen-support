@@ -31,3 +31,14 @@ if (typeof globalThis !== 'undefined') {
   }
 }
 
+// Mock WebSocket store to avoid real WS dependencies in unit tests
+import { vi } from 'vitest';
+vi.mock('@/store/websocket.store', () => ({
+  useWebSocketStore: () => ({
+    users: [],
+    connect: vi.fn(),
+    disconnect: vi.fn(),
+    setUsers: vi.fn(),
+    subscribe: vi.fn().mockReturnValue(() => {}),
+  }),
+}));
