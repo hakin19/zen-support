@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '../../../test/test-utils';
 import '@testing-library/jest-dom';
 import { ProtectedRoute } from './ProtectedRoute';
 import type { Session } from '@supabase/supabase-js';
@@ -20,18 +20,7 @@ vi.mock('next/navigation', () => ({
   }),
 }));
 
-// Mock Supabase auth
-const mockGetSession = vi.fn();
-const mockOnAuthStateChange = vi.fn();
-
-vi.mock('@/lib/supabase/client', () => ({
-  createClient: () => ({
-    auth: {
-      getSession: mockGetSession,
-      onAuthStateChange: mockOnAuthStateChange,
-    },
-  }),
-}));
+// Note: Supabase client is mocked globally in setup.ts
 
 describe('ProtectedRoute', () => {
   const mockSession: Session = {
@@ -51,18 +40,11 @@ describe('ProtectedRoute', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockOnAuthStateChange.mockReturnValue({
-      data: { subscription: { unsubscribe: vi.fn() } },
-    });
   });
 
   describe('authentication check', () => {
     it('should render children when user is authenticated', async () => {
-      mockGetSession.mockResolvedValue({
-        data: { session: mockSession },
-        error: null,
-      });
-
+      // With our global Supabase mock, the user should be authenticated
       render(
         <ProtectedRoute>
           <div data-testid='protected-content'>Protected Content</div>

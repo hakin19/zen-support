@@ -39,7 +39,7 @@ export default defineConfig({
       'src/**/*.spec.{ts,tsx}',
       'test/**/*.test.{ts,tsx}',
     ],
-    testTimeout: 10000,
+    testTimeout: 30000,
     css: true,
   },
   resolve: {

@@ -1,15 +1,13 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '../../../test/test-utils';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { UserManagement } from './UserManagement';
 import { useAuthStore } from '@/store/auth.store';
 import { api } from '@/lib/api-client';
 
-// Mock the stores and API
-vi.mock('@/store/auth.store');
-vi.mock('@/lib/api-client');
+// Note: Stores and API are already mocked in setup.ts
 
 describe('UserManagement', () => {
   const mockUsers = [
