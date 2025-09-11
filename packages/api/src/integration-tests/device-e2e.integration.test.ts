@@ -495,7 +495,8 @@ describe('Device E2E Integration Tests', () => {
         `${process.env.SUPABASE_URL}/rest/v1/devices?device_id=eq.${TEST_DEVICE_ID}`,
         {
           headers: {
-            apikey: process.env.SUPABASE_ANON_KEY!,
+            apikey: process.env.SUPABASE_SERVICE_ROLE_KEY!,
+            Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY!}`,
           },
         }
       );
@@ -725,7 +726,8 @@ describe('Device E2E Integration Tests', () => {
         `${process.env.SUPABASE_URL}/rest/v1/devices?device_id=eq.${TEST_DEVICE_ID}`,
         {
           headers: {
-            apikey: process.env.SUPABASE_ANON_KEY!,
+            apikey: process.env.SUPABASE_SERVICE_ROLE_KEY!,
+            Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY!}`,
           },
         }
       );
@@ -764,7 +766,8 @@ describe('Device E2E Integration Tests', () => {
         `${process.env.SUPABASE_URL}/rest/v1/devices?device_id=eq.${TEST_DEVICE_ID}`,
         {
           headers: {
-            apikey: process.env.SUPABASE_ANON_KEY!,
+            apikey: process.env.SUPABASE_SERVICE_ROLE_KEY!,
+            Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY!}`,
           },
         }
       );
@@ -782,7 +785,8 @@ describe('Device E2E Integration Tests', () => {
         `${process.env.SUPABASE_URL}/rest/v1/devices?device_id=eq.${TEST_DEVICE_ID}`,
         {
           headers: {
-            apikey: process.env.SUPABASE_ANON_KEY!,
+            apikey: process.env.SUPABASE_SERVICE_ROLE_KEY!,
+            Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY!}`,
           },
         }
       );
@@ -982,7 +986,8 @@ describe('Device E2E Integration Tests', () => {
           `${process.env.SUPABASE_URL}/rest/v1/devices?device_id=eq.test-device-concurrent-${i}`,
           {
             headers: {
-              apikey: process.env.SUPABASE_ANON_KEY!,
+              apikey: process.env.SUPABASE_SERVICE_ROLE_KEY!,
+              Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY!}`,
             },
           }
         );

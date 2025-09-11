@@ -190,3 +190,27 @@ Bootstrap a Dockerized Device Agent that authenticates to the local API, sends p
 - Task 3: WebSocket Communication ✅
 - Task 4: Device Agent Container (Pending)
 - Task 5: Local Development Environment (Pending)
+
+## Updates (2025-09-11): E2E Integration Fixes and API Additions
+
+- Root cause of device E2E failures: global test mocks in `test/setup.ts` intercepted Supabase client calls, returning undefined instead of `{ data, error }`. Resolution: added integration-only Vitest config and setup with real clients.
+  - Added `test/setup.integration.ts` and `vitest.config.integration.ts`; integration tests now bypass global mocks.
+  - `.env.test` updated to `REDIS_PORT=6379` and Fastify set to `^4.28.1` for WS plugin compatibility.
+- Authentication and headers:
+  - Device middleware now prioritizes `X-Device-Session` over `X-Device-Token` and `Authorization`.
+  - Session tokens switched to 64-char hex (`randomBytes(32)`), aligned with device agent/tests.
+- Heartbeat semantics:
+  - Heartbeat schema accepts `'online'` in addition to `'healthy'|'degraded'|'offline'`.
+  - Service maps `'healthy'` or `'online'` heartbeats to connectivity `'online'` and stores metrics.
+- WebSocket hardening and status:
+  - Robust connection extraction for Fastify+WS plugin variants; guards missing `.on`.
+  - On device WS close, API updates device status to `'offline'` with `last_seen`.
+  - DeviceAgent health status now reports `websocket: 'connected'|'disconnected'`.
+- New device command REST endpoints (complement WS flow):
+  - `POST /api/v1/device/commands` queues a command, immediately claims to issue `claimToken`, and publishes WS control message.
+  - `GET /api/v1/device/commands/:id` returns command status/result (includes `result.success`).
+- Supabase REST in tests:
+  - E2E reads use `apikey` and `Authorization: Bearer` with `SUPABASE_SERVICE_ROLE_KEY` due to RLS on `devices`.
+- Outcome: all 13 Device E2E tests now pass via `npm run test:integration:vitest`.
+
+Next steps: stabilize web package unit test timings around WS client, add lightweight docs for the new device command endpoints, and consider a dedicated status read API to avoid direct REST reads in tests.

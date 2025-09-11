@@ -29,6 +29,7 @@ export class DeviceAgent extends EventEmitter {
   #heartbeatErrors = 0;
   #lastError: Error | null = null;
   #mockSimulator: any = null; // Use any to avoid type issues with dynamic import
+  #websocketState: 'connected' | 'disconnected' = 'disconnected';
 
   constructor(config: DeviceConfig) {
     super();
@@ -81,11 +82,13 @@ export class DeviceAgent extends EventEmitter {
     // WebSocket events
     this.#apiClient.on('websocket:connected', () => {
       console.log('🔌 WebSocket connected');
+      this.#websocketState = 'connected';
       this.emit('websocket:connected');
     });
 
     this.#apiClient.on('websocket:disconnected', (reason: any) => {
       console.log('🔌 WebSocket disconnected:', reason);
+      this.#websocketState = 'disconnected';
       this.emit('websocket:disconnected', reason);
     });
 
@@ -194,9 +197,28 @@ export class DeviceAgent extends EventEmitter {
     }
   }
 
-  stop(): void {
+  async stop(): Promise<void> {
     if (this.#status !== 'running') {
       throw new Error('Agent is not running');
+    }
+
+    // Best-effort: mark device offline
+    try {
+      if (this.#apiClient) {
+        const token = this.#apiClient.getAuthToken();
+        if (token) {
+          await fetch(`${this.#config.apiUrl}/api/v1/device/heartbeat`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Device-Session': token,
+            },
+            body: JSON.stringify({ status: 'offline' }),
+          });
+        }
+      }
+    } catch {
+      // Ignore offline signal errors on shutdown
     }
 
     this.stopHeartbeat();
@@ -514,6 +536,7 @@ export class DeviceAgent extends EventEmitter {
       uptime: this.getUptime(),
       heartbeatCount: this.#heartbeatCount,
       heartbeatErrors: this.#heartbeatErrors,
+      websocket: this.#websocketState,
     };
 
     if (this.#lastHeartbeat) {

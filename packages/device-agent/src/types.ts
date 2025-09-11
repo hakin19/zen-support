@@ -106,6 +106,7 @@ export interface HealthStatus {
   heartbeatCount: number;
   heartbeatErrors: number;
   error?: string;
+  websocket?: 'connected' | 'disconnected';
 }
 
 export interface AgentMessage {

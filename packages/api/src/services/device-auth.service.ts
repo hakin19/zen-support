@@ -402,7 +402,10 @@ export const deviceAuthService = {
   ): Promise<boolean> {
     try {
       const supabase = getSupabaseAdminClient();
-      const newStatus = data.status === 'healthy' ? 'online' : 'offline';
+      const newStatus =
+        data.status === 'healthy' || data.status === 'online'
+          ? 'online'
+          : 'offline';
 
       // Get device's customer ID for broadcasting
       const { data: device } = await supabase

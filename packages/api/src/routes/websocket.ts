@@ -245,6 +245,21 @@ export async function registerWebSocketRoutes(
                 }
                 manager.removeConnection(connectionId);
                 request.log.info(`Device ${String(deviceId)} disconnected`);
+
+                // Mark device as offline in database
+                try {
+                  if (deviceId) {
+                    await supabase
+                      .from('devices')
+                      .update({
+                        status: 'offline',
+                        last_seen: new Date().toISOString(),
+                      })
+                      .eq('device_id', deviceId);
+                  }
+                } catch (dbErr) {
+                  request.log.error(dbErr, 'Failed to update device offline status');
+                }
               } catch (error) {
                 request.log.error(error, 'Error during connection close');
               }

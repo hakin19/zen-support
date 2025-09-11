@@ -1,5 +1,7 @@
 import { deviceAuthMiddleware } from '../middleware/device-auth.middleware';
 import { commandQueueService } from '../services/command-queue.service';
+import { getRedisClient } from '@aizen/shared/utils/redis-client';
+import { publishToChannel } from '../utils/redis-pubsub';
 
 import type { FastifyInstance } from 'fastify';
 
@@ -23,6 +25,79 @@ interface ResultBody {
 }
 
 export function registerDeviceCommandRoutes(app: FastifyInstance): void {
+  /**
+   * POST /api/v1/device/commands
+   * Enqueue a new command for the authenticated device and notify via WebSocket
+   */
+  app.post<{ Body: { command: string; parameters?: Record<string, unknown>; priority?: number } }>(
+    '/api/v1/device/commands',
+    {
+      preHandler: [deviceAuthMiddleware],
+      schema: {
+        body: {
+          type: 'object',
+          required: ['command'],
+          properties: {
+            command: { type: 'string' },
+            parameters: { type: 'object' },
+            priority: { type: 'integer', minimum: 1, maximum: 10, default: 1 },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const deviceId = request.deviceId;
+      const customerId = request.customerId;
+      if (!deviceId || !customerId) {
+        return reply.status(401).send({
+          error: { code: 'UNAUTHORIZED', message: 'Device authentication required' },
+        });
+      }
+
+      try {
+        const priority = request.body.priority ?? 1;
+        // Create command
+        const command = await commandQueueService.addCommand(
+          deviceId,
+          customerId,
+          request.body.command,
+          request.body.parameters ?? {},
+          priority
+        );
+
+        // Immediately claim to generate a claim token for the device to submit results
+        const claimed = await commandQueueService.claimCommands(deviceId, 1, 300000);
+        const claimedCommand = claimed.find(c => c.id === command.id) ?? null;
+
+        // Notify device via Redis pub/sub (forwarded by WS route)
+        const redis = getRedisClient();
+        const controlChannel = `device:${deviceId}:control`;
+        await publishToChannel(redis, controlChannel, {
+          type: 'command',
+          // Legacy top-level fields for simpler WS clients/tests
+          id: command.id,
+          command: command.type,
+          parameters: command.parameters,
+          // Payload shape used by device-agent
+          payload: {
+            id: command.id,
+            type: command.type,
+            parameters: command.parameters,
+            claimToken: claimedCommand?.claimToken,
+            visibleUntil: claimedCommand?.visibleUntil,
+            timestamp: new Date().toISOString(),
+          },
+        });
+
+        return reply.status(201).send({ id: command.id, status: command.status });
+      } catch (error) {
+        request.log.error(error, 'Failed to enqueue device command');
+        return reply.status(500).send({
+          error: { code: 'INTERNAL_ERROR', message: 'Failed to enqueue command' },
+        });
+      }
+    }
+  );
   /**
    * POST /api/v1/device/commands/claim
    * Claim pending commands for processing with visibility timeout
@@ -285,6 +360,52 @@ export function registerDeviceCommandRoutes(app: FastifyInstance): void {
             message: 'Failed to submit command result',
           },
         });
+      }
+    }
+  );
+
+  /**
+   * GET /api/v1/device/commands/:id
+   * Get a command status/result (restricted to the authenticated device)
+   */
+  app.get<{ Params: { id: string } }>(
+    '/api/v1/device/commands/:id',
+    {
+      preHandler: [deviceAuthMiddleware],
+      schema: {
+        params: {
+          type: 'object',
+          required: ['id'],
+          properties: { id: { type: 'string' } },
+        },
+      },
+    },
+    async (request, reply) => {
+      try {
+        const deviceId = request.deviceId;
+        if (!deviceId) {
+          return reply.status(401).send({ error: { code: 'UNAUTHORIZED', message: 'Device authentication required' } });
+        }
+
+        const command = await commandQueueService.getCommand(request.params.id);
+        if (!command || command.deviceId !== deviceId) {
+          return reply.status(404).send({ error: { code: 'COMMAND_NOT_FOUND', message: 'Command not found' } });
+        }
+
+        const baseResult = command.result ?? {};
+        const resultWithSuccess = {
+          success: command.status === 'completed',
+          ...baseResult,
+        } as Record<string, unknown>;
+
+        return reply.send({
+          id: command.id,
+          status: command.status,
+          result: resultWithSuccess,
+        });
+      } catch (error) {
+        request.log.error(error, 'Failed to get command');
+        return reply.status(500).send({ error: { code: 'INTERNAL_ERROR', message: 'Failed to get command' } });
       }
     }
   );

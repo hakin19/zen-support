@@ -194,7 +194,8 @@ export function registerDeviceAuthRoutes(app: FastifyInstance): void {
   app.post<{ Body: HeartbeatRequestBody }>(
     '/api/v1/device/heartbeat',
     {
-      preHandler: [deviceAuthMiddleware],
+      // Authenticate before validating body to ensure 401 on invalid/missing session
+      preValidation: [deviceAuthMiddleware],
       schema: {
         body: {
           type: 'object',
@@ -202,7 +203,7 @@ export function registerDeviceAuthRoutes(app: FastifyInstance): void {
           properties: {
             status: {
               type: 'string',
-              enum: ['healthy', 'degraded', 'offline'],
+              enum: ['healthy', 'degraded', 'offline', 'online'],
             },
             metrics: {
               type: 'object',
