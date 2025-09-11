@@ -137,6 +137,23 @@ export function UserManagement(): JSX.Element {
   const canManageUsers = user?.role === 'owner' || user?.role === 'admin';
   const canChangeRoles = user?.role === 'owner';
 
+  const formatRole = (role: UserRole): string => {
+    return role.charAt(0).toUpperCase() + role.slice(1);
+  };
+
+  const formatStatus = (status: UserStatus): string => {
+    switch (status) {
+      case 'active':
+        return 'Active';
+      case 'invited':
+        return 'Pending';
+      case 'suspended':
+        return 'Suspended';
+      default:
+        return status;
+    }
+  };
+
   const fetchUsers = useCallback(async () => {
     try {
       setLoading(true);
@@ -524,7 +541,7 @@ export function UserManagement(): JSX.Element {
               </Button>
 
               {canManageUsers && (
-                <Button onClick={() => setIsInviteDialogOpen(true)}>
+                <Button onClick={() => setIsInviteDialogOpen(true)} aria-label='Invite User'>
                   <UserPlus className='mr-2 h-4 w-4' />
                   Invite User
                 </Button>
@@ -542,7 +559,7 @@ export function UserManagement(): JSX.Element {
           )}
 
           <div className='rounded-md border'>
-            <Table>
+            <Table aria-label='Users table'>
               <TableHeader>
                 <TableRow>
                   {canManageUsers && (
@@ -615,7 +632,7 @@ export function UserManagement(): JSX.Element {
                           {u.role === 'owner' && (
                             <Shield className='mr-1 h-3 w-3' />
                           )}
-                          {u.role}
+                          {formatRole(u.role)}
                         </Badge>
                       </TableCell>
                       <TableCell>
@@ -629,7 +646,7 @@ export function UserManagement(): JSX.Element {
                           {u.status === 'suspended' && (
                             <UserX className='mr-1 h-3 w-3' />
                           )}
-                          {u.status === 'invited' ? 'Pending' : u.status}
+                          {formatStatus(u.status)}
                         </Badge>
                       </TableCell>
                       <TableCell>
