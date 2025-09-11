@@ -112,10 +112,14 @@ export interface ApiClientEvents {
   'command:received': (command: CommandMessage) => void;
   configuration_update: (config: Record<string, unknown>) => void;
   'websocket:connected': () => void;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   'websocket:disconnected': (reason?: any) => void;
   'websocket:error': (error: Error) => void;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   'device:status': (status: any) => void;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   'heartbeat:success': (response: any) => void;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   'heartbeat:error': (error: any) => void;
 }
 
@@ -150,13 +154,8 @@ export interface WebSocketClientOptions {
 }
 
 export interface WebSocketMessage {
-  type:
-    | 'connected'
-    | 'heartbeat'
-    | 'command'
-    | 'command_result'
-    | 'error'
-    | string;
+  type: 'connected' | 'heartbeat' | 'command' | 'command_result' | 'error';
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   payload?: any;
 }
 

@@ -6,6 +6,7 @@ import type {
   ApiClientConfig,
   ApiClientEvents,
   AuthResponse,
+  CommandMessage,
   ConnectionState,
   DeviceRegistrationRequest,
   DeviceRegistrationResponse,
@@ -14,6 +15,15 @@ import type {
 } from './types.js';
 import type { DiagnosticResult, CommandResultSubmission } from '../types.js';
 import type { WebSocketClient } from './websocket-client.js';
+
+interface SessionData {
+  deviceId: string;
+  createdAt: string;
+  lastActivity: string;
+  metadata: {
+    customerId: string;
+  };
+}
 
 export class ApiClient extends EventEmitter {
   #config: ApiClientConfig;
@@ -29,7 +39,7 @@ export class ApiClient extends EventEmitter {
   #maxReconnectAttempts = 10;
   #isReconnecting = false;
   #wsClient: WebSocketClient | null = null;
-  #sessionData: any = null;
+  #sessionData: SessionData | null = null;
 
   constructor(config: ApiClientConfig) {
     super();
@@ -592,7 +602,7 @@ export class ApiClient extends EventEmitter {
   }
 
   // Additional methods for testing and WebSocket support
-  async disconnect(): Promise<void> {
+  disconnect(): void {
     this.stop();
     this.disconnectWebSocket();
   }
@@ -601,7 +611,7 @@ export class ApiClient extends EventEmitter {
     return this.#authToken;
   }
 
-  getSessionData(): any {
+  getSessionData(): SessionData {
     if (!this.#sessionData) {
       this.#sessionData = {
         deviceId: this.#config.deviceId,
@@ -613,7 +623,9 @@ export class ApiClient extends EventEmitter {
       };
     }
     // Update last activity
-    this.#sessionData.lastActivity = new Date().toISOString();
+    if (this.#sessionData) {
+      this.#sessionData.lastActivity = new Date().toISOString();
+    }
     return { ...this.#sessionData };
   }
 
@@ -637,20 +649,21 @@ export class ApiClient extends EventEmitter {
           maxReconnectAttempts: 10,
           pingInterval: 30000,
           pongTimeout: 10000,
-        }) as any;
+        });
 
         // Set up WebSocket event handlers
         const ws = this.#wsClient;
         if (ws) {
           ws.on('connected', () => {
-            (this as any).emit('websocket:connected');
+            this.emit('websocket:connected');
           });
 
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           ws.on('disconnected', (data: any) => {
-            (this as any).emit('websocket:disconnected', data);
+            this.emit('websocket:disconnected', data);
           });
 
-          ws.on('command', (command: any) => {
+          ws.on('command', (command: CommandMessage) => {
             this.emit('command', command);
           });
 
@@ -664,19 +677,25 @@ export class ApiClient extends EventEmitter {
             this.emit('error', apiError);
           });
 
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           ws.on('device:status', (status: any) => {
-            (this as any).emit('device:status', status);
+            this.emit('device:status', status);
           });
 
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           ws.on('heartbeat:success', (response: any) => {
-            (this as any).emit('heartbeat:success', response);
+            this.emit('heartbeat:success', response);
           });
 
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           ws.on('heartbeat:error', (error: any) => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
             (this as any).emit('heartbeat:error', error);
           });
 
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           ws.on('command:received', (command: any) => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
             (this as any).emit('command:received', command);
           });
         }

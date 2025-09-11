@@ -171,8 +171,8 @@ export function UserManagement(): JSX.Element {
       setLocalUsers(usersData);
       const total = (data as { total?: number }).total ?? usersData.length;
       setTotalPages(Math.ceil(total / itemsPerPage));
-    } catch (error: unknown) {
-      console.error('Failed to load users:', error);
+    } catch {
+      // console.error('Failed to load users:', error);
       toast({
         title: 'Error',
         description: 'Failed to load users. Please try again.',
@@ -245,7 +245,7 @@ export function UserManagement(): JSX.Element {
       setIsInviteDialogOpen(false);
       setInviteFormData({ email: '', role: 'viewer', full_name: '' });
       void fetchUsers();
-    } catch (_error: unknown) {
+    } catch (error: unknown) {
       toast({
         title: 'Error',
         description:
@@ -274,7 +274,7 @@ export function UserManagement(): JSX.Element {
       setIsRoleDialogOpen(false);
       setSelectedUserForAction(null);
       void fetchUsers();
-    } catch (_error: unknown) {
+    } catch {
       toast({
         title: 'Error',
         description: 'Failed to update user role',
@@ -300,7 +300,7 @@ export function UserManagement(): JSX.Element {
       setIsDeleteDialogOpen(false);
       setSelectedUserForAction(null);
       void fetchUsers();
-    } catch (_error: unknown) {
+    } catch {
       toast({
         title: 'Error',
         description: 'Failed to delete user',
@@ -329,7 +329,7 @@ export function UserManagement(): JSX.Element {
       setSelectedUsers(new Set());
       setBulkAction(null);
       void fetchUsers();
-    } catch (_error: unknown) {
+    } catch {
       toast({
         title: 'Error',
         description: `Failed to ${bulkAction} selected users`,
@@ -352,7 +352,7 @@ export function UserManagement(): JSX.Element {
       });
 
       void fetchUsers();
-    } catch (_error: unknown) {
+    } catch {
       toast({
         title: 'Error',
         description: 'Failed to resend invitation',
@@ -378,7 +378,7 @@ export function UserManagement(): JSX.Element {
         title: 'Export successful',
         description: 'User list has been exported',
       });
-    } catch (_error: unknown) {
+    } catch {
       toast({
         title: 'Error',
         description: 'Failed to export user list',
@@ -536,7 +536,7 @@ export function UserManagement(): JSX.Element {
               <Button
                 variant='outline'
                 size='icon'
-                onClick={fetchUsers}
+                onClick={() => void fetchUsers()}
                 aria-label='Refresh user list'
               >
                 <RefreshCw className='h-4 w-4' />

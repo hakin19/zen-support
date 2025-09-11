@@ -97,7 +97,7 @@ export class CommandQueue extends EventEmitter {
   }
 
   enqueue(command: DiagnosticCommand): void {
-    const priority = command.priority || 'normal';
+    const priority = command.priority ?? 'normal';
     const queue = this.#queues[priority];
 
     // Skip if command already exists in any queue (duplicate ID)

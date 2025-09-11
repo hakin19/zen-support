@@ -95,4 +95,14 @@ export default [
       'no-console': 'off',
     },
   },
+
+  // UI components - relax type safety for shadcn/ui components
+  {
+    files: ['src/components/ui/**/*.tsx', 'src/components/ui/**/*.ts'],
+    rules: {
+      '@typescript-eslint/no-unsafe-argument': 'off',
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/explicit-module-boundary-types': 'off',
+    },
+  },
 ];

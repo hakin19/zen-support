@@ -280,8 +280,8 @@ export function OrganizationSettings(): JSX.Element {
       setApiData({
         rate_limit: orgData.settings?.api_settings?.rate_limit ?? 1000,
       });
-    } catch (error: unknown) {
-      console.error('Failed to load organization settings:', error);
+    } catch {
+      // console.error('Failed to load organization settings:', error);
       toast({
         title: 'Error',
         description: 'Failed to load organization settings. Please try again.',
@@ -420,8 +420,8 @@ export function OrganizationSettings(): JSX.Element {
 
       // Refresh data
       void fetchOrganization();
-    } catch (error: unknown) {
-      console.error('Failed to save basic info:', error);
+    } catch {
+      // console.error('Failed to save basic info:', error);
       toast({
         title: 'Error',
         description: 'Failed to save settings. Please try again.',
@@ -448,8 +448,8 @@ export function OrganizationSettings(): JSX.Element {
       });
 
       void fetchOrganization();
-    } catch (error: unknown) {
-      console.error('Failed to save security settings:', error);
+    } catch {
+      // console.error('Failed to save security settings:', error);
       toast({
         title: 'Error',
         description: 'Failed to save security settings.',
@@ -473,8 +473,8 @@ export function OrganizationSettings(): JSX.Element {
       });
 
       void fetchOrganization();
-    } catch (error: unknown) {
-      console.error('Failed to save notification settings:', error);
+    } catch {
+      // console.error('Failed to save notification settings:', error);
       toast({
         title: 'Error',
         description: 'Failed to save notification settings.',
@@ -498,8 +498,8 @@ export function OrganizationSettings(): JSX.Element {
       });
 
       void fetchOrganization();
-    } catch (error: unknown) {
-      console.error('Failed to save API settings:', error);
+    } catch {
+      // console.error('Failed to save API settings:', error);
       toast({
         title: 'Error',
         description: 'Failed to save API settings.',
@@ -532,8 +532,8 @@ export function OrganizationSettings(): JSX.Element {
       setNewIPDescription('');
       setIsIPDialogOpen(false);
       void fetchOrganization();
-    } catch (error: unknown) {
-      console.error('Failed to add IP:', error);
+    } catch {
+      // console.error('Failed to add IP:', error);
       toast({
         title: 'Error',
         description: 'Failed to add IP address.',
@@ -556,8 +556,8 @@ export function OrganizationSettings(): JSX.Element {
       });
 
       void fetchOrganization();
-    } catch (error: unknown) {
-      console.error('Failed to remove IP:', error);
+    } catch {
+      // console.error('Failed to remove IP:', error);
       toast({
         title: 'Error',
         description: 'Failed to remove IP address.',
@@ -586,8 +586,8 @@ export function OrganizationSettings(): JSX.Element {
       setNewOrigin('');
       setIsOriginDialogOpen(false);
       void fetchOrganization();
-    } catch (error: unknown) {
-      console.error('Failed to add origin:', error);
+    } catch {
+      // console.error('Failed to add origin:', error);
       toast({
         title: 'Error',
         description: 'Failed to add origin.',
@@ -610,8 +610,8 @@ export function OrganizationSettings(): JSX.Element {
       });
 
       void fetchOrganization();
-    } catch (error: unknown) {
-      console.error('Failed to remove origin:', error);
+    } catch {
+      // console.error('Failed to remove origin:', error);
       toast({
         title: 'Error',
         description: 'Failed to remove origin.',
@@ -635,8 +635,8 @@ export function OrganizationSettings(): JSX.Element {
         title: 'Success',
         description: 'Webhook test successful',
       });
-    } catch (error: unknown) {
-      console.error('Webhook test failed:', error);
+    } catch {
+      // console.error('Webhook test failed:', error);
       setWebhookTestResult('Webhook test failed');
       toast({
         title: 'Error',
@@ -658,8 +658,8 @@ export function OrganizationSettings(): JSX.Element {
       if ((response.data as { url?: string }).url) {
         window.location.href = (response.data as { url: string }).url;
       }
-    } catch (error: unknown) {
-      console.error('Failed to access billing portal:', error);
+    } catch {
+      // console.error('Failed to access billing portal:', error);
       toast({
         title: 'Error',
         description: 'Failed to access billing portal.',
@@ -683,8 +683,8 @@ export function OrganizationSettings(): JSX.Element {
 
       // Redirect or handle post-deletion logic
       window.location.href = '/';
-    } catch (error: unknown) {
-      console.error('Failed to delete organization:', error);
+    } catch {
+      // console.error('Failed to delete organization:', error);
       toast({
         title: 'Error',
         description: 'Failed to delete organization.',

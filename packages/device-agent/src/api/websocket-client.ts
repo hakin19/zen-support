@@ -113,7 +113,7 @@ export class WebSocketClient extends EventEmitter {
         });
       } catch (error) {
         this.handleError(error as Error);
-        reject(error);
+        reject(error as Error);
       }
     });
   }
@@ -166,7 +166,22 @@ export class WebSocketClient extends EventEmitter {
    */
   private handleMessage(data: WebSocket.Data): void {
     try {
-      const message = JSON.parse(data.toString()) as WebSocketMessage;
+      let dataStr: string;
+      if (typeof data === 'string') {
+        dataStr = data;
+      } else if (Buffer.isBuffer(data)) {
+        dataStr = data.toString('utf-8');
+      } else if (data instanceof ArrayBuffer) {
+        dataStr = Buffer.from(data).toString('utf-8');
+      } else if (Array.isArray(data)) {
+        dataStr = Buffer.concat(
+          data.map(d => (Buffer.isBuffer(d) ? d : Buffer.from(d)))
+        ).toString('utf-8');
+      } else {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call
+        dataStr = data.toString();
+      }
+      const message = JSON.parse(dataStr) as WebSocketMessage;
       this.metrics.messagesReceived++;
 
       switch (message.type) {
@@ -185,6 +200,7 @@ export class WebSocketClient extends EventEmitter {
         case 'error':
           this.emit(
             'error',
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
             new Error(message.payload?.message ?? 'Unknown error')
           );
           break;
@@ -317,6 +333,7 @@ export class WebSocketClient extends EventEmitter {
       `Reconnecting in ${Math.round(delay / 1000)}s (attempt ${this.reconnectAttempts}/${this.options.maxReconnectAttempts})`
     );
 
+    // eslint-disable-next-line @typescript-eslint/no-misused-promises
     this.reconnectTimer = setTimeout(async () => {
       this.emit('reconnecting', { attempt: this.reconnectAttempts });
 

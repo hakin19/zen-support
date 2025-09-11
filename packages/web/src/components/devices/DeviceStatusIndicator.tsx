@@ -32,8 +32,8 @@ export function DeviceStatusIndicator({
 
   // Initialize Supabase client
   const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    process.env.NEXT_PUBLIC_SUPABASE_URL as string,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string
   );
 
   useEffect(() => {
@@ -49,8 +49,8 @@ export function DeviceStatusIndicator({
         if (error) throw error;
         setDevice(data);
         setLoading(false);
-      } catch (err) {
-        console.error('Error fetching device:', err);
+      } catch {
+        // console.error('Error fetching device:', err);
         setError('Failed to load device');
         setLoading(false);
       }
@@ -69,9 +69,9 @@ export function DeviceStatusIndicator({
           table: 'devices',
           filter: `id=eq.${deviceId}`,
         },
-        (payload: any) => {
+        (payload: { new: Device }) => {
           // Device status update
-          setDevice(payload.new as Device);
+          setDevice(payload.new);
         }
       )
       .subscribe();
@@ -82,19 +82,22 @@ export function DeviceStatusIndicator({
       .on(
         'broadcast',
         { event: 'device_status' },
-        ({ payload }: { payload: any }) => {
-          const devicePayload = payload as {
+        ({
+          payload,
+        }: {
+          payload: {
             deviceId: string;
             status: 'online' | 'offline' | 'connecting';
             timestamp: string;
           };
-          if (devicePayload.deviceId === deviceId) {
+        }) => {
+          if (payload.deviceId === deviceId) {
             setDevice(prev => {
               if (!prev) return prev;
               return {
                 ...prev,
-                status: devicePayload.status,
-                last_heartbeat: devicePayload.timestamp,
+                status: payload.status,
+                last_heartbeat: payload.timestamp,
               };
             });
           }
