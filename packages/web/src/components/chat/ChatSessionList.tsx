@@ -15,7 +15,7 @@ interface ChatSession {
   id: string;
   title?: string | null;
   status: 'active' | 'closed' | 'archived';
-  created_at: string;
+  created_at: string | null;
   updated_at?: string | null;
 }
 
@@ -52,8 +52,6 @@ export function ChatSessionList({
   onSessionArchive,
   onSessionDelete,
   onSessionRename,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  isLoading = false,
   className,
 }: ChatSessionListProps): JSX.Element {
   const [searchQuery, setSearchQuery] = useState('');
@@ -83,8 +81,8 @@ export function ChatSessionList({
 
     // Sort by most recent
     return filtered.sort((a, b) => {
-      const dateA = new Date(a.updated_at ?? a.created_at);
-      const dateB = new Date(b.updated_at ?? b.created_at);
+      const dateA = new Date(a.updated_at ?? a.created_at ?? '1970-01-01');
+      const dateB = new Date(b.updated_at ?? b.created_at ?? '1970-01-01');
       return dateB.getTime() - dateA.getTime();
     });
   }, [sessions, filterStatus, searchQuery]);
@@ -111,7 +109,7 @@ export function ChatSessionList({
     const olderSessions: ChatSession[] = [];
 
     filteredSessions.forEach(session => {
-      const sessionDate = new Date(session.created_at);
+      const sessionDate = new Date(session.created_at ?? '1970-01-01');
 
       if (sessionDate.toDateString() === today.toDateString()) {
         todaySessions.push(session);

@@ -305,7 +305,7 @@ export function OrganizationSettings(): JSX.Element {
   // Sync WebSocket organization with local state
   useEffect(() => {
     if (wsOrganization) {
-      setOrganization(wsOrganization);
+      setOrganization(wsOrganization as unknown as Organization);
 
       // Update form data when organization changes via WebSocket
       setFormData({
@@ -326,33 +326,33 @@ export function OrganizationSettings(): JSX.Element {
 
       setSecurityData({
         allow_sso:
-          (wsOrganization.settings as OrganizationSettingsData)?.allow_sso ??
-          false,
+          (wsOrganization.settings as unknown as OrganizationSettingsData)
+            ?.allow_sso ?? false,
         enforce_2fa:
-          (wsOrganization.settings as OrganizationSettingsData)?.enforce_2fa ??
-          false,
+          (wsOrganization.settings as unknown as OrganizationSettingsData)
+            ?.enforce_2fa ?? false,
         session_timeout: Math.floor(
-          ((wsOrganization.settings as OrganizationSettingsData)
+          ((wsOrganization.settings as unknown as OrganizationSettingsData)
             ?.session_timeout ?? 3600) / 60
         ),
       });
 
       setNotificationData({
         email_alerts:
-          (wsOrganization.settings as OrganizationSettingsData)
+          (wsOrganization.settings as unknown as OrganizationSettingsData)
             ?.notification_preferences?.email_alerts ?? true,
         sms_alerts:
-          (wsOrganization.settings as OrganizationSettingsData)
+          (wsOrganization.settings as unknown as OrganizationSettingsData)
             ?.notification_preferences?.sms_alerts ?? false,
         webhook_url:
-          (wsOrganization.settings as OrganizationSettingsData)
+          (wsOrganization.settings as unknown as OrganizationSettingsData)
             ?.notification_preferences?.webhook_url ?? '',
       });
 
       setApiData({
         rate_limit:
-          (wsOrganization.settings as OrganizationSettingsData)?.api_settings
-            ?.rate_limit ?? 1000,
+          (wsOrganization.settings as unknown as OrganizationSettingsData)
+            ?.api_settings?.rate_limit ?? 1000,
       });
     }
   }, [wsOrganization]);

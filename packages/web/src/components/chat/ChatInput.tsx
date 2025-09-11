@@ -28,7 +28,7 @@ export function ChatInput({
   const [message, setMessage] = useState('');
   const [rows, setRows] = useState(1);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const typingTimeoutRef = useRef<NodeJS.Timeout>();
+  const typingTimeoutRef = useRef<number>();
 
   const isNearLimit = message.length > maxLength * 0.9;
   const remainingChars = maxLength - message.length;

@@ -72,7 +72,7 @@ export const organizationRoutes: FastifyPluginAsync = async fastify => {
           .single()) as { data: Customer | null; error: unknown };
 
         if (error ?? !org) {
-          fastify.log.error('Failed to fetch organization:', error);
+          fastify.log.error('Failed to fetch organization: %s', error);
           return reply.code(404).send({ error: 'Organization not found' });
         }
 
@@ -88,7 +88,7 @@ export const organizationRoutes: FastifyPluginAsync = async fastify => {
           webhook_url?: string | null;
           rate_limit?: number;
           allowed_origins?: unknown[];
-        } | null = null; // Placeholder until organization_settings table is implemented
+        } = {}; // Placeholder until organization_settings table is implemented
         const subscription: {
           plan: string;
           seats: number;
@@ -100,44 +100,47 @@ export const organizationRoutes: FastifyPluginAsync = async fastify => {
           status: string;
         } | null = null; // Placeholder until subscriptions table is implemented
 
+        // Extract metadata fields - use type assertion to handle query result types
+        const metadata =
+          ((org as any).metadata as Record<string, unknown>) || {};
+
         // Mock organization data structure for UI compatibility
         const organization = {
           id: String(org.id),
-          name: String(org.business_name ?? 'Organization'),
-          subdomain: String(org.subdomain ?? ''),
-          logo_url: String(org.logo_url ?? ''),
-          primary_color: String(org.primary_color ?? '#007bff'),
-          secondary_color: String(org.secondary_color ?? '#6c757d'),
+          name: String(
+            (metadata.business_name as string) ?? org.name ?? 'Organization'
+          ),
+          subdomain: String((metadata.subdomain as string) ?? ''),
+          logo_url: String((metadata.logo_url as string) ?? ''),
+          primary_color: String(
+            (metadata.primary_color as string) ?? '#007bff'
+          ),
+          secondary_color: String(
+            (metadata.secondary_color as string) ?? '#6c757d'
+          ),
           contact_email: String(org.email ?? ''),
           contact_phone: String(org.phone ?? ''),
-          address: String(org.address ?? ''),
-          city: String(org.city ?? ''),
-          state: String(org.state ?? ''),
-          zip: String(org.zip ?? ''),
-          country: String(org.country ?? 'US'),
-          timezone: String(org.timezone ?? 'America/New_York'),
+          address: String((org as any).address ?? ''),
+          city: String((metadata.city as string) ?? ''),
+          state: String((metadata.state as string) ?? ''),
+          zip: String((metadata.zip as string) ?? ''),
+          country: String((metadata.country as string) ?? 'US'),
+          timezone: String((metadata.timezone as string) ?? 'America/New_York'),
           created_at: String(org.created_at),
           updated_at: String(org.updated_at),
           settings: {
-            allow_sso: (settings?.allow_sso as boolean | undefined) ?? false,
-            enforce_2fa:
-              (settings?.enforce_2fa as boolean | undefined) ?? false,
-            session_timeout:
-              (settings?.session_timeout as number | undefined) ?? 3600,
-            ip_whitelist:
-              (settings?.ip_whitelist as unknown[] | undefined) ?? [],
+            allow_sso: settings.allow_sso ?? false,
+            enforce_2fa: settings.enforce_2fa ?? false,
+            session_timeout: settings.session_timeout ?? 3600,
+            ip_whitelist: settings.ip_whitelist ?? [],
             notification_preferences: {
-              email_alerts:
-                (settings?.email_alerts as boolean | undefined) ?? true,
-              sms_alerts:
-                (settings?.sms_alerts as boolean | undefined) ?? false,
-              webhook_url:
-                (settings?.webhook_url as string | null | undefined) ?? null,
+              email_alerts: settings.email_alerts ?? true,
+              sms_alerts: settings.sms_alerts ?? false,
+              webhook_url: settings.webhook_url ?? null,
             },
             api_settings: {
-              rate_limit: (settings?.rate_limit as number | undefined) ?? 1000,
-              allowed_origins:
-                (settings?.allowed_origins as unknown[] | undefined) ?? [],
+              rate_limit: settings.rate_limit ?? 1000,
+              allowed_origins: settings.allowed_origins ?? [],
             },
           },
           subscription: subscription ?? {
@@ -154,7 +157,7 @@ export const organizationRoutes: FastifyPluginAsync = async fastify => {
 
         return reply.send({ organization });
       } catch (error) {
-        fastify.log.error('Error fetching organization:', error);
+        fastify.log.error('Error fetching organization: %s', error);
         return reply.code(500).send({ error: 'Internal server error' });
       }
     }
@@ -197,7 +200,7 @@ export const organizationRoutes: FastifyPluginAsync = async fastify => {
           .single()) as { data: unknown; error: unknown };
 
         if (error) {
-          fastify.log.error('Failed to update organization:', error);
+          fastify.log.error('Failed to update organization: %s', error);
           return reply
             .code(500)
             .send({ error: 'Failed to update organization' });
@@ -212,7 +215,7 @@ export const organizationRoutes: FastifyPluginAsync = async fastify => {
 
         return reply.send({ success: true });
       } catch (error) {
-        fastify.log.error('Error updating organization:', error);
+        fastify.log.error('Error updating organization: %s', error);
         return reply.code(500).send({ error: 'Internal server error' });
       }
     }
@@ -242,7 +245,7 @@ export const organizationRoutes: FastifyPluginAsync = async fastify => {
 
         if (result.error) {
           fastify.log.error(
-            'Failed to update security settings:',
+            'Failed to update security settings: %s',
             result.error
           );
           return reply.code(500).send({ error: 'Failed to update settings' });
@@ -250,7 +253,7 @@ export const organizationRoutes: FastifyPluginAsync = async fastify => {
 
         return reply.send({ success: true });
       } catch (error) {
-        fastify.log.error('Error updating security settings:', error);
+        fastify.log.error('Error updating security settings: %s', error);
         return reply.code(500).send({ error: 'Internal server error' });
       }
     }
@@ -280,7 +283,7 @@ export const organizationRoutes: FastifyPluginAsync = async fastify => {
 
         if (result.error) {
           fastify.log.error(
-            'Failed to update notification settings:',
+            'Failed to update notification settings: %s',
             result.error
           );
           return reply.code(500).send({ error: 'Failed to update settings' });
@@ -288,7 +291,7 @@ export const organizationRoutes: FastifyPluginAsync = async fastify => {
 
         return reply.send({ success: true });
       } catch (error) {
-        fastify.log.error('Error updating notification settings:', error);
+        fastify.log.error('Error updating notification settings: %s', error);
         return reply.code(500).send({ error: 'Internal server error' });
       }
     }
@@ -315,13 +318,13 @@ export const organizationRoutes: FastifyPluginAsync = async fastify => {
         });
 
         if (result.error) {
-          fastify.log.error('Failed to update API settings:', result.error);
+          fastify.log.error('Failed to update API settings: %s', result.error);
           return reply.code(500).send({ error: 'Failed to update settings' });
         }
 
         return reply.send({ success: true });
       } catch (error) {
-        fastify.log.error('Error updating API settings:', error);
+        fastify.log.error('Error updating API settings: %s', error);
         return reply.code(500).send({ error: 'Internal server error' });
       }
     }
@@ -382,13 +385,13 @@ export const organizationRoutes: FastifyPluginAsync = async fastify => {
         });
 
         if (result.error) {
-          fastify.log.error('Failed to add IP to whitelist:', result.error);
+          fastify.log.error('Failed to add IP to whitelist: %s', result.error);
           return reply.code(500).send({ error: 'Failed to add IP' });
         }
 
         return reply.send({ success: true });
       } catch (error) {
-        fastify.log.error('Error adding IP to whitelist:', error);
+        fastify.log.error('Error adding IP to whitelist: %s', error);
         return reply.code(500).send({ error: 'Internal server error' });
       }
     }
@@ -432,7 +435,7 @@ export const organizationRoutes: FastifyPluginAsync = async fastify => {
 
         if (result.error) {
           fastify.log.error(
-            'Failed to remove IP from whitelist:',
+            'Failed to remove IP from whitelist: %s',
             result.error
           );
           return reply.code(500).send({ error: 'Failed to remove IP' });
@@ -440,7 +443,7 @@ export const organizationRoutes: FastifyPluginAsync = async fastify => {
 
         return reply.send({ success: true });
       } catch (error) {
-        fastify.log.error('Error removing IP from whitelist:', error);
+        fastify.log.error('Error removing IP from whitelist: %s', error);
         return reply.code(500).send({ error: 'Internal server error' });
       }
     }
@@ -482,13 +485,13 @@ export const organizationRoutes: FastifyPluginAsync = async fastify => {
         });
 
         if (result.error) {
-          fastify.log.error('Failed to add allowed origin:', result.error);
+          fastify.log.error('Failed to add allowed origin: %s', result.error);
           return reply.code(500).send({ error: 'Failed to add origin' });
         }
 
         return reply.send({ success: true });
       } catch (error) {
-        fastify.log.error('Error adding allowed origin:', error);
+        fastify.log.error('Error adding allowed origin: %s', error);
         return reply.code(500).send({ error: 'Internal server error' });
       }
     }
@@ -523,13 +526,16 @@ export const organizationRoutes: FastifyPluginAsync = async fastify => {
         });
 
         if (result.error) {
-          fastify.log.error('Failed to remove allowed origin:', result.error);
+          fastify.log.error(
+            'Failed to remove allowed origin: %s',
+            result.error
+          );
           return reply.code(500).send({ error: 'Failed to remove origin' });
         }
 
         return reply.send({ success: true });
       } catch (error) {
-        fastify.log.error('Error removing allowed origin:', error);
+        fastify.log.error('Error removing allowed origin: %s', error);
         return reply.code(500).send({ error: 'Internal server error' });
       }
     }
@@ -554,7 +560,7 @@ export const organizationRoutes: FastifyPluginAsync = async fastify => {
 
         return reply.send({ success: true });
       } catch (error) {
-        fastify.log.error('Error testing webhook:', error);
+        fastify.log.error('Error testing webhook: %s', error);
         return reply.code(500).send({ error: 'Internal server error' });
       }
     }
@@ -579,7 +585,7 @@ export const organizationRoutes: FastifyPluginAsync = async fastify => {
           url: 'https://billing.example.com/portal',
         });
       } catch (error) {
-        fastify.log.error('Error getting billing portal URL:', error);
+        fastify.log.error('Error getting billing portal URL: %s', error);
         return reply.code(500).send({ error: 'Internal server error' });
       }
     }
@@ -603,7 +609,7 @@ export const organizationRoutes: FastifyPluginAsync = async fastify => {
 
         return reply.send({ success: true });
       } catch (error) {
-        fastify.log.error('Error deleting organization:', error);
+        fastify.log.error('Error deleting organization: %s', error);
         return reply.code(500).send({ error: 'Internal server error' });
       }
     }

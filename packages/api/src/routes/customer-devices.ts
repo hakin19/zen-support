@@ -231,7 +231,9 @@ export function registerCustomerDeviceRoutes(app: FastifyInstance): void {
 
         const { data: device, error } = await supabase
           .from('devices')
-          .select('id, name, status, last_seen, created_at, metrics')
+          .select(
+            'id, name, status, last_heartbeat_at, registered_at, network_info'
+          )
           .eq('id', deviceId)
           .eq('customer_id', customerId)
           .single();
@@ -251,12 +253,12 @@ export function registerCustomerDeviceRoutes(app: FastifyInstance): void {
 
         return {
           device: {
-            id: device.id as string,
-            name: device.name as string,
+            id: device.id,
+            name: device.name,
             status: device.status as string,
-            lastHeartbeat: device.last_seen as string,
-            metrics: device.metrics as Record<string, unknown>,
-            createdAt: device.created_at as string,
+            lastHeartbeat: device.last_heartbeat_at as string,
+            networkInfo: device.network_info as Record<string, unknown>,
+            createdAt: device.registered_at as string,
           },
         };
       } catch (error) {

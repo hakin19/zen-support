@@ -1,13 +1,7 @@
-import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import userEvent from '@testing-library/user-event';
 
 describe('ChatInput', () => {
-  const mockOnSend = vi.fn();
-  const mockOnTyping = vi.fn();
-
   beforeEach(() => {
     vi.clearAllMocks();
   });

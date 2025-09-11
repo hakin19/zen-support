@@ -1,21 +1,7 @@
-/* eslint-disable @typescript-eslint/no-redundant-type-constituents */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-unsafe-return */
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 
-import type { Database } from '@aizen/shared';
-
-type _ChatSessionStatus = 'active' | 'archived' | 'closed';
-type _ChatMessageRole = 'user' | 'assistant' | 'system';
-type _DeviceActionStatus =
-  | 'pending'
-  | 'approved'
-  | 'rejected'
-  | 'executing'
-  | 'completed'
-  | 'failed';
+import type { Database } from '@aizen/shared/types/database.generated';
 
 type ChatSession = Database['public']['Tables']['chat_sessions']['Row'];
 type ChatMessage = Database['public']['Tables']['chat_messages']['Row'];
@@ -239,7 +225,7 @@ export const useChatStore = create<ChatState>()(
         const message: MessageWithStatus = {
           id: tempId,
           session_id: sessionId,
-          role: 'user',
+          role: 'user' as Database['public']['Enums']['message_role'],
           content,
           created_at: new Date().toISOString(),
           metadata: null,
@@ -385,21 +371,9 @@ export const useChatStore = create<ChatState>()(
           // Rollback to original state
           if (originalAction) {
             get().updateDeviceAction(id, {
-              status: originalAction.status as
-                | 'pending'
-                | 'approved'
-                | 'rejected'
-                | 'executing'
-                | 'completed'
-                | 'failed',
-              approved_at: originalAction.approved_at as
-                | string
-                | null
-                | undefined,
-              approved_by: originalAction.approved_by as
-                | string
-                | null
-                | undefined,
+              status: originalAction.status,
+              approved_at: originalAction.approved_at,
+              approved_by: originalAction.approved_by,
             });
           }
           throw error;
@@ -424,21 +398,9 @@ export const useChatStore = create<ChatState>()(
           // Rollback to original state
           if (originalAction) {
             get().updateDeviceAction(id, {
-              status: originalAction.status as
-                | 'pending'
-                | 'approved'
-                | 'rejected'
-                | 'executing'
-                | 'completed'
-                | 'failed',
-              rejected_at: originalAction.rejected_at as
-                | string
-                | null
-                | undefined,
-              rejected_by: originalAction.rejected_by as
-                | string
-                | null
-                | undefined,
+              status: originalAction.status,
+              rejected_at: originalAction.rejected_at,
+              rejected_by: originalAction.rejected_by,
             });
           }
           throw error;

@@ -300,7 +300,7 @@ export function registerChatRoutes(fastify: FastifyInstance): void {
         customerId,
         token
       ).catch((error: unknown) => {
-        fastify.log.error('Failed to process AI response:', error);
+        fastify.log.error('Failed to process AI response: %s', error as Error);
       });
 
       return reply.code(201).send(userMessage);

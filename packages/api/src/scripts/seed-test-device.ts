@@ -67,7 +67,7 @@ async function seedTestDevice(): Promise<void> {
 
     if (!existingCustomer) {
       console.log('   Creating test customer...');
-      const { error: customerError } = await supabaseAdmin
+      const { error: customerError } = await (supabaseAdmin as any)
         .from('customers')
         .insert({
           id: TEST_CUSTOMER_ID,
@@ -103,11 +103,11 @@ async function seedTestDevice(): Promise<void> {
       console.log('   ⚠️  Test device already exists');
       console.log('   Updating device status...');
 
-      const { error: updateError } = await supabaseAdmin
+      const { error: updateError } = await (supabaseAdmin as any)
         .from('devices')
         .update({
           status: 'offline',
-          last_seen: new Date().toISOString(),
+          last_heartbeat_at: new Date().toISOString(),
         })
         .eq('device_id', TEST_DEVICE_ID);
 
@@ -119,7 +119,7 @@ async function seedTestDevice(): Promise<void> {
     } else {
       console.log('   Creating test device...');
 
-      const { error: deviceError } = await supabaseAdmin
+      const { error: deviceError } = await (supabaseAdmin as any)
         .from('devices')
         .insert({
           device_id: TEST_DEVICE_ID,

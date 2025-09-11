@@ -179,7 +179,7 @@ export class WebSocketClient extends EventEmitter {
         ).toString('utf-8');
       } else {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call
-        dataStr = data.toString();
+        dataStr = (data as any).toString();
       }
       const message = JSON.parse(dataStr) as WebSocketMessage;
       this.metrics.messagesReceived++;

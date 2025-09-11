@@ -1,18 +1,12 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import {
-  render,
-  screen,
-  fireEvent,
-  waitFor,
-  within,
-} from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { PromptTemplateEditor } from './PromptTemplateEditor';
 import { useAuthStore } from '@/store/auth.store';
 import { api } from '@/lib/api-client';
-import * as monaco from 'monaco-editor';
+// import * as monaco from 'monaco-editor'; // Monaco is mocked
 
 // Mock Monaco Editor
 vi.mock('monaco-editor');

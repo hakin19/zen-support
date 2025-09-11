@@ -158,12 +158,18 @@ describe('DeviceStatusIndicator', () => {
 
     it('should update status when receiving real-time update', async () => {
       let postgresCallback: any;
-      mockChannel.on.mockImplementation((event, config, callback) => {
-        if (event === 'postgres_changes') {
-          postgresCallback = callback;
+      mockChannel.on.mockImplementation(
+        (
+          event: string,
+          _config: unknown,
+          callback: (payload: unknown) => void
+        ) => {
+          if (event === 'postgres_changes') {
+            postgresCallback = callback;
+          }
+          return mockChannel;
         }
-        return mockChannel;
-      });
+      );
 
       render(<DeviceStatusIndicator deviceId='device-001' />);
 
@@ -193,12 +199,18 @@ describe('DeviceStatusIndicator', () => {
 
     it('should handle broadcast events for immediate updates', async () => {
       let broadcastCallback: any;
-      mockChannel.on.mockImplementation((event, config, callback) => {
-        if (event === 'broadcast') {
-          broadcastCallback = callback;
+      mockChannel.on.mockImplementation(
+        (
+          event: string,
+          _config: unknown,
+          callback: (payload: unknown) => void
+        ) => {
+          if (event === 'broadcast') {
+            broadcastCallback = callback;
+          }
+          return mockChannel;
         }
-        return mockChannel;
-      });
+      );
 
       render(<DeviceStatusIndicator deviceId='device-001' />);
 
@@ -329,12 +341,18 @@ describe('DeviceStatusIndicator', () => {
       vi.useFakeTimers();
       let postgresCallback: any;
 
-      mockChannel.on.mockImplementation((event, config, callback) => {
-        if (event === 'postgres_changes') {
-          postgresCallback = callback;
+      mockChannel.on.mockImplementation(
+        (
+          event: string,
+          _config: unknown,
+          callback: (payload: unknown) => void
+        ) => {
+          if (event === 'postgres_changes') {
+            postgresCallback = callback;
+          }
+          return mockChannel;
         }
-        return mockChannel;
-      });
+      );
 
       render(<DeviceStatusIndicator deviceId='device-001' />);
 
@@ -373,12 +391,18 @@ describe('DeviceStatusIndicator', () => {
     it('should handle rapid status changes', async () => {
       let postgresCallback: any;
 
-      mockChannel.on.mockImplementation((event, config, callback) => {
-        if (event === 'postgres_changes') {
-          postgresCallback = callback;
+      mockChannel.on.mockImplementation(
+        (
+          event: string,
+          _config: unknown,
+          callback: (payload: unknown) => void
+        ) => {
+          if (event === 'postgres_changes') {
+            postgresCallback = callback;
+          }
+          return mockChannel;
         }
-        return mockChannel;
-      });
+      );
 
       render(<DeviceStatusIndicator deviceId='device-001' />);
 

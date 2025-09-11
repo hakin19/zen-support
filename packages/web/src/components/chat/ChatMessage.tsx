@@ -16,7 +16,7 @@ import type {
   MessageWithStatus,
   DeviceActionWithStatus,
 } from '@/store/chat.store';
-import type { Database } from '@aizen/shared';
+import type { Database } from '@aizen/shared/types/database.generated';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -119,7 +119,7 @@ export function ChatMessage({
               variant='ghost'
               size='sm'
               className='h-6 px-2'
-              onClick={() => onRetry(message.id as string)}
+              onClick={() => onRetry(message.id)}
             >
               <RefreshCw className='h-3 w-3 mr-1' />
               Retry
@@ -128,6 +128,8 @@ export function ChatMessage({
         </div>
       );
     }
+
+    return null;
   };
 
   const renderDeviceActions = () => {
@@ -136,7 +138,7 @@ export function ChatMessage({
     return (
       <div className='mt-3 space-y-2'>
         {messageActions.map(action => (
-          <Card key={action.id as string} className='p-3'>
+          <Card key={action.id} className='p-3'>
             <div className='flex items-start justify-between'>
               <div className='flex-1'>
                 <div className='flex items-center gap-2'>
@@ -183,7 +185,7 @@ export function ChatMessage({
                     <Button
                       size='sm'
                       variant='default'
-                      onClick={() => onApproveAction(action.id as string)}
+                      onClick={() => onApproveAction(action.id)}
                       className='h-7'
                     >
                       <CheckCircle2 className='h-3 w-3 mr-1' />
@@ -194,7 +196,7 @@ export function ChatMessage({
                     <Button
                       size='sm'
                       variant='destructive'
-                      onClick={() => onRejectAction(action.id as string)}
+                      onClick={() => onRejectAction(action.id)}
                       className='h-7'
                     >
                       Reject
@@ -206,7 +208,7 @@ export function ChatMessage({
                 <Button
                   size='sm'
                   variant='ghost'
-                  onClick={() => onViewAction(action.id as string)}
+                  onClick={() => onViewAction(action.id)}
                   className='h-7'
                 >
                   View
@@ -223,7 +225,7 @@ export function ChatMessage({
     <div
       className={cn(
         'group relative flex gap-3 p-4 rounded-lg border transition-colors',
-        roleColors[message.role as MessageRole],
+        roleColors[message.role],
         isUser && 'ml-8',
         !isUser && 'mr-8'
       )}
@@ -232,7 +234,7 @@ export function ChatMessage({
     >
       <div className='flex-shrink-0'>
         <div className='w-8 h-8 rounded-full bg-background flex items-center justify-center border'>
-          {roleIcons[message.role as MessageRole]}
+          {roleIcons[message.role]}
         </div>
       </div>
       <div className='flex-1 space-y-1'>
@@ -240,7 +242,7 @@ export function ChatMessage({
           <span className='text-xs font-medium capitalize'>{message.role}</span>
           {message.created_at && (
             <span className='text-xs text-muted-foreground'>
-              {formatDistanceToNow(new Date(message.created_at as string), {
+              {formatDistanceToNow(new Date(message.created_at), {
                 addSuffix: true,
               })}
             </span>

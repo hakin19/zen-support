@@ -1,8 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-return */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable @typescript-eslint/no-unsafe-argument */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-misused-promises */
 /* eslint-disable @typescript-eslint/no-floating-promises */
 /* eslint-disable @typescript-eslint/prefer-nullish-coalescing */
@@ -272,6 +267,7 @@ export function PromptTemplateEditor(): React.ReactElement {
       document.addEventListener('keydown', handleKeyDown);
       return () => document.removeEventListener('keydown', handleKeyDown);
     }
+    return undefined;
   }, [selectedPrompt]);
 
   // Variable detection from template content
@@ -281,7 +277,7 @@ export function PromptTemplateEditor(): React.ReactElement {
     let match;
 
     while ((match = variableRegex.exec(template)) !== null) {
-      const variable = match[1].trim();
+      const variable = match[1]?.trim();
       if (variable && /^[a-zA-Z][a-zA-Z0-9_]*$/.test(variable)) {
         variables.add(variable);
       }
@@ -380,7 +376,7 @@ export function PromptTemplateEditor(): React.ReactElement {
       ...prev,
       [field]: value,
       ...(field === 'template' && {
-        variables: detectVariables(value),
+        variables: detectVariables(value as string),
       }),
     }));
 
@@ -402,7 +398,10 @@ export function PromptTemplateEditor(): React.ReactElement {
       setIsSubmitting(true);
       const response = await api.post('/api/prompts', formData);
 
-      setPrompts(prev => [...prev, response.data.prompt]);
+      setPrompts(prev => [
+        ...prev,
+        (response.data as { prompt: PromptTemplate }).prompt,
+      ]);
       setIsCreateDialogOpen(false);
       setFormData(DEFAULT_FORM_DATA);
       setErrors({});
@@ -439,7 +438,8 @@ export function PromptTemplateEditor(): React.ReactElement {
         formData
       );
 
-      const updatedPrompt = response.data.prompt;
+      const updatedPrompt = (response.data as { prompt: PromptTemplate })
+        .prompt;
       setPrompts(prev =>
         prev.map(p => (p.id === selectedPrompt.id ? updatedPrompt : p))
       );
@@ -501,7 +501,7 @@ export function PromptTemplateEditor(): React.ReactElement {
         variables: testVariables,
       });
 
-      setTestResult(response.data);
+      setTestResult(response.data as TestResult);
     } catch {
       toast({
         title: 'Error',
@@ -582,7 +582,7 @@ export function PromptTemplateEditor(): React.ReactElement {
 
       toast({
         title: 'Import successful',
-        description: `${response.data.imported_count} templates imported`,
+        description: `${(response.data as { imported_count: number }).imported_count} templates imported`,
       });
     } catch {
       toast({
@@ -597,7 +597,9 @@ export function PromptTemplateEditor(): React.ReactElement {
   const fetchVersionHistory = async (promptId: string) => {
     try {
       const response = await api.get(`/api/prompts/${promptId}/history`);
-      setVersionHistory(response.data.versions as TemplateVersionHistory[]);
+      setVersionHistory(
+        (response.data as { versions: TemplateVersionHistory[] }).versions
+      );
       setIsHistoryDialogOpen(true);
     } catch {
       toast({
@@ -672,7 +674,11 @@ export function PromptTemplateEditor(): React.ReactElement {
 
                       <Select
                         value={statusFilter}
-                        onValueChange={setStatusFilter}
+                        onValueChange={value =>
+                          setStatusFilter(
+                            value as 'all' | 'active' | 'inactive'
+                          )
+                        }
                       >
                         <SelectTrigger className='flex-1'>
                           <SelectValue placeholder='Status' />

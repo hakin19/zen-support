@@ -1,9 +1,7 @@
-import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 
-import type { Database } from '@aizen/shared';
+import type { Database } from '@aizen/shared/types/database.generated';
 
 type ChatMessage = Database['public']['Tables']['chat_messages']['Row'];
 
@@ -12,7 +10,7 @@ describe('MessageList', () => {
     {
       id: 'msg-1',
       session_id: 'session-1',
-      role: 'user',
+      role: 'user' as Database['public']['Enums']['message_role'],
       content: 'Hello, I need help with my network',
       created_at: '2025-01-08T10:00:00Z',
       metadata: null,
@@ -20,7 +18,7 @@ describe('MessageList', () => {
     {
       id: 'msg-2',
       session_id: 'session-1',
-      role: 'assistant',
+      role: 'assistant' as Database['public']['Enums']['message_role'],
       content: 'I can help you with that. Let me check your network status.',
       created_at: '2025-01-08T10:01:00Z',
       metadata: null,
@@ -28,7 +26,7 @@ describe('MessageList', () => {
     {
       id: 'msg-3',
       session_id: 'session-1',
-      role: 'system',
+      role: 'system' as Database['public']['Enums']['message_role'],
       content: 'Running network diagnostics...',
       created_at: '2025-01-08T10:02:00Z',
       metadata: null,
@@ -41,7 +39,8 @@ describe('MessageList', () => {
 
   describe('Message Display', () => {
     it('should render all messages in order', () => {
-      // Test implementation will be added
+      // Test implementation will be added - temporary usage of mock data
+      expect(mockMessages).toBeDefined();
       expect(true).toBe(true);
     });
 

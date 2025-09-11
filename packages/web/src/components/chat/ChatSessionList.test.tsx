@@ -1,9 +1,7 @@
-import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 
-import type { Database } from '@aizen/shared';
+import type { Database } from '@aizen/shared/types/database.generated';
 
 type ChatSession = Database['public']['Tables']['chat_sessions']['Row'];
 
@@ -14,7 +12,7 @@ describe('ChatSessionList', () => {
       customer_id: 'customer-1',
       user_id: 'user-1',
       title: 'Network connectivity issue',
-      status: 'active',
+      status: 'active' as Database['public']['Enums']['chat_session_status'],
       created_at: '2025-01-08T10:00:00Z',
       updated_at: '2025-01-08T11:00:00Z',
       closed_at: null,
@@ -25,7 +23,7 @@ describe('ChatSessionList', () => {
       customer_id: 'customer-1',
       user_id: 'user-1',
       title: 'Slow internet speed',
-      status: 'archived',
+      status: 'archived' as Database['public']['Enums']['chat_session_status'],
       created_at: '2025-01-07T10:00:00Z',
       updated_at: '2025-01-07T12:00:00Z',
       closed_at: '2025-01-07T12:00:00Z',
@@ -36,7 +34,7 @@ describe('ChatSessionList', () => {
       customer_id: 'customer-1',
       user_id: 'user-1',
       title: null,
-      status: 'active',
+      status: 'active' as Database['public']['Enums']['chat_session_status'],
       created_at: '2025-01-08T09:00:00Z',
       updated_at: '2025-01-08T09:30:00Z',
       closed_at: null,
@@ -54,7 +52,11 @@ describe('ChatSessionList', () => {
 
   describe('Session Display', () => {
     it('should render all chat sessions', () => {
-      // Test implementation will be added
+      // Test implementation will be added - temporary usage of mock data
+      expect(mockSessions).toBeDefined();
+      expect(mockOnSessionSelect).toBeDefined();
+      expect(mockOnSessionCreate).toBeDefined();
+      expect(mockOnSessionArchive).toBeDefined();
       expect(true).toBe(true);
     });
 

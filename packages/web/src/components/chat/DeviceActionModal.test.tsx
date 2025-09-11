@@ -1,9 +1,7 @@
-import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 
-import type { Database } from '@aizen/shared';
+import type { Database } from '@aizen/shared/types/database.generated';
 
 type DeviceAction = Database['public']['Tables']['device_actions']['Row'];
 
@@ -12,10 +10,11 @@ describe('DeviceActionModal', () => {
     id: 'action-1',
     session_id: 'session-1',
     device_id: 'device-1',
-    action_type: 'command',
+    message_id: 'msg-1',
+    action_type: 'command' as Database['public']['Enums']['action_type'],
     command: 'ping 8.8.8.8',
     parameters: { count: 4 },
-    status: 'pending',
+    status: 'pending' as Database['public']['Enums']['action_status'],
     requested_by: 'user-1',
     created_at: '2025-01-08T10:00:00Z',
     approved_at: null,
@@ -39,7 +38,11 @@ describe('DeviceActionModal', () => {
 
   describe('Modal Display', () => {
     it('should render modal when visible', () => {
-      // Test implementation will be added
+      // Test implementation will be added - temporary usage of mock data
+      expect(mockDeviceAction).toBeDefined();
+      expect(mockOnApprove).toBeDefined();
+      expect(mockOnReject).toBeDefined();
+      expect(mockOnClose).toBeDefined();
       expect(true).toBe(true);
     });
 

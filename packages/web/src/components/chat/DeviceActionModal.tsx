@@ -144,7 +144,10 @@ export function DeviceActionModal({
 
     const newIndex = direction === 'prev' ? currentIndex - 1 : currentIndex + 1;
     if (newIndex >= 0 && newIndex < actions.length) {
-      onSelectAction(actions[newIndex].id as string);
+      const action = actions[newIndex];
+      if (action) {
+        onSelectAction(action.id);
+      }
     }
   };
 
@@ -238,14 +241,14 @@ export function DeviceActionModal({
             <div className='p-2 space-y-1'>
               {actions.map(action => (
                 <Card
-                  key={action.id as string}
+                  key={action.id}
                   className={cn(
                     'p-3 cursor-pointer transition-colors',
                     action.id === selectedActionId
                       ? 'bg-primary/10 border-primary'
                       : 'hover:bg-muted/50'
                   )}
-                  onClick={() => onSelectAction(action.id as string)}
+                  onClick={() => onSelectAction(action.id)}
                 >
                   <div className='flex items-center justify-between'>
                     <div className='flex items-center gap-2'>
@@ -330,7 +333,7 @@ export function DeviceActionModal({
                       <Button
                         size='sm'
                         variant='default'
-                        onClick={() => onApprove(selectedAction.id as string)}
+                        onClick={() => onApprove(selectedAction.id)}
                       >
                         <CheckCircle2 className='h-4 w-4 mr-2' />
                         Approve
@@ -338,7 +341,7 @@ export function DeviceActionModal({
                       <Button
                         size='sm'
                         variant='destructive'
-                        onClick={() => onReject(selectedAction.id as string)}
+                        onClick={() => onReject(selectedAction.id)}
                       >
                         <XCircle className='h-4 w-4 mr-2' />
                         Reject

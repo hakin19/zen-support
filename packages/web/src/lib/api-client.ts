@@ -28,7 +28,7 @@ export class ApiClient {
 
     // Add Authorization header if token is available
     if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
+      (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
     }
 
     const response = await fetch(url, {
@@ -62,7 +62,7 @@ export class ApiClient {
 
     // Add Authorization header if token is available
     if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
+      (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
     }
 
     const response = await fetch(url, {

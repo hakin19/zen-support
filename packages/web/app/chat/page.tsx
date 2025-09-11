@@ -2,7 +2,7 @@
 
 import React from 'react';
 
-import type { Database } from '@aizen/shared';
+import type { Database } from '@aizen/shared/types/database.generated';
 
 import { ChatInput } from '@/components/chat/ChatInput';
 import { ChatSessionList } from '@/components/chat/ChatSessionList';

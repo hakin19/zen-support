@@ -2,6 +2,7 @@ import { getAuthenticatedSupabaseClient } from '@aizen/shared/utils/supabase-cli
 
 import { customerAuthMiddleware } from '../middleware/customer-auth.middleware';
 
+import type { Json } from '@aizen/shared/types/database.generated';
 import type { FastifyInstance } from 'fastify';
 
 interface CreateSessionBody {
@@ -27,6 +28,7 @@ interface SessionRecord {
   updated_at: string;
   expires_at?: string | null;
   commands?: Command[] | null;
+  diagnostic_data?: Json | null;
 }
 
 interface Command {
@@ -347,7 +349,12 @@ export function registerCustomerSessionRoutes(app: FastifyInstance): void {
         // Include customer_id and updated_at to prevent race conditions
         const { data: updateData, error: updateError } = await supabase
           .from('diagnostic_sessions')
-          .update({ commands: updatedCommands })
+          .update({
+            diagnostic_data: {
+              ...((session.diagnostic_data as Record<string, unknown>) || {}),
+              commands: updatedCommands,
+            } as Json,
+          })
           .eq('id', sessionId)
           .eq('customer_id', customerId)
           .eq('updated_at', session.updated_at)
@@ -372,7 +379,7 @@ export function registerCustomerSessionRoutes(app: FastifyInstance): void {
         await supabase.from('audit_logs').insert({
           customer_id: customerId,
           user_id: userId,
-          action: approved ? 'command_approved' : 'command_rejected',
+          action: approved ? 'approve' : 'reject',
           resource_type: 'diagnostic_command',
           resource_id: commandId,
           details: {

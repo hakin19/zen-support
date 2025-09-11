@@ -122,6 +122,7 @@ export function ProtectedRoute({
 
       return () => clearTimeout(retryTimeout);
     }
+    return undefined;
   }, [error]);
 
   if (loading) {

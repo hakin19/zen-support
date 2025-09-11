@@ -11,8 +11,6 @@ import type { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
 // Type aliases for cleaner code
 type DeviceRow = Database['public']['Tables']['devices']['Row'];
 type DeviceInsert = Database['public']['Tables']['devices']['Insert'];
-type _DeviceUpdate = Database['public']['Tables']['devices']['Update'];
-type _AuditLogInsert = Database['public']['Tables']['audit_logs']['Insert'];
 
 const deviceStatusSchema = z.enum(['online', 'offline', 'maintenance']);
 
@@ -46,11 +44,6 @@ const queryParamsSchema = z.object({
 export const devicesRoutes: FastifyPluginAsync = async (
   fastify
 ): Promise<void> => {
-  // Helper function to create typed preHandler
-  const _createPreHandler = () => {
-    return (request: FastifyRequest, reply: FastifyReply): Promise<void> =>
-      webPortalAuthMiddleware(request, reply);
-  };
   // Get devices list - simplified endpoint for UI compatibility
   fastify.get(
     '/api/devices',
@@ -68,11 +61,11 @@ export const devicesRoutes: FastifyPluginAsync = async (
         const { data: devices, error } = await supabase
           .from('devices')
           .select('*')
-          .eq('customer_id', user.organization_id)
+          .eq('customer_id', user.customerId)
           .order('created_at', { ascending: false });
 
         if (error) {
-          fastify.log.error('Failed to fetch devices:', error);
+          fastify.log.error('Failed to fetch devices: %s', error);
           return reply.code(500).send({ error: 'Failed to fetch devices' });
         }
 
@@ -90,7 +83,7 @@ export const devicesRoutes: FastifyPluginAsync = async (
           firmware_updates: firmwareUpdates,
         });
       } catch (error: unknown) {
-        fastify.log.error('Error fetching devices:', error);
+        fastify.log.error('Error fetching devices: %s', error);
         return reply.code(500).send({ error: 'Internal server error' });
       }
     }
@@ -144,7 +137,7 @@ export const devicesRoutes: FastifyPluginAsync = async (
         const deviceData: DeviceInsert = {
           name: body.name,
           device_id: body.serial_number,
-          customer_id: user.organization_id as string,
+          customer_id: user.customerId,
           location: body.location ?? null,
           status: 'offline',
         };
@@ -156,7 +149,7 @@ export const devicesRoutes: FastifyPluginAsync = async (
           .single()) as { data: DeviceRow | null; error: Error | null };
 
         if (insertError) {
-          fastify.log.error('Failed to register device:', insertError);
+          fastify.log.error('Failed to register device: %s', insertError);
           return reply.code(500).send({ error: 'Failed to register device' });
         }
 
@@ -173,7 +166,7 @@ export const devicesRoutes: FastifyPluginAsync = async (
           registration_code: registrationCode,
         });
       } catch (error: unknown) {
-        fastify.log.error('Error registering device:', error);
+        fastify.log.error('Error registering device: %s', error);
         return reply.code(500).send({ error: 'Internal server error' });
       }
     }
@@ -202,7 +195,7 @@ export const devicesRoutes: FastifyPluginAsync = async (
         let query = supabase
           .from('devices')
           .select('*', { count: 'exact' })
-          .eq('customer_id', user.organization_id)
+          .eq('customer_id', user.customerId)
           .range(offset, offset + limit - 1)
           .order('created_at', { ascending: false });
 
@@ -220,7 +213,7 @@ export const devicesRoutes: FastifyPluginAsync = async (
         const { data: devices, error, count } = await query;
 
         if (error) {
-          fastify.log.error('Failed to fetch devices:', error);
+          fastify.log.error('Failed to fetch devices: %s', error);
           return reply.code(500).send({ error: 'Failed to fetch devices' });
         }
 
@@ -248,7 +241,7 @@ export const devicesRoutes: FastifyPluginAsync = async (
           limit,
         });
       } catch (error: unknown) {
-        fastify.log.error('Error fetching devices:', error);
+        fastify.log.error('Error fetching devices: %s', error);
         return reply.code(500).send({ error: 'Internal server error' });
       }
     }
@@ -286,7 +279,7 @@ export const devicesRoutes: FastifyPluginAsync = async (
           .from('devices')
           .insert({
             ...body,
-            customer_id: user.organization_id as string,
+            customer_id: user.customerId,
             status: 'offline',
             registered_by: user.id,
           })
@@ -294,7 +287,7 @@ export const devicesRoutes: FastifyPluginAsync = async (
           .single()) as { data: DeviceRow | null; error: Error | null };
 
         if (deviceInsertError) {
-          fastify.log.error('Failed to register device:', deviceInsertError);
+          fastify.log.error('Failed to register device: %s', deviceInsertError);
           return reply.code(500).send({ error: 'Failed to register device' });
         }
 
@@ -307,7 +300,7 @@ export const devicesRoutes: FastifyPluginAsync = async (
 
         return reply.send({ device: newDevice as DeviceRow });
       } catch (error: unknown) {
-        fastify.log.error('Error registering device:', error);
+        fastify.log.error('Error registering device: %s', error);
         return reply.code(500).send({ error: 'Internal server error' });
       }
     }
@@ -335,7 +328,7 @@ export const devicesRoutes: FastifyPluginAsync = async (
           .from('devices')
           .select('id')
           .eq('id', deviceId)
-          .eq('customer_id', user.organization_id)
+          .eq('customer_id', user.customerId)
           .single();
 
         if (!device) {
@@ -351,7 +344,7 @@ export const devicesRoutes: FastifyPluginAsync = async (
           .single()) as { data: DeviceRow | null; error: Error | null };
 
         if (updateError) {
-          fastify.log.error('Failed to update device:', updateError);
+          fastify.log.error('Failed to update device: %s', updateError);
           return reply.code(500).send({ error: 'Failed to update device' });
         }
 
@@ -364,7 +357,7 @@ export const devicesRoutes: FastifyPluginAsync = async (
 
         return reply.send({ device: updatedDevice as DeviceRow });
       } catch (error: unknown) {
-        fastify.log.error('Error updating device:', error);
+        fastify.log.error('Error updating device: %s', error);
         return reply.code(500).send({ error: 'Internal server error' });
       }
     }
@@ -393,7 +386,7 @@ export const devicesRoutes: FastifyPluginAsync = async (
           .from('devices')
           .select('id')
           .eq('id', deviceId)
-          .eq('customer_id', user.organization_id)
+          .eq('customer_id', user.customerId)
           .single();
 
         if (!device) {
@@ -407,7 +400,7 @@ export const devicesRoutes: FastifyPluginAsync = async (
           .eq('id', deviceId);
 
         if (error) {
-          fastify.log.error('Failed to delete device:', error);
+          fastify.log.error('Failed to delete device: %s', error);
           return reply.code(500).send({ error: 'Failed to delete device' });
         }
 
@@ -420,7 +413,7 @@ export const devicesRoutes: FastifyPluginAsync = async (
 
         return reply.send({ success: true });
       } catch (error: unknown) {
-        fastify.log.error('Error deleting device:', error);
+        fastify.log.error('Error deleting device: %s', error);
         return reply.code(500).send({ error: 'Internal server error' });
       }
     }
@@ -447,7 +440,7 @@ export const devicesRoutes: FastifyPluginAsync = async (
           .from('devices')
           .select('id, status')
           .eq('id', deviceId)
-          .eq('customer_id', user.organization_id)
+          .eq('customer_id', user.customerId)
           .single();
 
         if (!device) {
@@ -480,7 +473,7 @@ export const devicesRoutes: FastifyPluginAsync = async (
           message: 'Restart command sent to device',
         });
       } catch (error: unknown) {
-        fastify.log.error('Error restarting device:', error);
+        fastify.log.error('Error restarting device: %s', error);
         return reply.code(500).send({ error: 'Internal server error' });
       }
     }
@@ -508,7 +501,7 @@ export const devicesRoutes: FastifyPluginAsync = async (
           .from('devices')
           .select('id, status, firmware_version')
           .eq('id', deviceId)
-          .eq('customer_id', user.organization_id)
+          .eq('customer_id', user.customerId)
           .single();
 
         if (!device) {
@@ -538,7 +531,7 @@ export const devicesRoutes: FastifyPluginAsync = async (
 
         if (firmwareError) {
           fastify.log.error(
-            'Failed to create firmware update record:',
+            'Failed to create firmware update record: %s',
             firmwareError
           );
           return reply
@@ -562,7 +555,7 @@ export const devicesRoutes: FastifyPluginAsync = async (
           message: 'Firmware update initiated',
         });
       } catch (error: unknown) {
-        fastify.log.error('Error updating firmware:', error);
+        fastify.log.error('Error updating firmware: %s', error);
         return reply.code(500).send({ error: 'Internal server error' });
       }
     }
@@ -589,7 +582,7 @@ export const devicesRoutes: FastifyPluginAsync = async (
           .from('devices')
           .select('*')
           .eq('id', deviceId)
-          .eq('customer_id', user.organization_id)
+          .eq('customer_id', user.customerId)
           .single()) as { data: DeviceRow | null; error: Error | null };
 
         if (!device) {
@@ -618,7 +611,7 @@ export const devicesRoutes: FastifyPluginAsync = async (
           events: events ?? [],
         });
       } catch (error: unknown) {
-        fastify.log.error('Error fetching device diagnostics:', error);
+        fastify.log.error('Error fetching device diagnostics: %s', error);
         return reply.code(500).send({ error: 'Internal server error' });
       }
     }
@@ -642,11 +635,14 @@ export const devicesRoutes: FastifyPluginAsync = async (
         const { data: devices, error: exportError } = await supabase
           .from('devices')
           .select('*')
-          .eq('customer_id', user.organization_id)
+          .eq('customer_id', user.customerId)
           .order('created_at', { ascending: false });
 
         if (exportError) {
-          fastify.log.error('Failed to fetch devices for export:', exportError);
+          fastify.log.error(
+            'Failed to fetch devices for export: %s',
+            exportError
+          );
           return reply.code(500).send({ error: 'Failed to export devices' });
         }
 
@@ -711,7 +707,7 @@ export const devicesRoutes: FastifyPluginAsync = async (
           )
           .send(csvContent);
       } catch (error: unknown) {
-        fastify.log.error('Error exporting devices:', error);
+        fastify.log.error('Error exporting devices: %s', error);
         return reply.code(500).send({ error: 'Internal server error' });
       }
     }
@@ -742,10 +738,10 @@ export const devicesRoutes: FastifyPluginAsync = async (
           .from('devices')
           .select('id, status')
           .in('id', device_ids)
-          .eq('customer_id', user.organization_id);
+          .eq('customer_id', user.customerId);
 
         if (fetchDevicesError || !devices) {
-          fastify.log.error('Failed to fetch devices:', fetchDevicesError);
+          fastify.log.error('Failed to fetch devices: %s', fetchDevicesError);
           return reply.code(500).send({ error: 'Failed to fetch devices' });
         }
 
@@ -784,7 +780,7 @@ export const devicesRoutes: FastifyPluginAsync = async (
           devices_affected: onlineDevices.length,
         });
       } catch (error: unknown) {
-        fastify.log.error('Error in bulk restart:', error);
+        fastify.log.error('Error in bulk restart: %s', error);
         return reply.code(500).send({ error: 'Internal server error' });
       }
     }
@@ -815,11 +811,11 @@ export const devicesRoutes: FastifyPluginAsync = async (
           .from('devices')
           .update({ enabled: true })
           .in('id', device_ids)
-          .eq('customer_id', user.organization_id)
+          .eq('customer_id', user.customerId)
           .select();
 
         if (enableError) {
-          fastify.log.error('Failed to enable devices:', enableError);
+          fastify.log.error('Failed to enable devices: %s', enableError);
           return reply.code(500).send({ error: 'Failed to enable devices' });
         }
 
@@ -849,7 +845,7 @@ export const devicesRoutes: FastifyPluginAsync = async (
           devices_affected: updatedDevices?.length ?? 0,
         });
       } catch (error: unknown) {
-        fastify.log.error('Error in bulk enable:', error);
+        fastify.log.error('Error in bulk enable: %s', error);
         return reply.code(500).send({ error: 'Internal server error' });
       }
     }
@@ -880,11 +876,11 @@ export const devicesRoutes: FastifyPluginAsync = async (
           .from('devices')
           .update({ enabled: false })
           .in('id', device_ids)
-          .eq('customer_id', user.organization_id)
+          .eq('customer_id', user.customerId)
           .select();
 
         if (disableError) {
-          fastify.log.error('Failed to disable devices:', disableError);
+          fastify.log.error('Failed to disable devices: %s', disableError);
           return reply.code(500).send({ error: 'Failed to disable devices' });
         }
 
@@ -914,7 +910,7 @@ export const devicesRoutes: FastifyPluginAsync = async (
           devices_affected: updatedDevices?.length ?? 0,
         });
       } catch (error: unknown) {
-        fastify.log.error('Error in bulk disable:', error);
+        fastify.log.error('Error in bulk disable: %s', error);
         return reply.code(500).send({ error: 'Internal server error' });
       }
     }
@@ -947,10 +943,10 @@ export const devicesRoutes: FastifyPluginAsync = async (
           .from('devices')
           .select('id')
           .in('id', device_ids)
-          .eq('customer_id', user.organization_id);
+          .eq('customer_id', user.customerId);
 
         if (verifyFetchError) {
-          fastify.log.error('Failed to fetch devices:', verifyFetchError);
+          fastify.log.error('Failed to fetch devices: %s', verifyFetchError);
           return reply.code(500).send({ error: 'Failed to fetch devices' });
         }
 
@@ -967,7 +963,7 @@ export const devicesRoutes: FastifyPluginAsync = async (
           .in('id', validDeviceIds);
 
         if (removeError) {
-          fastify.log.error('Failed to remove devices:', removeError);
+          fastify.log.error('Failed to remove devices: %s', removeError);
           return reply.code(500).send({ error: 'Failed to remove devices' });
         }
 
@@ -997,7 +993,7 @@ export const devicesRoutes: FastifyPluginAsync = async (
           devices_affected: validDeviceIds.length,
         });
       } catch (error: unknown) {
-        fastify.log.error('Error in bulk remove:', error);
+        fastify.log.error('Error in bulk remove: %s', error);
         return reply.code(500).send({ error: 'Internal server error' });
       }
     }

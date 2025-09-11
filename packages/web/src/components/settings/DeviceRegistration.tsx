@@ -180,10 +180,12 @@ export function DeviceRegistration(): JSX.Element {
       setLoading(true);
       setError(null);
       const response = await api.get('/api/devices');
-      setDevices(response.data.devices as Device[]);
-      setFirmwareUpdates(
-        (response.data.firmware_updates as Record<string, FirmwareUpdate>) ?? {}
-      );
+      const data = response.data as {
+        devices: Device[];
+        firmware_updates?: Record<string, FirmwareUpdate>;
+      };
+      setDevices(data.devices);
+      setFirmwareUpdates(data.firmware_updates ?? {});
     } catch {
       setError('Failed to load devices');
     } finally {
@@ -242,7 +244,7 @@ export function DeviceRegistration(): JSX.Element {
         capabilities: ['diagnostics', 'monitoring'],
       });
       void fetchDevices();
-    } catch {
+    } catch (error) {
       toast({
         title: 'Registration failed',
         description:
@@ -881,7 +883,7 @@ export function DeviceRegistration(): JSX.Element {
                               <span className='text-sm text-orange-800'>
                                 Firmware update available
                               </span>
-                              {firmwareUpdates[device.id].critical && (
+                              {firmwareUpdates[device.id]?.critical && (
                                 <Badge
                                   variant='destructive'
                                   className='text-xs'

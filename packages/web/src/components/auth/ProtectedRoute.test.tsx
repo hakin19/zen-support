@@ -223,15 +223,15 @@ describe('ProtectedRoute', () => {
         error: null,
       });
 
-      const { rerender } = render(
+      render(
         <ProtectedRoute>
           <div data-testid='protected-content'>Protected Content</div>
         </ProtectedRoute>
       );
 
       // Simulate auth state change to signed out
-      const authChangeCallback = mockOnAuthStateChange.mock.calls[0][0];
-      authChangeCallback('SIGNED_OUT', null);
+      const authChangeCallback = mockOnAuthStateChange.mock.calls[0]?.[0];
+      authChangeCallback?.('SIGNED_OUT', null);
 
       await waitFor(() => {
         expect(mockReplace).toHaveBeenCalledWith('/login');
