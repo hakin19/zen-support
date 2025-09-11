@@ -37,11 +37,13 @@ if (typeof globalThis !== 'undefined') {
 
   // Mock clipboard API
   if (typeof (globalThis as any).navigator !== 'undefined') {
-    Object.assign((globalThis as any).navigator, {
-      clipboard: {
+    Object.defineProperty((globalThis as any).navigator, 'clipboard', {
+      value: {
         writeText: vi.fn().mockResolvedValue(undefined),
         readText: vi.fn().mockResolvedValue(''),
       },
+      writable: true,
+      configurable: true,
     });
   }
 }
