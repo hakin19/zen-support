@@ -28,6 +28,7 @@ export class DeviceAgent extends EventEmitter {
   #heartbeatCount = 0;
   #heartbeatErrors = 0;
   #lastError: Error | null = null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   #mockSimulator: any = null; // Use any to avoid type issues with dynamic import
   #websocketState: 'connected' | 'disconnected' = 'disconnected';
 
@@ -88,6 +89,7 @@ export class DeviceAgent extends EventEmitter {
       this.emit('websocket:connected');
     });
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     this.#apiClient.on('websocket:disconnected', (reason: any) => {
       console.log('🔌 WebSocket disconnected:', reason);
       this.#websocketState = 'disconnected';
@@ -95,7 +97,9 @@ export class DeviceAgent extends EventEmitter {
     });
 
     // Command events - convert CommandMessage to DiagnosticCommand format
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     this.#apiClient.on('command', (command: any) => {
+      /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
       const diagnosticCommand: DiagnosticCommand = {
         id: command.id,
         type: command.type,
@@ -103,6 +107,7 @@ export class DeviceAgent extends EventEmitter {
         createdAt: command.timestamp,
         claimToken: command.claimToken,
       };
+      /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
       console.log(
         `📋 Command received via WebSocket: ${diagnosticCommand.type} (${diagnosticCommand.id})`
       );
@@ -113,7 +118,9 @@ export class DeviceAgent extends EventEmitter {
       });
     });
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     this.#apiClient.on('command:received', (command: any) => {
+      /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
       const diagnosticCommand: DiagnosticCommand = {
         id: command.id,
         type: command.type,
@@ -121,6 +128,7 @@ export class DeviceAgent extends EventEmitter {
         createdAt: command.timestamp,
         claimToken: command.claimToken,
       };
+      /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
       this.emit('command:received', diagnosticCommand);
       void this.processCommand(diagnosticCommand).catch((error: unknown) => {
         this.emit('command:error', { command: diagnosticCommand, error });
@@ -274,7 +282,9 @@ export class DeviceAgent extends EventEmitter {
     }
 
     // Cleanup mock simulator if it exists
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     if (this.#mockSimulator?.destroy) {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
       this.#mockSimulator.destroy();
       this.#mockSimulator = null;
     }
@@ -288,7 +298,9 @@ export class DeviceAgent extends EventEmitter {
       if (this.#apiClient) {
         this.#apiClient.stop();
       }
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       if (this.#mockSimulator?.destroy) {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
         this.#mockSimulator.destroy();
         this.#mockSimulator = null;
       }
@@ -336,7 +348,7 @@ export class DeviceAgent extends EventEmitter {
       authenticated = await this.#apiClient.authenticate();
       if (authenticated) break;
       const last = this.#apiClient.getLastError();
-      lastError = last?.originalError ?? last ?? null ?? null;
+      lastError = last?.originalError ?? last ?? null;
       const retryable = last?.retryable ?? true;
       if (!retryable) break; // Do not retry non-retryable errors (e.g., 4xx)
     }
@@ -378,7 +390,7 @@ export class DeviceAgent extends EventEmitter {
 
     const runCycle = async (): Promise<void> => {
       try {
-        const response = await this.sendHeartbeat();
+        await this.sendHeartbeat();
         // Schedule next cycle using server-provided interval if available
         if (this.#status === 'running') {
           this.#heartbeatTimer = setTimeout(
@@ -400,8 +412,9 @@ export class DeviceAgent extends EventEmitter {
 
     // Non-mock: perform a single immediate cycle with re-auth handling when needed
     if (!this.#config.mockMode && this.#apiClient) {
+      const apiClient = this.#apiClient; // Capture the non-null value
       const cycleNonMock = async (): Promise<void> => {
-        const result = await this.#apiClient.sendHeartbeat();
+        const result = await apiClient.sendHeartbeat();
         if (result) {
           // Successful heartbeat; update counters and schedule next
           this.#lastHeartbeat = new Date();
@@ -539,6 +552,7 @@ export class DeviceAgent extends EventEmitter {
     // In mock mode, simulate successful heartbeat with mock metrics
     if (this.#config.mockMode) {
       // Get metrics from mock simulator if available
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
       const metrics = this.#mockSimulator?.getMetrics() ?? {
         cpu: 25,
         memory: 512,
@@ -586,6 +600,7 @@ export class DeviceAgent extends EventEmitter {
     return [
       {
         id: `cmd-${Date.now()}`,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
         type: commandType as any, // Type is already validated from the array
         payload: {
           target: '8.8.8.8',
@@ -603,11 +618,14 @@ export class DeviceAgent extends EventEmitter {
 
     // In mock mode, use the mock simulator to execute commands
     if (this.#config.mockMode && this.#mockSimulator) {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
       const result = await this.#mockSimulator.executeCommand(command);
       // Include claimToken if present
       if (command.claimToken) {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
         result.claimToken = command.claimToken;
       }
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
       await this.submitResult(result);
       return;
     }

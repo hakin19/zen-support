@@ -9,6 +9,8 @@ import { ClaudeCodeService } from '../services/claude-code.service';
 import { publishToChannel } from '../utils/redis-pubsub';
 
 import type { WebSocketConnectionManager } from '../services/websocket-connection-manager';
+import type { Json } from '@aizen/shared/types/database.generated';
+import type { RedisClient } from '@aizen/shared/utils/redis-client';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 
 // Create a wrapper for the middleware without options
@@ -92,7 +94,7 @@ export function registerChatRoutes(fastify: FastifyInstance): void {
           user_id: userId,
           customer_id: customerId,
           title: title ?? null,
-          metadata,
+          metadata: metadata as Json,
           status: 'active',
         })
         .select()
@@ -284,7 +286,7 @@ export function registerChatRoutes(fastify: FastifyInstance): void {
       await connectionManager.broadcastToCustomer(customerId, messageData);
 
       // Publish to Redis for multi-server fanout
-      const redis = (fastify as unknown as { redis?: unknown }).redis;
+      const redis = (fastify as unknown as { redis?: RedisClient }).redis;
       if (redis) {
         await publishToChannel(redis, `chat:${sessionId}`, messageData);
       }
@@ -662,7 +664,8 @@ export function registerChatRoutes(fastify: FastifyInstance): void {
                 messageData
               );
 
-              const redis = (fastify as unknown as { redis?: unknown }).redis;
+              const redis = (fastify as unknown as { redis?: RedisClient })
+                .redis;
               if (redis) {
                 await publishToChannel(redis, `chat:${sessionId}`, messageData);
               }
@@ -681,7 +684,7 @@ export function registerChatRoutes(fastify: FastifyInstance): void {
             // Only broadcast to connections from the same customer
             await connectionManager.broadcastToCustomer(customerId, toolData);
 
-            const redis = (fastify as unknown as { redis?: unknown }).redis;
+            const redis = (fastify as unknown as { redis?: RedisClient }).redis;
             if (redis) {
               await publishToChannel(redis, `chat:${sessionId}`, toolData);
             }
@@ -715,7 +718,7 @@ export function registerChatRoutes(fastify: FastifyInstance): void {
         session_id: sessionId,
         role: 'error' as const,
         content: 'Failed to process AI response. Please try again.',
-        metadata: { error: String(error) } as Record<string, unknown>,
+        metadata: { error: String(error) } as Json,
       });
 
       // Broadcast error
@@ -730,7 +733,7 @@ export function registerChatRoutes(fastify: FastifyInstance): void {
       // Only broadcast to connections from the same customer
       await connectionManager.broadcastToCustomer(customerId, errorData);
 
-      const redis = (fastify as unknown as { redis?: unknown }).redis;
+      const redis = (fastify as unknown as { redis?: RedisClient }).redis;
       if (redis) {
         await publishToChannel(redis, `chat:${sessionId}`, errorData);
       }

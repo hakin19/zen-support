@@ -7,7 +7,7 @@ import { getRedisClient } from '@aizen/shared/utils/redis-client';
 
 // Diagnostic: Check environment when server module loads
 if (process.env.NODE_ENV === 'test') {
-  const diagLog = `[SERVER] Test mode - SUPABASE_URL: ${process.env.SUPABASE_URL}, REDIS_HOST: ${process.env.REDIS_HOST || 'localhost'}\n`;
+  const diagLog = `[SERVER] Test mode - SUPABASE_URL: ${process.env.SUPABASE_URL}, REDIS_HOST: ${process.env.REDIS_HOST ?? 'localhost'}\n`;
   fs.appendFileSync('/tmp/test-diag.log', diagLog);
 }
 

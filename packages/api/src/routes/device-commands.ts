@@ -1,6 +1,7 @@
+import { getRedisClient } from '@aizen/shared/utils/redis-client';
+
 import { deviceAuthMiddleware } from '../middleware/device-auth.middleware';
 import { commandQueueService } from '../services/command-queue.service';
-import { getRedisClient } from '@aizen/shared/utils/redis-client';
 import { publishToChannel } from '../utils/redis-pubsub';
 
 import type { FastifyInstance } from 'fastify';
@@ -29,7 +30,13 @@ export function registerDeviceCommandRoutes(app: FastifyInstance): void {
    * POST /api/v1/device/commands
    * Enqueue a new command for the authenticated device and notify via WebSocket
    */
-  app.post<{ Body: { command: string; parameters?: Record<string, unknown>; priority?: number } }>(
+  app.post<{
+    Body: {
+      command: string;
+      parameters?: Record<string, unknown>;
+      priority?: number;
+    };
+  }>(
     '/api/v1/device/commands',
     {
       preHandler: [deviceAuthMiddleware],
@@ -50,7 +57,10 @@ export function registerDeviceCommandRoutes(app: FastifyInstance): void {
       const customerId = request.customerId;
       if (!deviceId || !customerId) {
         return reply.status(401).send({
-          error: { code: 'UNAUTHORIZED', message: 'Device authentication required' },
+          error: {
+            code: 'UNAUTHORIZED',
+            message: 'Device authentication required',
+          },
         });
       }
 
@@ -66,7 +76,11 @@ export function registerDeviceCommandRoutes(app: FastifyInstance): void {
         );
 
         // Immediately claim to generate a claim token for the device to submit results
-        const claimed = await commandQueueService.claimCommands(deviceId, 1, 300000);
+        const claimed = await commandQueueService.claimCommands(
+          deviceId,
+          1,
+          300000
+        );
         const claimedCommand = claimed.find(c => c.id === command.id) ?? null;
 
         // Notify device via Redis pub/sub (forwarded by WS route)
@@ -89,11 +103,16 @@ export function registerDeviceCommandRoutes(app: FastifyInstance): void {
           },
         });
 
-        return reply.status(201).send({ id: command.id, status: command.status });
+        return reply
+          .status(201)
+          .send({ id: command.id, status: command.status });
       } catch (error) {
         request.log.error(error, 'Failed to enqueue device command');
         return reply.status(500).send({
-          error: { code: 'INTERNAL_ERROR', message: 'Failed to enqueue command' },
+          error: {
+            code: 'INTERNAL_ERROR',
+            message: 'Failed to enqueue command',
+          },
         });
       }
     }
@@ -384,12 +403,22 @@ export function registerDeviceCommandRoutes(app: FastifyInstance): void {
       try {
         const deviceId = request.deviceId;
         if (!deviceId) {
-          return reply.status(401).send({ error: { code: 'UNAUTHORIZED', message: 'Device authentication required' } });
+          return reply.status(401).send({
+            error: {
+              code: 'UNAUTHORIZED',
+              message: 'Device authentication required',
+            },
+          });
         }
 
         const command = await commandQueueService.getCommand(request.params.id);
         if (!command || command.deviceId !== deviceId) {
-          return reply.status(404).send({ error: { code: 'COMMAND_NOT_FOUND', message: 'Command not found' } });
+          return reply.status(404).send({
+            error: {
+              code: 'COMMAND_NOT_FOUND',
+              message: 'Command not found',
+            },
+          });
         }
 
         const baseResult = command.result ?? {};
@@ -405,7 +434,9 @@ export function registerDeviceCommandRoutes(app: FastifyInstance): void {
         });
       } catch (error) {
         request.log.error(error, 'Failed to get command');
-        return reply.status(500).send({ error: { code: 'INTERNAL_ERROR', message: 'Failed to get command' } });
+        return reply.status(500).send({
+          error: { code: 'INTERNAL_ERROR', message: 'Failed to get command' },
+        });
       }
     }
   );

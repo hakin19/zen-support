@@ -133,14 +133,14 @@ export function registerCustomerDeviceRoutes(app: FastifyInstance): void {
         // Build the query with pagination
         let query = supabase
           .from('devices')
-          .select('id, name, status, last_seen, created_at')
+          .select('id, name, status, last_heartbeat_at, registered_at')
           .eq('customer_id', customerId)
-          .order('created_at', { ascending: false })
+          .order('registered_at', { ascending: false })
           .limit(limit + 1); // Fetch one extra to determine if there's a next page
 
         // Apply cursor if provided
         if (cursor) {
-          query = query.lt('created_at', cursor);
+          query = query.lt('registered_at', cursor);
         }
 
         const { data: devices, error } = await query;
@@ -153,7 +153,7 @@ export function registerCustomerDeviceRoutes(app: FastifyInstance): void {
         const hasMore = devices.length > limit;
         const resultDevices = hasMore ? devices.slice(0, limit) : devices;
         const nextCursor = hasMore
-          ? (resultDevices[resultDevices.length - 1]?.created_at as string)
+          ? (resultDevices[resultDevices.length - 1]?.registered_at as string)
           : null;
 
         // Get total count for pagination info (only if no cursor, for performance)
@@ -171,11 +171,11 @@ export function registerCustomerDeviceRoutes(app: FastifyInstance): void {
 
         return {
           devices: resultDevices.map(device => ({
-            id: device.id as string,
-            name: device.name as string,
+            id: device.id,
+            name: device.name,
             status: device.status as string,
-            lastSeen: device.last_seen as string,
-            createdAt: device.created_at as string,
+            lastSeen: device.last_heartbeat_at as string,
+            createdAt: device.registered_at as string,
           })),
           pagination: {
             limit,

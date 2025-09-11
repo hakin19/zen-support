@@ -39,6 +39,7 @@ const queryParamsSchema = z.object({
   status: userStatusSchema.optional(),
 });
 
+// eslint-disable-next-line @typescript-eslint/require-await
 export const usersRoutes: FastifyPluginAsync = async fastify => {
   // Get users list
   fastify.get(

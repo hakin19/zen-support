@@ -258,7 +258,10 @@ export async function registerWebSocketRoutes(
                       .eq('device_id', deviceId);
                   }
                 } catch (dbErr) {
-                  request.log.error(dbErr, 'Failed to update device offline status');
+                  request.log.error(
+                    dbErr,
+                    'Failed to update device offline status'
+                  );
                 }
               } catch (error) {
                 request.log.error(error, 'Error during connection close');
@@ -656,9 +659,11 @@ export async function registerWebSocketRoutes(
     (fastify as any).get(
       '/api/v1/customer/ws',
       { websocket: true },
-      async (connection: { socket: WebSocket }, request: FastifyRequest) => {
-        const socket = connection.socket;
-        const ws = socket;
+      async (connection: unknown, request: FastifyRequest) => {
+        const raw = connection as { socket?: WebSocket } | WebSocket;
+        const ws = (raw as { socket?: WebSocket }).socket
+          ? (raw as { socket: WebSocket }).socket
+          : (raw as WebSocket);
         const connectionId = generateCorrelationId();
         let customerId: string | null = null;
         let customerEmail: string | null = null;
@@ -691,8 +696,7 @@ export async function registerWebSocketRoutes(
           // Extract token from subprotocol for browser clients (auth-{token})
           token = protocol.substring(5);
           // Accept the subprotocol in the response
-          (connection.socket as WebSocket & { protocol?: string }).protocol =
-            protocol;
+          (ws as WebSocket & { protocol?: string }).protocol = protocol;
         }
 
         // Function to authenticate and setup customer connection

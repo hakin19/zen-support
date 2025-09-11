@@ -41,16 +41,7 @@ export interface HeartbeatResponse {
 
 export interface DiagnosticCommand {
   id: string;
-  type:
-    | 'ping'
-    | 'traceroute'
-    | 'dns'
-    | 'connectivity'
-    | 'custom'
-    | 'port_check'
-    | 'network_scan'
-    | 'bandwidth_test'
-    | string;
+  type: string;
   payload?: {
     target?: string;
     domain?: string;

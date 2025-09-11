@@ -14,9 +14,10 @@ export {
   storage,
 } from './lib/supabase';
 
-// Export database types
-export * from './types/supabase.types';
-export type { Database as GeneratedDatabase } from './types/database.generated';
+// Export database types - prefer generated types over manually maintained ones
+export type { Database } from './types/database.generated';
+// Keep the old Database interface renamed to avoid confusion
+export type { Database as LegacyDatabase } from './types/supabase.types';
 
 // Export User type based on Supabase auth and our user_roles table
 export interface User {

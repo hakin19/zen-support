@@ -24,12 +24,8 @@ export function initializeSupabase(config: SupabaseConfig): void {
 
   // Skip re-initialization if already initialized with same config
   if (supabaseClient && supabaseConfig?.url === config.url) {
-    console.log('[SUPABASE INIT] Already initialized with same URL, skipping');
     return;
   }
-
-  // Diagnostic logging to debug test issues
-  console.log('[SUPABASE INIT] Initializing with URL:', config.url);
 
   // Store config for later use
   supabaseConfig = config;
@@ -45,7 +41,7 @@ export function initializeSupabase(config: SupabaseConfig): void {
     },
   });
 
-  // Initialize admin client with service role key if provided
+  // Initialize admin client if service role key is provided
   if (config.serviceRoleKey) {
     supabaseAdminClient = createClient(config.url, config.serviceRoleKey, {
       auth: {
@@ -77,25 +73,47 @@ export function getSupabaseClient(): SupabaseClient {
  * Bypasses Row Level Security - use with caution
  */
 export function getSupabaseAdminClient(): SupabaseClient {
-  // WORKAROUND: Always create a completely fresh client instance
-  // This bypasses the corrupted singleton that was created when Edge Runtime was hanging
-  const url = process.env.SUPABASE_URL;
+  // TODO(Edge Runtime): If this admin client is ever used from an Edge
+  // environment (e.g., Vercel Edge Runtime, Cloudflare Workers), consider
+  // returning a fresh client per call instead of the cached singleton to
+  // avoid potential runtime hangs/corruption observed in some Edge runtimes.
+  // Suggested pattern:
+  //   const isEdge =
+  //     typeof (globalThis as any).EdgeRuntime !== 'undefined' ||
+  //     typeof (globalThis as any).WebSocketPair !== 'undefined';
+  //   if (isEdge) {
+  //     return createClient(url, serviceKey, {
+  //       auth: { persistSession: false, autoRefreshToken: false },
+  //     });
+  //   }
+  //   // Node.js: use the cached singleton (current behavior)
+  //   if (supabaseAdminClient) return supabaseAdminClient;
+  //   supabaseAdminClient = createClient(url, serviceKey, { ... });
+  //   return supabaseAdminClient;
+  //
+  // Note: As of now, this admin client is only used in the Node.js Fastify API
+  // path, not in Next.js middleware (which uses @supabase/ssr), so the
+  // singleton behavior is appropriate.
+  // First check if we have an initialized singleton
+  if (supabaseAdminClient) {
+    return supabaseAdminClient;
+  }
+
+  // Fall back to environment variables if not initialized via initializeSupabase
+  const url = process.env.SUPABASE_URL ?? supabaseConfig?.url;
   const serviceKey =
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
+    process.env.SUPABASE_SERVICE_ROLE_KEY ??
+    process.env.SUPABASE_SERVICE_KEY ??
+    supabaseConfig?.serviceRoleKey;
 
   if (!url || !serviceKey) {
     throw new Error(
-      'Supabase admin client not initialized. Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY.'
+      'Supabase admin client not initialized. Provide serviceRoleKey to initializeSupabase or set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY environment variables.'
     );
   }
 
-  console.log('[SUPABASE-FRESH] Creating new admin client');
-  console.log('[SUPABASE-FRESH] URL:', url);
-  console.log('[SUPABASE-FRESH] Key exists:', !!serviceKey);
-
-  // Create a completely new client using the createClient imported at the top
-  // Note: We're NOT using the cached singleton, we're creating a new one each time
-  const newClient = createClient(url, serviceKey, {
+  // Create and cache the admin client
+  supabaseAdminClient = createClient(url, serviceKey, {
     auth: {
       persistSession: false,
       autoRefreshToken: false,
@@ -105,14 +123,7 @@ export function getSupabaseAdminClient(): SupabaseClient {
     },
   });
 
-  console.log('[SUPABASE-FRESH] Client created:', !!newClient);
-  console.log('[SUPABASE-FRESH] Has from method:', typeof newClient?.from);
-
-  // Test the client to make sure it's working
-  const testResult = newClient.from('devices');
-  console.log('[SUPABASE-FRESH] Test from() call result:', typeof testResult);
-
-  return newClient;
+  return supabaseAdminClient;
 }
 
 /**
