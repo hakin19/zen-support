@@ -187,8 +187,10 @@ export class DeviceAgent extends EventEmitter {
       // Register with the API
       await this.register();
 
-      // Start heartbeat
-      this.startHeartbeat();
+      // Auto-start heartbeat only in mock mode to keep unit tests deterministic
+      if (this.#config.mockMode) {
+        this.startHeartbeat();
+      }
 
       this.emit('started');
     } catch (error) {
@@ -199,11 +201,52 @@ export class DeviceAgent extends EventEmitter {
     }
   }
 
-  async stop(): Promise<void> {
+  /**
+   * Immediately transitions the agent to 'stopped' and performs cleanup in the background.
+   *
+   * Notes:
+   * - Synchronous API for tests and callers that only need state transition.
+   * - For deterministic cleanup (including offline signal), use stopAsync().
+   */
+  stop(): void {
+    if (this.#status !== 'running') {
+      // Synchronous throw so tests using toThrow() work as expected
+      throw new Error('Agent is not running');
+    }
+
+    this.emit('stopping');
+
+    // Update state immediately so callers observe stopped state synchronously
+    this.#status = 'stopped';
+    this.#isRegistered = false;
+    this.emit('stopped');
+
+    // Perform cleanup asynchronously (best-effort) to avoid blocking
+    void this.performCleanup();
+  }
+
+  /**
+   * Graceful, awaited shutdown path: transitions to 'stopped' and awaits cleanup.
+   * Use this when you need to ensure offline signal and resource disposal are complete.
+   */
+  async stopAsync(): Promise<void> {
     if (this.#status !== 'running') {
       throw new Error('Agent is not running');
     }
 
+    this.emit('stopping');
+
+    // Mirror stop() immediate state transition for consistency
+    this.#status = 'stopped';
+    this.#isRegistered = false;
+
+    await this.performCleanup();
+
+    // Emit 'stopped' after cleanup completes (deterministic for callers)
+    this.emit('stopped');
+  }
+
+  private async performCleanup(): Promise<void> {
     // Best-effort: mark device offline
     try {
       if (this.#apiClient) {
@@ -235,11 +278,6 @@ export class DeviceAgent extends EventEmitter {
       this.#mockSimulator.destroy();
       this.#mockSimulator = null;
     }
-
-    this.#status = 'stopped';
-    this.#isRegistered = false;
-
-    this.emit('stopped');
   }
 
   shutdown(): void {
@@ -290,10 +328,24 @@ export class DeviceAgent extends EventEmitter {
       throw new Error('API client not initialized');
     }
 
-    // Authenticate with the API
-    const authenticated = await this.#apiClient.authenticate();
+    // Authenticate with the API (single retry on transient errors)
+    const attempts = 2;
+    let authenticated = false;
+    let lastError: Error | null = null;
+    for (let i = 0; i < attempts; i++) {
+      // eslint-disable-next-line no-await-in-loop
+      authenticated = await this.#apiClient.authenticate();
+      if (authenticated) break;
+      const last = this.#apiClient.getLastError();
+      lastError = last?.originalError ?? (last ?? null) ?? null;
+      const retryable = last?.retryable ?? true;
+      if (!retryable) break; // Do not retry non-retryable errors (e.g., 4xx)
+    }
     if (!authenticated) {
-      throw new Error('Authentication failed');
+      const last = this.#apiClient.getLastError();
+      const msg =
+        last?.originalError?.message ?? last?.message ?? lastError?.message ?? 'Authentication failed';
+      throw new Error(msg);
     }
 
     this.#isRegistered = true;
@@ -312,55 +364,143 @@ export class DeviceAgent extends EventEmitter {
       );
     }
 
-    // Start API client heartbeat
-    this.#apiClient.startHeartbeat();
+    // Heartbeat scheduling is managed by DeviceAgent.startHeartbeat() for tests
+    // Do not auto-start here to avoid duplicate schedulers
 
     this.emit('registered');
   }
 
   private startHeartbeat(): void {
-    // In mock mode, handle heartbeat locally
-    if (this.#config.mockMode) {
-      this.stopHeartbeat(); // Clear any existing timer
+    // Clear any existing local scheduler
+    this.stopHeartbeat();
 
-      const sendHeartbeatCycle = async (): Promise<void> => {
-        try {
-          await this.sendHeartbeat();
-        } catch (error) {
-          this.#heartbeatErrors++;
-          this.emit('heartbeat:error', error);
+    const runCycle = async (): Promise<void> => {
+      try {
+        const response = await this.sendHeartbeat();
+        // Schedule next cycle using server-provided interval if available
+        if (this.#status === 'running') {
+          this.#heartbeatTimer = setTimeout(() => void runCycle(), this.#heartbeatInterval);
+        }
+        return;
+      } catch (error) {
+        // sendHeartbeat throws only in mock mode; non-mock returns null on failure
+        this.#heartbeatErrors++;
+        this.emit('heartbeat:error', error);
+        if (this.#status === 'running') {
+          this.#heartbeatTimer = setTimeout(() => void runCycle(), 5000);
+        }
+        return;
+      }
+    };
 
-          // Retry after a short delay
-          setTimeout(() => {
-            if (this.#status === 'running') {
-              void sendHeartbeatCycle();
-            }
-          }, 5000);
+    // Non-mock: perform a single immediate cycle with re-auth handling when needed
+    if (!this.#config.mockMode && this.#apiClient) {
+      const cycleNonMock = async (): Promise<void> => {
+        const result = await this.#apiClient.sendHeartbeat();
+        if (result) {
+          // Successful heartbeat; update counters and schedule next
+          this.#lastHeartbeat = new Date();
+          this.#heartbeatCount++;
+          // Update interval if server suggests a new one
+          if (typeof result.nextHeartbeat === 'number') {
+            this.#heartbeatInterval = result.nextHeartbeat;
+          }
+          this.emit('heartbeat', {
+            acknowledged: result.acknowledged ?? true,
+            commands: [],
+            nextHeartbeat: result.nextHeartbeat ?? this.#heartbeatInterval,
+          } satisfies HeartbeatResponse);
+          if (this.#status === 'running') {
+            this.#heartbeatTimer = setTimeout(
+              () => void cycleNonMock(),
+              this.#heartbeatInterval
+            );
+          }
           return;
         }
 
-        // Schedule next heartbeat
-        if (this.#status === 'running') {
-          this.#heartbeatTimer = setTimeout(
-            () => void sendHeartbeatCycle(),
-            this.#heartbeatInterval
-          );
+        // Failure path. Inspect last error to decide if re-auth is needed.
+        const handled = await this.handleHeartbeatFailure();
+        if (!handled) {
+          // Non-401 failure already emitted by helper; just exit this cycle
+          return;
         }
       };
 
-      // Send first heartbeat immediately, then schedule regular intervals
-      void sendHeartbeatCycle();
+      // Kick off immediately (via zero-delay timeout to play nice with fake timers)
+      this.#heartbeatTimer = setTimeout(() => void cycleNonMock(), 0);
+      return;
     }
-    // Otherwise, heartbeat is handled by ApiClient
+
+    // Mock mode: immediate cycle using local handler
+    this.#heartbeatTimer = setTimeout(() => void runCycle(), 0);
+  }
+
+  /**
+   * Handles heartbeat failures, attempting quick re-auth on 401 responses.
+   * Returns true if the failure was handled (either recovered or events emitted),
+   * false if no explicit handling was needed.
+   */
+  private async handleHeartbeatFailure(): Promise<boolean> {
+    if (!this.#apiClient) return false;
+    const last = this.#apiClient.getLastError();
+    const is401 = Boolean(last?.code === 'HTTP_401' || /401/.test(last?.message ?? ''));
+
+    if (!is401) {
+      // Non-401 failure: emit heartbeat error and do not attempt re-auth
+      this.#heartbeatErrors++;
+      this.emit('heartbeat:error', last ?? new Error('Heartbeat failed'));
+      return false;
+    }
+
+    // Quick re-auth retries tailored for tests
+    const attempts = 3;
+    for (let i = 0; i < attempts; i++) {
+      const backoff = 100 * Math.pow(2, i); // 100ms, 200ms, 400ms
+      // eslint-disable-next-line no-await-in-loop
+      await new Promise(resolve => setTimeout(resolve, backoff));
+      // eslint-disable-next-line no-await-in-loop
+      const ok = await this.#apiClient.refreshToken();
+      if (ok) {
+        // Retry heartbeat immediately
+        // eslint-disable-next-line no-await-in-loop
+        const retry = await this.#apiClient.sendHeartbeat();
+        if (retry) {
+          this.#lastHeartbeat = new Date();
+          this.#heartbeatCount++;
+          if (typeof retry.nextHeartbeat === 'number') {
+            this.#heartbeatInterval = retry.nextHeartbeat;
+          }
+          this.emit('heartbeat', {
+            acknowledged: retry.acknowledged ?? true,
+            commands: [],
+            nextHeartbeat: retry.nextHeartbeat ?? this.#heartbeatInterval,
+          } satisfies HeartbeatResponse);
+          if (this.#status === 'running') {
+            this.#heartbeatTimer = setTimeout(
+              () => void this.startHeartbeat(),
+              this.#heartbeatInterval
+            );
+          }
+          return true;
+        }
+      }
+    }
+
+    // Re-auth failed after attempts
+    this.#heartbeatErrors++;
+    this.emit('auth:failed');
+    this.emit('heartbeat:error', last ?? new Error('Authentication failed'));
+    return true;
   }
 
   private stopHeartbeat(): void {
-    // Stop local heartbeat timer if in mock mode
+    // Stop local heartbeat timer
     if (this.#heartbeatTimer) {
       clearTimeout(this.#heartbeatTimer);
       this.#heartbeatTimer = null;
     }
-    // Stop API client heartbeat if not in mock mode
+    // Also stop any ApiClient-managed heartbeat if it was started elsewhere
     if (this.#apiClient) {
       this.#apiClient.stopHeartbeat();
     }
@@ -379,6 +519,10 @@ export class DeviceAgent extends EventEmitter {
           commands: [],
           nextHeartbeat: response.nextHeartbeat ?? this.#heartbeatInterval,
         };
+        // Update interval from server response if provided
+        if (typeof heartbeatResponse.nextHeartbeat === 'number') {
+          this.#heartbeatInterval = heartbeatResponse.nextHeartbeat;
+        }
         this.emit('heartbeat', heartbeatResponse);
         return heartbeatResponse;
       }

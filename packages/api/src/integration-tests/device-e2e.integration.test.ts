@@ -156,7 +156,7 @@ describe('Device E2E Integration Tests', () => {
 
     // Stop device agent
     if (deviceAgent?.getStatus() === 'running') {
-      await deviceAgent.stop();
+      await deviceAgent.stopAsync();
     }
 
     // Clean up test data
@@ -174,7 +174,7 @@ describe('Device E2E Integration Tests', () => {
       deviceWebSocket = null;
     }
     if (deviceAgent?.getStatus() === 'running') {
-      await deviceAgent.stop();
+      await deviceAgent.stopAsync();
     }
     deviceAgent = null;
     authToken = null;
@@ -740,7 +740,7 @@ describe('Device E2E Integration Tests', () => {
       expect(health.websocket).toBe('connected');
 
       // Stop the agent
-      await deviceAgent.stop();
+      await deviceAgent.stopAsync();
       expect(deviceAgent.getStatus()).toBe('stopped');
     });
 
@@ -775,7 +775,7 @@ describe('Device E2E Integration Tests', () => {
       expect(devices[0].status).toBe('online');
 
       // Stop the agent (simulate going offline)
-      await deviceAgent.stop();
+      await deviceAgent.stopAsync();
 
       // Wait for status to update
       await wait(1000);
@@ -871,7 +871,7 @@ describe('Device E2E Integration Tests', () => {
       expect(resultData.status).toBe('completed');
       expect(resultData.result.success).toBe(true);
 
-      await deviceAgent.stop();
+      await deviceAgent.stopAsync();
     });
   });
 
@@ -996,7 +996,7 @@ describe('Device E2E Integration Tests', () => {
       }
 
       // Stop all agents
-      await Promise.all(agents.map(agent => agent.stop()));
+      await Promise.all(agents.map(agent => agent.stopAsync()))
 
       // Cleanup concurrent test devices
       const supabase = createClient(

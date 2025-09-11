@@ -606,7 +606,7 @@ export function UserManagement(): JSX.Element {
                   </TableRow>
                 ) : (
                   filteredUsers.map(u => (
-                    <TableRow key={u.id} data-testid={`user-row-${u.id}`}>
+                    <TableRow key={u.id}>
                       {canManageUsers && (
                         <TableCell>
                           <Checkbox
@@ -618,7 +618,7 @@ export function UserManagement(): JSX.Element {
                         </TableCell>
                       )}
                       <TableCell>
-                        <div>
+                        <div data-testid={`user-row-${u.id}`}>
                           <div className='font-medium'>
                             {u.full_name ?? 'No name'}
                           </div>
