@@ -70,8 +70,8 @@ describe('Sidebar', () => {
     it('should show user info with email and role', () => {
       render(<Sidebar user={mockUser} />);
 
-      expect(screen.getByText(mockUser.email)).toBeInTheDocument();
-      expect(screen.getByText(mockUser.role)).toBeInTheDocument();
+      expect(screen.getByText(mockUser.email!)).toBeInTheDocument();
+      expect(screen.getByText(mockUser.role!)).toBeInTheDocument();
     });
 
     it('should render sign out button', () => {

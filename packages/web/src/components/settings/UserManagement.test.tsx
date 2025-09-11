@@ -454,7 +454,6 @@ describe('UserManagement', () => {
 
   describe('User Removal', () => {
     it('should allow removing users (except owner)', async () => {
-      const user = userEvent.setup();
       render(<UserManagement />);
 
       await waitFor(() => {

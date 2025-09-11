@@ -221,7 +221,7 @@ Suggest optimizations.`,
 
       expect(screen.getByTestId('monaco-editor')).toBeInTheDocument();
       expect(screen.getByTestId('monaco-editor')).toHaveValue(
-        mockPrompts[0].template
+        mockPrompts[0]!.template
       );
     });
 

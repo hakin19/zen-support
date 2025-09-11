@@ -30,8 +30,6 @@ describe('useAppStore', () => {
     status: 'active',
     started_at: new Date().toISOString(),
     ended_at: null,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
   };
 
   beforeEach(() => {

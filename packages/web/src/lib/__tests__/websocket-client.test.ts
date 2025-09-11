@@ -20,7 +20,7 @@ class MockWebSocket {
     this.readyState = MockWebSocket.CONNECTING;
   }
 
-  send(data: string | ArrayBuffer | Blob): void {
+  send(_data: string | ArrayBuffer | Blob): void {
     if (this.readyState !== MockWebSocket.OPEN) {
       throw new Error('WebSocket is not open');
     }
@@ -53,7 +53,7 @@ class MockWebSocket {
     }
   }
 
-  mockError(error?: string): void {
+  mockError(_error?: string): void {
     if (this.onerror) {
       this.onerror(new Event('error'));
     }
@@ -248,7 +248,7 @@ describe('WebSocketClient', () => {
 
       vi.advanceTimersByTime(5000);
       expect(sendSpy).toHaveBeenCalled();
-      const firstCall = JSON.parse(sendSpy.mock.calls[0][0] as string);
+      const firstCall = JSON.parse(sendSpy.mock.calls[0]![0] as string);
       expect(firstCall.type).toBe('ping');
       expect(typeof firstCall.timestamp).toBe('number');
 
