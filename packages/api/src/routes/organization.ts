@@ -51,6 +51,7 @@ const allowedOriginSchema = z.object({
   origin: z.string().url(),
 });
 
+// eslint-disable-next-line @typescript-eslint/require-await
 export const organizationRoutes: FastifyPluginAsync = async fastify => {
   // Get organization
   fastify.get(
