@@ -10,9 +10,9 @@ import {
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { DeviceRegistration } from './DeviceRegistration';
-import { useAuthStore } from '@/store/auth.store';
+// import { useAuthStore } from '@/store/auth.store';
 import { api } from '@/lib/api-client';
-import { useWebSocketStore } from '@/store/websocket.store';
+// import { useWebSocketStore } from '@/store/websocket.store';
 
 // Note: Stores and API are already mocked in setup.ts
 
@@ -617,7 +617,7 @@ describe('DeviceRegistration', () => {
       });
 
       // Simulate device coming online via WebSocket
-      const updatedDevices = mockDevices.map(d =>
+      /* const updatedDevices = mockDevices.map(d =>
         d.id === 'device-2'
           ? {
               ...d,
@@ -625,7 +625,7 @@ describe('DeviceRegistration', () => {
               last_seen: '2024-01-15T12:00:00Z',
             }
           : d
-      );
+      ); */
 
       // Note: With global mocks, we can't easily mock WebSocket updates
       // In a real app, this would be tested with integration tests
