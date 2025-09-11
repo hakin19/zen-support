@@ -9,15 +9,18 @@ config({ path: path.resolve(process.cwd(), '.env.test') });
 // Set test environment
 process.env.NODE_ENV = 'test';
 
-// Soften unhandled rejections/exceptions during unit tests to avoid noisy failures
-process.on('unhandledRejection', reason => {
-  // eslint-disable-next-line no-console
-  console.debug('[vitest] unhandledRejection (softened):', reason);
-});
-process.on('uncaughtException', err => {
-  // eslint-disable-next-line no-console
-  console.debug('[vitest] uncaughtException (softened):', err);
-});
+// Optionally soften unhandled rejections/exceptions during unit tests.
+// Disabled by default to ensure real failures are surfaced.
+if (process.env.TEST_SOFTEN_ERRORS === 'true') {
+  process.on('unhandledRejection', reason => {
+    // eslint-disable-next-line no-console
+    console.debug('[vitest] unhandledRejection (softened):', reason);
+  });
+  process.on('uncaughtException', err => {
+    // eslint-disable-next-line no-console
+    console.debug('[vitest] uncaughtException (softened):', err);
+  });
+}
 
 // Supabase test client configuration
 const supabaseUrl = process.env.SUPABASE_URL || 'http://localhost:54321';

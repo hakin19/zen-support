@@ -73,9 +73,11 @@ export async function deviceAuthMiddleware(
     request.sessionToken = token;
 
     // Refresh session TTL in background (non-blocking)
-    if (typeof (sessionService as unknown as { refreshSession?: unknown }).refreshSession === 'function') {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any
-      (sessionService as any).refreshSession(token).catch((error: unknown) => {
+    const svc = sessionService as unknown as {
+      refreshSession?: (token: string) => Promise<void> | void;
+    };
+    if (typeof svc.refreshSession === 'function') {
+      Promise.resolve(svc.refreshSession(token)).catch((error: unknown) => {
         request.log.warn(
           { error: String(error), token: `${token.substring(0, 8)}...` },
           'Failed to refresh session TTL'

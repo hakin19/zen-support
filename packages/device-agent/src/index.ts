@@ -109,6 +109,11 @@ async function main(): Promise<void> {
       console.error('❌ Agent error:', error);
     });
 
+    // Also capture API client errors forwarded by DeviceAgent
+    agent.on('api:error', error => {
+      console.error('❌ Agent API error:', error);
+    });
+
     agent.on('heartbeat:error', error => {
       console.error('❌ Heartbeat error:', error);
     });

@@ -65,6 +65,8 @@ export class WebSocketClient extends EventEmitter {
     bytesSent: 0,
   };
   private lastPingTimestamp = 0;
+  // Track if auth was supplied via WebSocket subprotocol during handshake
+  private authViaProtocol = false;
 
   constructor(url: string, options: WebSocketClientOptions = {}) {
     super();
@@ -254,8 +256,17 @@ export class WebSocketClient extends EventEmitter {
     this.reconnectAttempts = 0;
     this.metrics.connectedAt = new Date();
 
+    // Determine if server accepted auth via subprotocol (avoids duplicate auth message)
+    // Only skip if the negotiated protocol explicitly matches our auth token scheme
+    // Many servers/mocks do not echo protocol; in that case we still send the auth message
+    this.authViaProtocol = Boolean(
+      this.ws &&
+        typeof (this.ws as { protocol?: string }).protocol === 'string' &&
+        (this.ws as { protocol?: string }).protocol?.startsWith('auth-')
+    );
+
     // Send auth message when a token is provided
-    if (this.options.auth.token) {
+    if (this.options.auth.token && !this.authViaProtocol) {
       this.send({ type: 'auth', token: this.options.auth.token });
     }
 

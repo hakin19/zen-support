@@ -458,18 +458,19 @@ describe('ApiClient', () => {
       // All attempts fail
       mockFetch.mockRejectedValue(new Error('Network error'));
 
-      // Start the async operation
+      // Start the async operation and attach rejection handler immediately to avoid unhandledRejection
       const resultPromise = apiClient.submitDiagnosticResult(diagnosticResult);
+      const expectRejection = expect(resultPromise).rejects.toThrow(
+        'Failed to submit diagnostic result after 3 attempts'
+      );
 
       // Advance through all retry delays
       await vi.advanceTimersByTimeAsync(1000); // First retry
       await vi.advanceTimersByTimeAsync(2000); // Second retry
       await vi.advanceTimersByTimeAsync(4000); // Third retry
 
-      // Now await and check the rejection
-      await expect(resultPromise).rejects.toThrow(
-        'Failed to submit diagnostic result after 3 attempts'
-      );
+      // Now await and check the rejection (handler already attached above)
+      await expectRejection;
       expect(mockFetch).toHaveBeenCalledTimes(3);
     });
 
