@@ -97,3 +97,31 @@ Follow repository patterns for timestamps and avoid non‑immutable functions in
 ---
 
 References: `supabase/config.toml`, `supabase/migrations/*`, `scripts/test-db-init.sh`.
+
+## Supabase migration history sync (duplicates, renames, and repair)
+
+- Why duplicate version prefixes break: Supabase stores each applied migration in `supabase_migrations.schema_migrations(version)` with a unique primary key. Files that shared the short prefix `20250109_*.sql` caused the CLI to attempt inserting the same `version` (`20250109`), resulting in a duplicate-key error when resetting or pushing (e.g., `duplicate key value violates unique constraint "schema_migrations_pkey"`). The CLI also ignores non‑timestamped files (e.g., `combined_migrations.sql`) because they don’t match the required `<timestamp>_name.sql` pattern.
+
+- Renaming convention we used: we converted the short 8‑digit prefixes to full 14‑digit timestamps that continue the existing ordered series. This preserves lexical/chronological order and eliminates collisions:
+  - `20250109_fix_handle_new_user.sql` → `2025010900014_fix_handle_new_user.sql`
+  - `20250109_fix_handle_new_user_v2.sql` → `2025010900015_fix_handle_new_user_v2.sql`
+  - `20250109_fix_rls_policies.sql` → `2025010900016_fix_rls_policies.sql`
+  - New index migration for device pagination: `202509110001_add_device_registered_at_indexes.sql`
+
+- One‑time remote repair we performed: the hosted project had four versions that didn’t exist locally (`20250824020529`, `20250824020619`, `20250824020657`, `20250824020840`). To align histories without changing schema, we:
+  - Marked those remote‑only versions as reverted, then
+  - Marked all local timestamped migrations as applied (including `202509110001`), and
+  - Verified `supabase db push` now reports “Remote database is up to date.”
+
+  Notes and cautions:
+  - Migration repair rewrites the migration history table. Coordinate and back up before running on shared environments.
+  - `combined_migrations.sql` remains for reference but is skipped by the CLI during push/reset.
+
+- Local normalization (developers): if you ever see a duplicate‐key or baseline mismatch locally, use this pattern:
+  - (If needed) repair the baseline entry, then reset: `supabase migration repair --status reverted 20250109 --local && supabase db reset`
+  - Always generate new migrations with full timestamps via `supabase migration new <name>`.
+
+- Future workflow reminders:
+  - Local test stack: `npm run test:supabase:init` (or `reset`) applies migrations and seeds.
+  - Hosted dev: `supabase link --project-ref $SUPABASE_PROJECT_ID` then `supabase db push`.
+  - Avoid reusing prefixes; each migration must have a unique 14‑digit timestamp to keep both local and hosted histories in sync.
