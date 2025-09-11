@@ -146,8 +146,7 @@ export function MessageList({
     messages.forEach(message => {
       if (!message.created_at) return;
 
-      const createdAt = message.created_at as string;
-      if (!createdAt) return;
+      const createdAt = message.created_at;
 
       const messageDate = new Date(String(createdAt)).toDateString();
 

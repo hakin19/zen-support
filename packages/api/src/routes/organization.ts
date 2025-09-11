@@ -101,8 +101,10 @@ export const organizationRoutes: FastifyPluginAsync = async fastify => {
         } | null = null; // Placeholder until subscriptions table is implemented
 
         // Extract metadata fields - use type assertion to handle query result types
-        const metadata =
-          ((org as any).metadata as Record<string, unknown>) || {};
+        const orgWithMetadata = org as Customer & {
+          metadata?: Record<string, unknown>;
+        };
+        const metadata = orgWithMetadata.metadata || {};
 
         // Mock organization data structure for UI compatibility
         const organization = {
@@ -120,7 +122,7 @@ export const organizationRoutes: FastifyPluginAsync = async fastify => {
           ),
           contact_email: String(org.email ?? ''),
           contact_phone: String(org.phone ?? ''),
-          address: String((org as any).address ?? ''),
+          address: String((org as { address?: string }).address ?? ''),
           city: String((metadata.city as string) ?? ''),
           state: String((metadata.state as string) ?? ''),
           zip: String((metadata.zip as string) ?? ''),

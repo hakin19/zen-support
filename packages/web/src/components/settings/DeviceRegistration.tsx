@@ -539,7 +539,11 @@ export function DeviceRegistration(): JSX.Element {
               <h3 className='text-lg font-semibold'>Failed to load devices</h3>
               <p className='text-muted-foreground'>{error}</p>
             </div>
-            <Button onClick={() => void fetchDevices()}>
+            <Button
+              onClick={() => {
+                fetchDevices().catch(console.error);
+              }}
+            >
               <RefreshCw className='mr-2 h-4 w-4' />
               Retry
             </Button>
@@ -668,7 +672,9 @@ export function DeviceRegistration(): JSX.Element {
                 <Button
                   variant='outline'
                   size='icon'
-                  onClick={() => void handleExportDevices()}
+                  onClick={() => {
+                    handleExportDevices().catch(console.error);
+                  }}
                   aria-label='Export devices'
                 >
                   <Download className='h-4 w-4' />
@@ -677,7 +683,9 @@ export function DeviceRegistration(): JSX.Element {
                 <Button
                   variant='outline'
                   size='icon'
-                  onClick={() => void fetchDevices()}
+                  onClick={() => {
+                    fetchDevices().catch(console.error);
+                  }}
                   aria-label='Refresh device list'
                 >
                   <RefreshCw className='h-4 w-4' />
@@ -794,9 +802,12 @@ export function DeviceRegistration(): JSX.Element {
                                 </DropdownMenuItem>
                                 {device.status === 'online' && (
                                   <DropdownMenuItem
-                                    onClick={() =>
-                                      handleDeviceAction(device.id, 'restart')
-                                    }
+                                    onClick={() => {
+                                      handleDeviceAction(
+                                        device.id,
+                                        'restart'
+                                      ).catch(console.error);
+                                    }}
                                   >
                                     <RefreshCw className='mr-2 h-4 w-4' />
                                     Restart
@@ -804,9 +815,12 @@ export function DeviceRegistration(): JSX.Element {
                                 )}
                                 {device.status === 'offline' && (
                                   <DropdownMenuItem
-                                    onClick={() =>
-                                      handleDeviceAction(device.id, 'wake')
-                                    }
+                                    onClick={() => {
+                                      handleDeviceAction(
+                                        device.id,
+                                        'wake'
+                                      ).catch(console.error);
+                                    }}
                                   >
                                     <Zap className='mr-2 h-4 w-4' />
                                     Wake
@@ -814,9 +828,12 @@ export function DeviceRegistration(): JSX.Element {
                                 )}
                                 {device.status === 'pending' && (
                                   <DropdownMenuItem
-                                    onClick={() =>
-                                      handleDeviceAction(device.id, 'activate')
-                                    }
+                                    onClick={() => {
+                                      handleDeviceAction(
+                                        device.id,
+                                        'activate'
+                                      ).catch(console.error);
+                                    }}
                                   >
                                     <Play className='mr-2 h-4 w-4' />
                                     Activate
@@ -896,9 +913,11 @@ export function DeviceRegistration(): JSX.Element {
                               <Button
                                 size='sm'
                                 variant='outline'
-                                onClick={() =>
-                                  void handleUpdateFirmware(device.id)
-                                }
+                                onClick={() => {
+                                  handleUpdateFirmware(device.id).catch(
+                                    console.error
+                                  );
+                                }}
                               >
                                 Update Firmware
                               </Button>
@@ -914,7 +933,10 @@ export function DeviceRegistration(): JSX.Element {
                                 size='sm'
                                 variant='outline'
                                 onClick={() => {
-                                  void handleDeviceAction(device.id, 'restart');
+                                  handleDeviceAction(
+                                    device.id,
+                                    'restart'
+                                  ).catch(console.error);
                                 }}
                               >
                                 <RefreshCw className='mr-1 h-3 w-3' />
@@ -926,7 +948,9 @@ export function DeviceRegistration(): JSX.Element {
                                 size='sm'
                                 variant='outline'
                                 onClick={() => {
-                                  void handleDeviceAction(device.id, 'wake');
+                                  handleDeviceAction(device.id, 'wake').catch(
+                                    console.error
+                                  );
                                 }}
                               >
                                 <Zap className='mr-1 h-3 w-3' />
@@ -938,10 +962,10 @@ export function DeviceRegistration(): JSX.Element {
                                 size='sm'
                                 variant='outline'
                                 onClick={() => {
-                                  void handleDeviceAction(
+                                  handleDeviceAction(
                                     device.id,
                                     'activate'
-                                  );
+                                  ).catch(console.error);
                                 }}
                               >
                                 <Play className='mr-1 h-3 w-3' />
@@ -1044,7 +1068,7 @@ export function DeviceRegistration(): JSX.Element {
             </Button>
             <Button
               onClick={() => {
-                void handleRegisterDevice();
+                handleRegisterDevice().catch(console.error);
               }}
               disabled={
                 isSubmitting ||
@@ -1087,7 +1111,7 @@ export function DeviceRegistration(): JSX.Element {
                   size='icon'
                   variant='outline'
                   onClick={() => {
-                    void copyRegistrationCode();
+                    copyRegistrationCode().catch(console.error);
                   }}
                   aria-label='Copy Code'
                 >
@@ -1205,7 +1229,7 @@ export function DeviceRegistration(): JSX.Element {
             </Button>
             <Button
               onClick={() => {
-                void handleConfigureDevice();
+                handleConfigureDevice().catch(console.error);
               }}
               disabled={isSubmitting || !deviceFormData.name}
             >
@@ -1232,7 +1256,9 @@ export function DeviceRegistration(): JSX.Element {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={handleRemoveDevice}
+              onClick={() => {
+                handleRemoveDevice().catch(console.error);
+              }}
               disabled={isSubmitting}
               className='bg-destructive text-destructive-foreground hover:bg-destructive/90'
             >
@@ -1258,7 +1284,9 @@ export function DeviceRegistration(): JSX.Element {
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction
-              onClick={handleBulkAction}
+              onClick={() => {
+                handleBulkAction().catch(console.error);
+              }}
               disabled={isSubmitting}
             >
               {isSubmitting ? 'Processing...' : 'Confirm'}

@@ -1,4 +1,8 @@
 #!/usr/bin/env node
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /**
  * Seed script to create a test device for local development
  * Run with: npx tsx packages/api/src/scripts/seed-test-device.ts
@@ -67,6 +71,7 @@ async function seedTestDevice(): Promise<void> {
 
     if (!existingCustomer) {
       console.log('   Creating test customer...');
+
       const { error: customerError } = await (supabaseAdmin as any)
         .from('customers')
         .insert({
@@ -82,6 +87,7 @@ async function seedTestDevice(): Promise<void> {
       if (customerError) {
         console.error(
           '   ❌ Failed to create test customer:',
+
           customerError.message
         );
         process.exit(1);
@@ -136,6 +142,7 @@ async function seedTestDevice(): Promise<void> {
       if (deviceError) {
         console.error(
           '   ❌ Failed to create test device:',
+
           deviceError.message
         );
         process.exit(1);
