@@ -80,11 +80,13 @@ export const setupClipboardMock = () => {
   const writeText = vi.fn().mockResolvedValue(undefined);
   const readText = vi.fn().mockResolvedValue('');
 
-  Object.assign(navigator, {
-    clipboard: {
+  Object.defineProperty(navigator, 'clipboard', {
+    value: {
       writeText,
       readText,
     },
+    writable: true,
+    configurable: true,
   });
 
   return { writeText, readText };
