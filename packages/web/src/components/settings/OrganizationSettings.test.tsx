@@ -197,7 +197,7 @@ describe('OrganizationSettings', () => {
       const saveButtons = screen.getAllByRole('button', {
         name: /Save Changes/i,
       });
-      await user.click(saveButtons[0]);
+      await user.click(saveButtons[0]!);
 
       await waitFor(() => {
         expect(api.patch).toHaveBeenCalledWith('/api/organization', {
@@ -222,7 +222,7 @@ describe('OrganizationSettings', () => {
       const saveButtons = screen.getAllByRole('button', {
         name: /Save Changes/i,
       });
-      await user.click(saveButtons[0]);
+      await user.click(saveButtons[0]!);
 
       await waitFor(() => {
         expect(
@@ -253,7 +253,7 @@ describe('OrganizationSettings', () => {
       const saveButtons = screen.getAllByRole('button', {
         name: /Save Changes/i,
       });
-      await user.click(saveButtons[0]);
+      await user.click(saveButtons[0]!);
 
       await waitFor(() => {
         expect(api.patch).toHaveBeenCalledWith(
@@ -301,7 +301,7 @@ describe('OrganizationSettings', () => {
       const saveButtons = screen.getAllByRole('button', {
         name: /Save Changes/i,
       });
-      await user.click(saveButtons[0]);
+      await user.click(saveButtons[0]!);
 
       await waitFor(() => {
         expect(api.patch).toHaveBeenCalledWith(
@@ -339,7 +339,7 @@ describe('OrganizationSettings', () => {
       const saveButtons = screen.getAllByRole('button', {
         name: /Save Changes/i,
       });
-      await user.click(saveButtons[0]);
+      await user.click(saveButtons[0]!);
 
       await waitFor(() => {
         expect(api.patch).toHaveBeenCalledWith(
@@ -412,7 +412,7 @@ describe('OrganizationSettings', () => {
       const saveButtons = screen.getAllByRole('button', {
         name: /Save Changes/i,
       });
-      await user.click(saveButtons[2]);
+      await user.click(saveButtons[2]!);
 
       await waitFor(() => {
         expect(api.patch).toHaveBeenCalledWith(
@@ -470,7 +470,7 @@ describe('OrganizationSettings', () => {
       const saveButtons = screen.getAllByRole('button', {
         name: /Save Changes/i,
       });
-      await user.click(saveButtons[2]);
+      await user.click(saveButtons[2]!);
 
       await waitFor(() => {
         expect(api.patch).toHaveBeenCalledWith(
@@ -628,7 +628,7 @@ describe('OrganizationSettings', () => {
       const saveButtons = screen.getAllByRole('button', {
         name: /Save Changes/i,
       });
-      await user.click(saveButtons[3]);
+      await user.click(saveButtons[3]!);
 
       await waitFor(() => {
         expect(api.patch).toHaveBeenCalledWith(
@@ -655,7 +655,7 @@ describe('OrganizationSettings', () => {
       const saveButtons = screen.getAllByRole('button', {
         name: /Save Changes/i,
       });
-      await user.click(saveButtons[3]);
+      await user.click(saveButtons[3]!);
 
       await waitFor(() => {
         expect(api.patch).toHaveBeenCalledWith(
@@ -731,7 +731,7 @@ describe('OrganizationSettings', () => {
       // Notifications has 1 button
       // API Settings has 1 button
       // So API Settings should be at index 4 (0-based)
-      await user.click(saveButtons[saveButtons.length - 1]); // Use the last Save button
+      await user.click(saveButtons[saveButtons.length - 1]!); // Use the last Save button
 
       await waitFor(() => {
         expect(api.patch).toHaveBeenCalledWith(
@@ -973,7 +973,7 @@ describe('OrganizationSettings', () => {
       const saveButtons = screen.getAllByRole('button', {
         name: /Save Changes/i,
       });
-      await user.click(saveButtons[0]);
+      await user.click(saveButtons[0]!);
 
       await waitFor(() => {
         expect(
@@ -1000,7 +1000,7 @@ describe('OrganizationSettings', () => {
       const saveButtons = screen.getAllByRole('button', {
         name: /Save Changes/i,
       });
-      await user.click(saveButtons[0]);
+      await user.click(saveButtons[0]!);
 
       await waitFor(() => {
         expect(screen.getByText(/Invalid email format/i)).toBeInTheDocument();
@@ -1025,7 +1025,7 @@ describe('OrganizationSettings', () => {
       const saveButtons = screen.getAllByRole('button', {
         name: /Save Changes/i,
       });
-      await user.click(saveButtons[0]);
+      await user.click(saveButtons[0]!);
 
       await waitFor(() => {
         expect(screen.getByText(/Invalid phone format/i)).toBeInTheDocument();
@@ -1052,7 +1052,7 @@ describe('OrganizationSettings', () => {
       const saveButtons = screen.getAllByRole('button', {
         name: /Save Changes/i,
       });
-      await user.click(saveButtons[0]);
+      await user.click(saveButtons[0]!);
 
       await waitFor(() => {
         expect(
@@ -1081,7 +1081,7 @@ describe('OrganizationSettings', () => {
       const saveButtons = screen.getAllByRole('button', {
         name: /Save Changes/i,
       });
-      await user.click(saveButtons[0]);
+      await user.click(saveButtons[0]!);
 
       await waitFor(() => {
         expect(
@@ -1141,7 +1141,7 @@ describe('OrganizationSettings', () => {
       const saveButtons = screen.getAllByRole('button', {
         name: /Save Changes/i,
       });
-      await user.click(saveButtons[0]);
+      await user.click(saveButtons[0]!);
 
       await waitFor(() => {
         const alert = screen.getByRole('alert');

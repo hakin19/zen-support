@@ -384,7 +384,7 @@ Suggest optimizations.`,
 
       const nameInput = screen.getByLabelText(/Template Name/i);
       const categorySelect = screen.getByLabelText(/Category/i);
-      const templateEditor = screen.getByTestId('monaco-editor');
+      // const templateEditor = screen.getByTestId('monaco-editor');
 
       await user.type(nameInput, 'New Diagnostic Template');
       // Click select to open the dropdown, then select the option
@@ -395,6 +395,7 @@ Suggest optimizations.`,
       await user.click(diagnosticsOption);
 
       // Focus the template editor before pasting
+      const templateEditor = screen.getByTestId('monaco-editor');
       await user.click(templateEditor);
       await user.paste('Analyze {{system}} for {{issue}}');
 
@@ -435,7 +436,7 @@ Suggest optimizations.`,
       const createButton = screen.getByText('Create Template');
       await user.click(createButton);
 
-      const templateEditor = screen.getByTestId('monaco-editor');
+      // const templateEditor = screen.getByTestId('monaco-editor');
       await user.paste('Check {{device}} status and {{network}} connectivity');
 
       await waitFor(() => {
@@ -598,7 +599,7 @@ Suggest optimizations.`,
 
       const prompt1 = screen.getByTestId('prompt-item-prompt-1');
       // Click the dropdown menu button (MoreHorizontal icon)
-      const moreButton = within(prompt1).getAllByRole('button')[0];
+      const moreButton = within(prompt1).getAllByRole('button')[0]!;
       await user.click(moreButton);
 
       // Check that delete option appears in dropdown
@@ -616,7 +617,7 @@ Suggest optimizations.`,
       });
 
       const prompt1 = screen.getByTestId('prompt-item-prompt-1');
-      const moreButton = within(prompt1).getAllByRole('button')[0];
+      const moreButton = within(prompt1).getAllByRole('button')[0]!;
       await user.click(moreButton);
 
       const deleteButton = await screen.findByRole('menuitem', {
@@ -644,7 +645,7 @@ Suggest optimizations.`,
       });
 
       const prompt1 = screen.getByTestId('prompt-item-prompt-1');
-      const moreButton = within(prompt1).getAllByRole('button')[0];
+      const moreButton = within(prompt1).getAllByRole('button')[0]!;
       await user.click(moreButton);
 
       const deleteButton = await screen.findByRole('menuitem', {
@@ -671,7 +672,7 @@ Suggest optimizations.`,
       });
 
       const prompt1 = screen.getByTestId('prompt-item-prompt-1');
-      const moreButton = within(prompt1).getAllByRole('button')[0];
+      const moreButton = within(prompt1).getAllByRole('button')[0]!;
       await user.click(moreButton);
 
       const deleteButton = await screen.findByRole('menuitem', {
@@ -702,7 +703,7 @@ Suggest optimizations.`,
       const createButton = screen.getByText('Create Template');
       await user.click(createButton);
 
-      const templateEditor = screen.getByTestId('monaco-editor');
+      // const templateEditor = screen.getByTestId('monaco-editor');
       // Type an actually invalid template with unclosed bracket
       await user.paste('Invalid {{variable syntax');
 
@@ -726,7 +727,7 @@ Suggest optimizations.`,
       const createButton = screen.getByText('Create Template');
       await user.click(createButton);
 
-      const templateEditor = screen.getByTestId('monaco-editor');
+      // const templateEditor = screen.getByTestId('monaco-editor');
       await user.paste('Template with {{123invalid}}');
 
       expect(
@@ -981,7 +982,7 @@ Suggest optimizations.`,
       });
 
       // Find the select by its placeholder text within the trigger
-      const categoryFilter = screen.getAllByRole('combobox')[0];
+      const categoryFilter = screen.getAllByRole('combobox')[0]!;
       await user.click(categoryFilter!);
       const diagnosticsOption = await screen.findByRole('option', {
         name: 'diagnostics',
@@ -1006,7 +1007,7 @@ Suggest optimizations.`,
       });
 
       // Find the select by its position (second combobox)
-      const statusFilter = screen.getAllByRole('combobox')[1];
+      const statusFilter = screen.getAllByRole('combobox')[1]!;
       await user.click(statusFilter!);
       const inactiveOption = await screen.findByRole('option', {
         name: 'Inactive',

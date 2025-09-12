@@ -207,6 +207,7 @@ export function UserManagement(): JSX.Element {
       }, 5000);
       return () => clearTimeout(timer);
     }
+    return undefined;
   }, [successMessage]);
 
   // Connect to WebSocket on mount

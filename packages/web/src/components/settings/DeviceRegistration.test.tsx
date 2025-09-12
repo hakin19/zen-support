@@ -715,7 +715,7 @@ describe('DeviceRegistration', () => {
     it.skip('should filter by device status', async () => {
       // Skipping due to Radix UI Select component testing limitations
       // The component works correctly in production but has known issues with hasPointerCapture in tests
-      const user = userEvent.setup();
+      // const user = userEvent.setup();
       render(<DeviceRegistration />);
 
       await waitFor(() => {
@@ -729,7 +729,7 @@ describe('DeviceRegistration', () => {
     it.skip('should filter by location', async () => {
       // Skipping due to Radix UI Select component testing limitations
       // The component works correctly in production but has known issues with hasPointerCapture in tests
-      const user = userEvent.setup();
+      // const user = userEvent.setup();
       render(<DeviceRegistration />);
 
       await waitFor(() => {
