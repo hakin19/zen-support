@@ -6,7 +6,6 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[];
 
-/* eslint-disable */
 export type Database = {
   graphql_public: {
     Tables: {
@@ -198,6 +197,13 @@ export type Database = {
             columns: ['customer_id'];
             isOneToOne: false;
             referencedRelation: 'customers';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'audit_logs_user_id_fkey';
+            columns: ['user_id'];
+            isOneToOne: false;
+            referencedRelation: 'user_management';
             referencedColumns: ['id'];
           },
           {
@@ -414,6 +420,13 @@ export type Database = {
             referencedColumns: ['id'];
           },
           {
+            foreignKeyName: 'device_actions_message_id_fkey';
+            columns: ['message_id'];
+            isOneToOne: false;
+            referencedRelation: 'chat_messages';
+            referencedColumns: ['id'];
+          },
+          {
             foreignKeyName: 'device_actions_session_id_fkey';
             columns: ['session_id'];
             isOneToOne: false;
@@ -443,7 +456,9 @@ export type Database = {
           device_id: string;
           id: string;
           last_heartbeat_at: string | null;
+          last_seen: string | null;
           location: string | null;
+          metrics: Json | null;
           name: string;
           network_info: Json | null;
           registered_at: string | null;
@@ -457,7 +472,9 @@ export type Database = {
           device_id: string;
           id?: string;
           last_heartbeat_at?: string | null;
+          last_seen?: string | null;
           location?: string | null;
+          metrics?: Json | null;
           name: string;
           network_info?: Json | null;
           registered_at?: string | null;
@@ -471,7 +488,9 @@ export type Database = {
           device_id?: string;
           id?: string;
           last_heartbeat_at?: string | null;
+          last_seen?: string | null;
           location?: string | null;
+          metrics?: Json | null;
           name?: string;
           network_info?: Json | null;
           registered_at?: string | null;
@@ -554,6 +573,13 @@ export type Database = {
             columns: ['device_id'];
             isOneToOne: false;
             referencedRelation: 'devices';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'diagnostic_sessions_user_id_fkey';
+            columns: ['user_id'];
+            isOneToOne: false;
+            referencedRelation: 'user_management';
             referencedColumns: ['id'];
           },
           {
@@ -664,6 +690,13 @@ export type Database = {
             foreignKeyName: 'remediation_actions_approved_by_fkey';
             columns: ['approved_by'];
             isOneToOne: false;
+            referencedRelation: 'user_management';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'remediation_actions_approved_by_fkey';
+            columns: ['approved_by'];
+            isOneToOne: false;
             referencedRelation: 'users';
             referencedColumns: ['id'];
           },
@@ -722,37 +755,55 @@ export type Database = {
         Row: {
           created_at: string | null;
           customer_id: string;
+          email: string | null;
           full_name: string | null;
           id: string;
+          invitation_expires_at: string | null;
+          invitation_sent_at: string | null;
+          invitation_token: string | null;
+          invited_by: string | null;
           is_active: boolean | null;
           last_login_at: string | null;
           metadata: Json | null;
           phone: string | null;
           role: string | null;
+          status: Database['public']['Enums']['user_status'] | null;
           updated_at: string | null;
         };
         Insert: {
           created_at?: string | null;
           customer_id: string;
+          email?: string | null;
           full_name?: string | null;
           id: string;
+          invitation_expires_at?: string | null;
+          invitation_sent_at?: string | null;
+          invitation_token?: string | null;
+          invited_by?: string | null;
           is_active?: boolean | null;
           last_login_at?: string | null;
           metadata?: Json | null;
           phone?: string | null;
           role?: string | null;
+          status?: Database['public']['Enums']['user_status'] | null;
           updated_at?: string | null;
         };
         Update: {
           created_at?: string | null;
           customer_id?: string;
+          email?: string | null;
           full_name?: string | null;
           id?: string;
+          invitation_expires_at?: string | null;
+          invitation_sent_at?: string | null;
+          invitation_token?: string | null;
+          invited_by?: string | null;
           is_active?: boolean | null;
           last_login_at?: string | null;
           metadata?: Json | null;
           phone?: string | null;
           role?: string | null;
+          status?: Database['public']['Enums']['user_status'] | null;
           updated_at?: string | null;
         };
         Relationships: [
@@ -767,7 +818,36 @@ export type Database = {
       };
     };
     Views: {
-      [_ in never]: never;
+      user_management: {
+        Row: {
+          auth_email: string | null;
+          created_at: string | null;
+          customer_id: string | null;
+          customer_name: string | null;
+          email: string | null;
+          full_name: string | null;
+          id: string | null;
+          invitation_expires_at: string | null;
+          invitation_sent_at: string | null;
+          invitation_token: string | null;
+          invited_by: string | null;
+          is_active: boolean | null;
+          last_login_at: string | null;
+          phone: string | null;
+          role: Database['public']['Enums']['user_role'] | null;
+          status: Database['public']['Enums']['user_status'] | null;
+          updated_at: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'users_customer_id_fkey';
+            columns: ['customer_id'];
+            isOneToOne: false;
+            referencedRelation: 'customers';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
     };
     Functions: {
       analyze_table_health: {
@@ -799,6 +879,10 @@ export type Database = {
           p_role?: string;
         };
         Returns: string;
+      };
+      fix_existing_users_without_roles: {
+        Args: Record<PropertyKey, never>;
+        Returns: undefined;
       };
       get_user_customer_id: {
         Args: Record<PropertyKey, never>;
@@ -870,6 +954,7 @@ export type Database = {
         | 'executed'
         | 'failed';
       user_role: 'owner' | 'admin' | 'viewer';
+      user_status: 'active' | 'invited' | 'suspended';
     };
     CompositeTypes: {
       [_ in never]: never;
@@ -1034,6 +1119,7 @@ export const Constants = {
         'failed',
       ],
       user_role: ['owner', 'admin', 'viewer'],
+      user_status: ['active', 'invited', 'suspended'],
     },
   },
 } as const;

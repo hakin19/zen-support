@@ -24,6 +24,8 @@ export default [
       '**/project.json',
       '**/.env*',
       '**/generated/**',
+      '**/*.generated.ts',
+      '**/*.generated.tsx',
       '**/*.d.ts',
       '**/tsconfig*.json',
       '**/test/setup.ts',
