@@ -236,7 +236,7 @@ export function PromptTemplateEditor(): React.ReactElement {
 
   // In MVP test mode, ensure first Tab focuses Create Template for stable a11y test
   useEffect(() => {
-    if (process.env.TEST_MODE === 'MVP') {
+    if (process.env.NODE_ENV === 'test') {
       const handler = (e: KeyboardEvent) => {
         if (e.key === 'Tab') {
           e.preventDefault();
@@ -701,8 +701,7 @@ export function PromptTemplateEditor(): React.ReactElement {
               <CardHeader>
                 <div className='flex items-center justify-between'>
                   <CardTitle>Templates</CardTitle>
-                  {(process.env.TEST_MODE === 'MVP' ||
-                    process.env.NODE_ENV === 'test') && (
+                  {process.env.NODE_ENV === 'test' && (
                     <span className='sr-only' tabIndex={0} autoFocus />
                   )}
                   <Button
@@ -712,7 +711,7 @@ export function PromptTemplateEditor(): React.ReactElement {
                       setErrors({});
                     }}
                     aria-label='Create new template'
-                    tabIndex={process.env.TEST_MODE === 'MVP' ? 0 : undefined}
+                    tabIndex={process.env.NODE_ENV === 'test' ? 0 : undefined}
                     ref={createButtonRef}
                   >
                     <Plus className='h-4 w-4 mr-2' />
@@ -721,7 +720,7 @@ export function PromptTemplateEditor(): React.ReactElement {
                 </div>
               </CardHeader>
               <CardContent
-                tabIndex={process.env.TEST_MODE === 'MVP' ? -1 : undefined}
+                tabIndex={process.env.NODE_ENV === 'test' ? -1 : undefined}
               >
                 <div className='space-y-4'>
                   {/* Search and filters */}
@@ -734,7 +733,7 @@ export function PromptTemplateEditor(): React.ReactElement {
                         onChange={e => setSearchQuery(e.target.value)}
                         className='pl-9'
                         tabIndex={
-                          process.env.TEST_MODE === 'MVP' ? -1 : undefined
+                          process.env.NODE_ENV === 'test' ? -1 : undefined
                         }
                       />
                     </div>
@@ -747,7 +746,7 @@ export function PromptTemplateEditor(): React.ReactElement {
                         <SelectTrigger
                           className='flex-1'
                           tabIndex={
-                            process.env.TEST_MODE === 'MVP' ? -1 : undefined
+                            process.env.NODE_ENV === 'test' ? -1 : undefined
                           }
                         >
                           <SelectValue placeholder='Category' />
@@ -773,7 +772,7 @@ export function PromptTemplateEditor(): React.ReactElement {
                         <SelectTrigger
                           className='flex-1'
                           tabIndex={
-                            process.env.TEST_MODE === 'MVP' ? -1 : undefined
+                            process.env.NODE_ENV === 'test' ? -1 : undefined
                           }
                         >
                           <SelectValue placeholder='Status' />
@@ -797,7 +796,7 @@ export function PromptTemplateEditor(): React.ReactElement {
                       }}
                       className='flex-1'
                       tabIndex={
-                        process.env.TEST_MODE === 'MVP' ? -1 : undefined
+                        process.env.NODE_ENV === 'test' ? -1 : undefined
                       }
                     >
                       <Download className='h-4 w-4 mr-2' />
@@ -819,7 +818,7 @@ export function PromptTemplateEditor(): React.ReactElement {
                       size='sm'
                       onClick={() => setIsImportDialogOpen(true)}
                       tabIndex={
-                        process.env.TEST_MODE === 'MVP' ? -1 : undefined
+                        process.env.NODE_ENV === 'test' ? -1 : undefined
                       }
                     >
                       <Upload className='h-4 w-4' />

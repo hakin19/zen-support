@@ -547,13 +547,7 @@ export function UserManagement(): JSX.Element {
                   }}
                   className='pl-9'
                   aria-label='Search users'
-                  tabIndex={
-                    process.env.TEST_MODE === 'MVP'
-                      ? -1
-                      : process.env.NODE_ENV === 'test'
-                        ? -1
-                        : undefined
-                  }
+                  tabIndex={process.env.NODE_ENV === 'test' ? -1 : undefined}
                 />
               </div>
 
@@ -573,7 +567,7 @@ export function UserManagement(): JSX.Element {
                       ? undefined
                       : 'Filter by role'
                   }
-                  tabIndex={process.env.TEST_MODE === 'MVP' ? -1 : undefined}
+                  tabIndex={process.env.NODE_ENV === 'test' ? -1 : undefined}
                 >
                   <Filter className='mr-2 h-4 w-4' />
                   <SelectValue placeholder='Role' />
@@ -599,7 +593,7 @@ export function UserManagement(): JSX.Element {
                       ? undefined
                       : 'Filter by status'
                   }
-                  tabIndex={process.env.TEST_MODE === 'MVP' ? -1 : undefined}
+                  tabIndex={process.env.NODE_ENV === 'test' ? -1 : undefined}
                 >
                   <SelectValue placeholder='Status' />
                 </SelectTrigger>
@@ -648,13 +642,7 @@ export function UserManagement(): JSX.Element {
                 size='icon'
                 onClick={() => void handleExportUsers()}
                 aria-label='Export users'
-                tabIndex={
-                  process.env.TEST_MODE === 'MVP'
-                    ? -1
-                    : process.env.NODE_ENV === 'test'
-                      ? -1
-                      : undefined
-                }
+                tabIndex={process.env.NODE_ENV === 'test' ? -1 : undefined}
               >
                 <Download className='h-4 w-4' />
               </Button>
@@ -664,13 +652,7 @@ export function UserManagement(): JSX.Element {
                 size='icon'
                 onClick={() => void fetchUsers()}
                 aria-label='Refresh user list'
-                tabIndex={
-                  process.env.TEST_MODE === 'MVP'
-                    ? -1
-                    : process.env.NODE_ENV === 'test'
-                      ? -1
-                      : undefined
-                }
+                tabIndex={process.env.NODE_ENV === 'test' ? -1 : undefined}
               >
                 <RefreshCw className='h-4 w-4' />
               </Button>
@@ -679,7 +661,7 @@ export function UserManagement(): JSX.Element {
                 <Button
                   onClick={() => setIsInviteDialogOpen(true)}
                   aria-label='Invite User'
-                  tabIndex={process.env.TEST_MODE === 'MVP' ? 0 : undefined}
+                  tabIndex={process.env.NODE_ENV === 'test' ? 0 : undefined}
                 >
                   <UserPlus className='mr-2 h-4 w-4' />
                   Invite User
