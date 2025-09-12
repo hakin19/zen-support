@@ -266,9 +266,9 @@ export class ClaudeCodeService {
    * Save a custom prompt template
    */
   async savePromptTemplate(template: PromptTemplate): Promise<void> {
-    // Type-safe approach with explicit types
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-    const { error } = await (supabase as any).from('ai_prompts').upsert([
+    // Note: Using supabase directly without type assertion
+    // The upsert method is available on the Supabase client
+    const { error } = await supabase.from('ai_prompts').upsert([
       {
         name: template.name,
         template: template.template,
@@ -371,17 +371,17 @@ export class ClaudeCodeService {
       );
     }
 
-    // Configure tools - cast to unknown first for type safety
+    // Configure tools
     if (this.readOnlyMode) {
       builder = builder.allowTools(); // No tools = read-only
     } else if (options?.allowedTools) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument
-      builder = builder.allowTools(...(options.allowedTools as any));
+      // Note: allowedTools is expected to be string[] by the SDK
+      builder = builder.allowTools(...options.allowedTools);
     }
 
     if (options?.deniedTools) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument
-      builder = builder.denyTools(...(options.deniedTools as any));
+      // Note: deniedTools is expected to be string[] by the SDK
+      builder = builder.denyTools(...options.deniedTools);
     }
 
     // Configure permissions

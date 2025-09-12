@@ -5,10 +5,21 @@ import { supabase } from '../services/supabase';
 
 import { getConnectionManager } from './websocket';
 
-import type { Database } from '@aizen/shared';
 import type { FastifyPluginAsync } from 'fastify';
 
-type Customer = Database['public']['Tables']['customers']['Row'];
+// Define Customer type inline to avoid Database type resolution issues in CI
+interface Customer {
+  id: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  address: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  is_active: boolean | null;
+  subscription_tier: string | null;
+  metadata: Record<string, unknown> | null;
+}
 
 const organizationSchema = z.object({
   name: z.string().min(1),
@@ -65,11 +76,14 @@ export const organizationRoutes: FastifyPluginAsync = async fastify => {
 
       try {
         // Get organization data
-        const { data: org, error } = (await supabase
+        const result = await supabase
           .from('customers')
           .select('*')
           .eq('id', user.customerId)
-          .single()) as { data: Customer | null; error: Error | null };
+          .single();
+
+        const org = result.data as Customer | null;
+        const error = result.error;
 
         if (error || !org) {
           fastify.log.error('Failed to fetch organization: %s', error);
@@ -171,17 +185,20 @@ export const organizationRoutes: FastifyPluginAsync = async fastify => {
         const body = organizationSchema.parse(request.body);
 
         // Get current organization data to preserve metadata
-        const { data: currentOrg } = await supabase
+        const currentResult = await supabase
           .from('customers')
           .select('metadata')
           .eq('id', user.customerId)
           .single();
 
-        const currentMetadata =
-          (currentOrg?.metadata as Record<string, unknown>) || {};
+        const currentOrg = currentResult.data as Pick<
+          Customer,
+          'metadata'
+        > | null;
+        const currentMetadata = currentOrg?.metadata ?? {};
 
         // Update organization
-        const { data: updatedOrg, error } = (await supabase
+        const updateResult = await supabase
           .from('customers')
           .update({
             name: body.name,
@@ -204,7 +221,10 @@ export const organizationRoutes: FastifyPluginAsync = async fastify => {
           })
           .eq('id', user.customerId)
           .select()
-          .single()) as { data: Customer | null; error: Error | null };
+          .single();
+
+        const updatedOrg = updateResult.data as Customer | null;
+        const error = updateResult.error;
 
         if (error) {
           fastify.log.error('Failed to update organization: %s', error);

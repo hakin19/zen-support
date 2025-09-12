@@ -26,10 +26,6 @@
       "args": ["-y", "@playwright/mcp@latest"],
       "env": {}
     },
-    "gemini-cli": {
-      "command": "npx",
-      "args": ["-y", "gemini-mcp-tool"]
-    },
     "supabase": {
       "type": "stdio",
       "command": "npx",
