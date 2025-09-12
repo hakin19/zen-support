@@ -10,9 +10,7 @@ import {
   type ToolName,
 } from '@instantlyeasy/claude-code-sdk-ts';
 
-import { getSupabase } from '@aizen/shared';
-
-import type { Json } from '@aizen/shared/dist/types/database.generated';
+import { getSupabase, type Json } from '@aizen/shared';
 
 export interface ClaudeCodeOptions {
   model?: 'sonnet' | 'opus';

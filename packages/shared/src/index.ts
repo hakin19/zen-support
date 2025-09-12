@@ -17,7 +17,7 @@ export {
 } from './lib/supabase';
 
 // Export database types - prefer generated types over manually maintained ones
-export type { Database } from './types/database.generated';
+export type { Database, Json } from './types/database.generated';
 // Keep the old Database interface renamed to avoid confusion
 export type { Database as LegacyDatabase } from './types/supabase.types';
 
