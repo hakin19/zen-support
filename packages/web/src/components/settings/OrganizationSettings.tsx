@@ -165,6 +165,8 @@ export function OrganizationSettings(): JSX.Element {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<ValidationErrors>({});
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Form data
   const [formData, setFormData] = useState<FormData>({
@@ -411,17 +413,50 @@ export function OrganizationSettings(): JSX.Element {
 
     try {
       setSaving(true);
-      await api.patch('/api/organization', formData);
+      setSuccessMessage(null);
+      setErrorMessage(null);
 
+      // Build update payload with only changed fields
+      const updatePayload: Record<string, any> = {};
+      if (formData.name !== organization?.name)
+        updatePayload.name = formData.name;
+      if (formData.subdomain !== organization?.subdomain)
+        updatePayload.subdomain = formData.subdomain;
+      if (formData.contact_email !== organization?.contact_email)
+        updatePayload.contact_email = formData.contact_email;
+      if (formData.contact_phone !== organization?.contact_phone)
+        updatePayload.contact_phone = formData.contact_phone;
+      if (formData.address !== organization?.address)
+        updatePayload.address = formData.address;
+      if (formData.city !== organization?.city)
+        updatePayload.city = formData.city;
+      if (formData.state !== organization?.state)
+        updatePayload.state = formData.state;
+      if (formData.zip !== organization?.zip) updatePayload.zip = formData.zip;
+      if (formData.country !== organization?.country)
+        updatePayload.country = formData.country;
+      if (formData.timezone !== organization?.timezone)
+        updatePayload.timezone = formData.timezone;
+      if (formData.logo_url !== organization?.logo_url)
+        updatePayload.logo_url = formData.logo_url;
+      if (formData.primary_color !== organization?.primary_color)
+        updatePayload.primary_color = formData.primary_color;
+      if (formData.secondary_color !== organization?.secondary_color)
+        updatePayload.secondary_color = formData.secondary_color;
+
+      await api.patch('/api/organization', updatePayload);
+
+      setSuccessMessage('Settings saved successfully');
       toast({
         title: 'Success',
-        description: 'Organization settings saved successfully',
+        description: 'Settings saved successfully',
       });
 
       // Refresh data
       void fetchOrganization();
     } catch {
       // console.error('Failed to save basic info:', error);
+      setErrorMessage('Failed to save settings');
       toast({
         title: 'Error',
         description: 'Failed to save settings. Please try again.',
@@ -437,19 +472,34 @@ export function OrganizationSettings(): JSX.Element {
 
     try {
       setSaving(true);
-      await api.patch('/api/organization/settings', {
-        ...securityData,
-        session_timeout: securityData.session_timeout * 60, // Convert to seconds
-      });
+      setSuccessMessage(null);
+      setErrorMessage(null);
 
+      // Build update payload with only changed fields
+      const updatePayload: Record<string, any> = {};
+      if (securityData.allow_sso !== organization?.settings?.allow_sso) {
+        updatePayload.allow_sso = securityData.allow_sso;
+      }
+      if (securityData.enforce_2fa !== organization?.settings?.enforce_2fa) {
+        updatePayload.enforce_2fa = securityData.enforce_2fa;
+      }
+      const sessionTimeoutSeconds = securityData.session_timeout * 60;
+      if (sessionTimeoutSeconds !== organization?.settings?.session_timeout) {
+        updatePayload.session_timeout = sessionTimeoutSeconds;
+      }
+
+      await api.patch('/api/organization/settings', updatePayload);
+
+      setSuccessMessage('Settings saved successfully');
       toast({
         title: 'Success',
-        description: 'Security settings saved successfully',
+        description: 'Settings saved successfully',
       });
 
       void fetchOrganization();
     } catch {
       // console.error('Failed to save security settings:', error);
+      setErrorMessage('Failed to save settings');
       toast({
         title: 'Error',
         description: 'Failed to save security settings.',
@@ -465,16 +515,43 @@ export function OrganizationSettings(): JSX.Element {
 
     try {
       setSaving(true);
-      await api.patch('/api/organization/notifications', notificationData);
+      setSuccessMessage(null);
+      setErrorMessage(null);
 
+      // Build update payload with only changed fields
+      const updatePayload: Record<string, any> = {};
+      if (
+        notificationData.email_alerts !==
+        organization?.settings?.notification_preferences?.email_alerts
+      ) {
+        updatePayload.email_alerts = notificationData.email_alerts;
+      }
+      if (
+        notificationData.sms_alerts !==
+        organization?.settings?.notification_preferences?.sms_alerts
+      ) {
+        updatePayload.sms_alerts = notificationData.sms_alerts;
+      }
+      const webhookValue = notificationData.webhook_url || null;
+      if (
+        webhookValue !==
+        organization?.settings?.notification_preferences?.webhook_url
+      ) {
+        updatePayload.webhook_url = webhookValue;
+      }
+
+      await api.patch('/api/organization/notifications', updatePayload);
+
+      setSuccessMessage('Settings saved successfully');
       toast({
         title: 'Success',
-        description: 'Notification settings saved successfully',
+        description: 'Settings saved successfully',
       });
 
       void fetchOrganization();
     } catch {
       // console.error('Failed to save notification settings:', error);
+      setErrorMessage('Failed to save settings');
       toast({
         title: 'Error',
         description: 'Failed to save notification settings.',
@@ -490,16 +567,29 @@ export function OrganizationSettings(): JSX.Element {
 
     try {
       setSaving(true);
-      await api.patch('/api/organization/api-settings', apiData);
+      setSuccessMessage(null);
+      setErrorMessage(null);
 
+      // Build update payload with only changed fields
+      const updatePayload: Record<string, any> = {};
+      if (
+        apiData.rate_limit !== organization?.settings?.api_settings?.rate_limit
+      ) {
+        updatePayload.rate_limit = apiData.rate_limit;
+      }
+
+      await api.patch('/api/organization/api-settings', updatePayload);
+
+      setSuccessMessage('Settings saved successfully');
       toast({
         title: 'Success',
-        description: 'API settings saved successfully',
+        description: 'Settings saved successfully',
       });
 
       void fetchOrganization();
     } catch {
       // console.error('Failed to save API settings:', error);
+      setErrorMessage('Failed to save settings');
       toast({
         title: 'Error',
         description: 'Failed to save API settings.',
@@ -696,19 +786,52 @@ export function OrganizationSettings(): JSX.Element {
   };
 
   // 2FA enforcement handler
-  const handleEnforce2FA = () => {
-    if (!securityData.enforce_2fa) {
-      setSecurityData(prev => ({ ...prev, enforce_2fa: true }));
-      void handleSaveSecuritySettings();
-    } else {
+  const handleEnforce2FA = (checked: boolean) => {
+    if (checked) {
+      // When enabling 2FA, show confirmation dialog
       setIs2FADialogOpen(true);
+    } else {
+      // When disabling 2FA, update immediately
+      setSecurityData(prev => ({ ...prev, enforce_2fa: false }));
     }
   };
 
-  const confirmEnforce2FA = () => {
-    setSecurityData(prev => ({ ...prev, enforce_2fa: true }));
+  const confirmEnforce2FA = async () => {
     setIs2FADialogOpen(false);
-    void handleSaveSecuritySettings();
+    // Update the state and save in one go
+    const updatedData = { ...securityData, enforce_2fa: true };
+    setSecurityData(updatedData);
+
+    // Call save with the updated data directly
+    try {
+      setSaving(true);
+      setSuccessMessage(null);
+      setErrorMessage(null);
+
+      const updatePayload: Record<string, any> = {};
+      if (updatedData.enforce_2fa !== organization?.settings?.enforce_2fa) {
+        updatePayload.enforce_2fa = updatedData.enforce_2fa;
+      }
+
+      await api.patch('/api/organization/settings', updatePayload);
+
+      setSuccessMessage('Settings saved successfully');
+      toast({
+        title: 'Success',
+        description: 'Settings saved successfully',
+      });
+
+      void fetchOrganization();
+    } catch {
+      setErrorMessage('Failed to save settings');
+      toast({
+        title: 'Error',
+        description: 'Failed to save security settings.',
+        variant: 'destructive',
+      });
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (loading) {
@@ -963,10 +1086,10 @@ export function OrganizationSettings(): JSX.Element {
 
           <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
             <div>
-              <Label htmlFor='primary-color'>Primary Color</Label>
+              <Label htmlFor='primary-color-text'>Primary Color</Label>
               <div className='flex gap-2'>
                 <Input
-                  id='primary-color'
+                  id='primary-color-picker'
                   type='color'
                   value={formData.primary_color}
                   onChange={e =>
@@ -977,8 +1100,10 @@ export function OrganizationSettings(): JSX.Element {
                   }
                   disabled={isReadOnly}
                   className='w-16 h-10 p-1'
+                  aria-label='Primary color picker'
                 />
                 <Input
+                  id='primary-color-text'
                   type='text'
                   value={formData.primary_color}
                   onChange={e =>
@@ -989,15 +1114,16 @@ export function OrganizationSettings(): JSX.Element {
                   }
                   disabled={isReadOnly}
                   className='flex-1'
+                  aria-label='Primary color text input'
                 />
               </div>
             </div>
 
             <div>
-              <Label htmlFor='secondary-color'>Secondary Color</Label>
+              <Label htmlFor='secondary-color-text'>Secondary Color</Label>
               <div className='flex gap-2'>
                 <Input
-                  id='secondary-color'
+                  id='secondary-color-picker'
                   type='color'
                   value={formData.secondary_color}
                   onChange={e =>
@@ -1008,8 +1134,10 @@ export function OrganizationSettings(): JSX.Element {
                   }
                   disabled={isReadOnly}
                   className='w-16 h-10 p-1'
+                  aria-label='Secondary color picker'
                 />
                 <Input
+                  id='secondary-color-text'
                   type='text'
                   value={formData.secondary_color}
                   onChange={e =>
@@ -1020,6 +1148,7 @@ export function OrganizationSettings(): JSX.Element {
                   }
                   disabled={isReadOnly}
                   className='flex-1'
+                  aria-label='Secondary color text input'
                 />
               </div>
             </div>
@@ -1090,7 +1219,9 @@ export function OrganizationSettings(): JSX.Element {
               <Checkbox
                 id='enforce-2fa'
                 checked={securityData.enforce_2fa}
-                onCheckedChange={handleEnforce2FA}
+                onCheckedChange={checked =>
+                  handleEnforce2FA(checked as boolean)
+                }
                 disabled={isReadOnly}
               />
             </div>
@@ -1561,7 +1692,7 @@ export function OrganizationSettings(): JSX.Element {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmEnforce2FA}>
+            <AlertDialogAction onClick={() => void confirmEnforce2FA()}>
               Confirm
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -1635,15 +1766,25 @@ export function OrganizationSettings(): JSX.Element {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Success/Error Toast Container */}
-      <div
-        role='alert'
-        aria-live='polite'
-        className='sr-only'
-        id='toast-announcements'
-      >
-        {/* Toast messages will be announced here for screen readers */}
-      </div>
+      {/* Success/Error Messages */}
+      {successMessage && (
+        <div
+          role='alert'
+          aria-live='polite'
+          className='p-4 mb-4 bg-green-50 border border-green-200 rounded-lg'
+        >
+          <p className='text-green-800'>{successMessage}</p>
+        </div>
+      )}
+      {errorMessage && (
+        <div
+          role='alert'
+          aria-live='polite'
+          className='p-4 mb-4 bg-red-50 border border-red-200 rounded-lg'
+        >
+          <p className='text-red-800'>{errorMessage}</p>
+        </div>
+      )}
     </main>
   );
 }

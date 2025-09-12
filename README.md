@@ -49,6 +49,26 @@ npm run graph
 npm run clean
 ```
 
+### Testing Modes (MVP vs Full)
+
+You can control which parts of the test suite run using the `TEST_MODE` env var. This helps speed up iteration during the MVP phase by skipping non‑critical UI/real‑time tests.
+
+- `TEST_MODE=MVP` runs the MVP subset (core CRUD, permissions, basic UI flows)
+- `TEST_MODE=FULL` runs the entire suite
+
+How to use:
+
+- Set in `.env` or `.env.test`:
+  - `TEST_MODE=MVP` (recommended for local MVP development)
+  - `TEST_MODE=FULL` (CI or full validation)
+- Or use scripts:
+  - `npm run test:mvp` → runs with `TEST_MODE=MVP`
+  - `npm run test:full` → runs with `TEST_MODE=FULL`
+
+Notes:
+
+- The test harness dynamically skips some non‑MVP tests when `TEST_MODE=MVP` is set (e.g., certain real‑time UI flows, extended keyboard shortcut coverage, and multi‑filter combinations). The tests remain in the repo and re‑enable automatically under `TEST_MODE=FULL`.
+
 ### Working with Nx
 
 This workspace uses Nx for monorepo management. Key commands:

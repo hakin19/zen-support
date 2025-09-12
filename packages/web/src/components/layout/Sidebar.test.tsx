@@ -75,7 +75,8 @@ describe('Sidebar', () => {
     });
 
     it('should render sign out button', () => {
-      render(<Sidebar user={mockUser} />);
+      const onSignOut = vi.fn();
+      render(<Sidebar user={mockUser} onSignOut={onSignOut} />);
 
       expect(
         screen.getByRole('button', { name: /sign out/i })

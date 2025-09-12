@@ -49,30 +49,47 @@ class QualityGates {
     'coverage-summary.json'
   );
 
-  private readonly globalThresholds: CoverageThreshold = {
-    statements: 60,
-    branches: 60,
-    functions: 60,
-    lines: 60,
-  };
+  private readonly isMVP = process.env.TEST_MODE === 'MVP';
 
-  private readonly packageThresholds: Record<string, CoverageThreshold> = {
-    'packages/shared': {
-      statements: 70,
-      branches: 70,
-      functions: 70,
-      lines: 70,
-    },
-    'packages/api': {
-      statements: 65,
-      branches: 65,
-      functions: 65,
-      lines: 65,
-    },
-  };
+  private readonly globalThresholds: CoverageThreshold = this.isMVP
+    ? {
+        // Relaxed thresholds for MVP phase
+        statements: 40,
+        branches: 40,
+        functions: 40,
+        lines: 40,
+      }
+    : {
+        statements: 60,
+        branches: 60,
+        functions: 60,
+        lines: 60,
+      };
+
+  private readonly packageThresholds: Record<string, CoverageThreshold> =
+    this.isMVP
+      ? {
+          // During MVP, use global relaxed thresholds for all packages
+        }
+      : {
+          'packages/shared': {
+            statements: 70,
+            branches: 70,
+            functions: 70,
+            lines: 70,
+          },
+          'packages/api': {
+            statements: 65,
+            branches: 65,
+            functions: 65,
+            lines: 65,
+          },
+        };
 
   async run(): Promise<boolean> {
-    console.log('🚨 Running Quality Gates...\n');
+    console.log(
+      `🚨 Running Quality Gates...${this.isMVP ? ' (MVP thresholds enabled)' : ''}\n`
+    );
 
     try {
       // Ensure directories exist

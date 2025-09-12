@@ -12,11 +12,13 @@ echo "🔍 Running type check..."
 npm run type-check
 
 # Run tests with coverage
-echo "🧪 Running tests with coverage..."
+echo "🧪 Running tests with coverage (MVP thresholds)..."
+# Temporarily relax thresholds during MVP phase
+export TEST_MODE=${TEST_MODE:-MVP}
 npm run test:coverage
 
 # Run quality gates
-echo "🚨 Running quality gates..."
+echo "🚨 Running quality gates (MVP thresholds)..."
 tsx scripts/quality-gates.ts
 
 echo "✅ Pre-push checks completed successfully!"

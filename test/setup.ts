@@ -3,7 +3,8 @@ import path from 'path';
 import { vi, beforeEach, afterEach, beforeAll, afterAll } from 'vitest';
 import { createClient } from '@supabase/supabase-js';
 
-// Load test environment variables
+// Load env variables: load .env first (base), then .env.test (overrides for tests)
+config({ path: path.resolve(process.cwd(), '.env') });
 config({ path: path.resolve(process.cwd(), '.env.test') });
 
 // Set test environment

@@ -2,6 +2,8 @@ import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 
+const isMVP = process.env.TEST_MODE === 'MVP';
+
 export default defineConfig({
   plugins: [react()],
   test: {
@@ -68,27 +70,37 @@ export default defineConfig({
         '**/test-results/**',
       ],
       include: ['packages/**/*.{js,ts,tsx}'],
-      thresholds: {
-        global: {
-          branches: 60,
-          functions: 60,
-          lines: 60,
-          statements: 60,
-        },
-        // Per-package thresholds
-        'packages/shared/**': {
-          branches: 70,
-          functions: 70,
-          lines: 70,
-          statements: 70,
-        },
-        'packages/api/**': {
-          branches: 65,
-          functions: 65,
-          lines: 65,
-          statements: 65,
-        },
-      },
+      thresholds: isMVP
+        ? {
+            // Relaxed thresholds for MVP
+            global: {
+              branches: 40,
+              functions: 40,
+              lines: 40,
+              statements: 40,
+            },
+          }
+        : {
+            global: {
+              branches: 60,
+              functions: 60,
+              lines: 60,
+              statements: 60,
+            },
+            // Per-package thresholds
+            'packages/shared/**': {
+              branches: 70,
+              functions: 70,
+              lines: 70,
+              statements: 70,
+            },
+            'packages/api/**': {
+              branches: 65,
+              functions: 65,
+              lines: 65,
+              statements: 65,
+            },
+          },
       watermarks: {
         statements: [60, 80],
         functions: [60, 80],

@@ -46,6 +46,18 @@ if (typeof globalThis !== 'undefined') {
       configurable: true,
     });
   }
+
+  // Mock Element.prototype.hasPointerCapture for Radix UI
+  if (typeof Element !== 'undefined' && !Element.prototype.hasPointerCapture) {
+    Element.prototype.hasPointerCapture = vi.fn(() => false);
+    Element.prototype.setPointerCapture = vi.fn();
+    Element.prototype.releasePointerCapture = vi.fn();
+  }
+
+  // Mock scrollIntoView for Radix UI Select components
+  if (typeof Element !== 'undefined' && !Element.prototype.scrollIntoView) {
+    Element.prototype.scrollIntoView = vi.fn();
+  }
 }
 
 // Mock WebSocket store to avoid real WS dependencies in unit tests
@@ -53,11 +65,18 @@ vi.mock('@/store/websocket.store', () => ({
   useWebSocketStore: () => ({
     users: [],
     devices: [], // Will be overridden by individual tests
+    promptTemplates: [], // Add prompt templates for PromptTemplateEditor
+    organization: null,
     isConnected: true,
     connect: vi.fn(),
     disconnect: vi.fn(),
     setUsers: vi.fn(),
     setDevices: vi.fn(),
+    setPromptTemplates: vi.fn(),
+    updatePromptTemplate: vi.fn(),
+    addPromptTemplate: vi.fn(),
+    removePromptTemplate: vi.fn(),
+    setOrganization: vi.fn(),
     subscribe: vi.fn().mockReturnValue(() => {}),
   }),
 }));
@@ -114,6 +133,7 @@ vi.mock('@/lib/api-client', () => ({
     put: vi.fn().mockResolvedValue({ data: {} }),
     patch: vi.fn().mockResolvedValue({ data: {} }),
     delete: vi.fn().mockResolvedValue({ data: {} }),
+    getBlob: vi.fn().mockResolvedValue(new Blob(['test'])),
   },
 }));
 
