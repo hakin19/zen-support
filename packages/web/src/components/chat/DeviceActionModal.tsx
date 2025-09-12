@@ -82,7 +82,7 @@ export function DeviceActionModal({
     }
   }, [selectedAction?.output]);
 
-  const handleMouseDown = (e: React.MouseEvent) => {
+  const handleMouseDown = (e: React.MouseEvent): void => {
     if (
       e.target === modalRef.current ||
       (e.target as HTMLElement).closest('.modal-header')
@@ -111,11 +111,11 @@ export function DeviceActionModal({
     setIsDragging(false);
   }, []);
 
-  useEffect(() => {
+  useEffect((): (() => void) | undefined => {
     if (isDragging) {
       window.document.addEventListener('mousemove', handleMouseMove);
       window.document.addEventListener('mouseup', handleMouseUp);
-      return () => {
+      return (): void => {
         window.document.removeEventListener('mousemove', handleMouseMove);
         window.document.removeEventListener('mouseup', handleMouseUp);
       };
@@ -123,7 +123,7 @@ export function DeviceActionModal({
     return undefined;
   }, [isDragging, dragStart, handleMouseMove, handleMouseUp]);
 
-  const handleCopyOutput = async () => {
+  const handleCopyOutput = async (): Promise<void> => {
     if (selectedAction?.output) {
       try {
         await window.navigator.clipboard.writeText(
@@ -139,7 +139,7 @@ export function DeviceActionModal({
     }
   };
 
-  const navigateAction = (direction: 'prev' | 'next') => {
+  const navigateAction = (direction: 'prev' | 'next'): void => {
     if (!selectedAction) return;
 
     const newIndex = direction === 'prev' ? currentIndex - 1 : currentIndex + 1;
@@ -175,7 +175,7 @@ export function DeviceActionModal({
               size='icon'
               variant='ghost'
               className='h-6 w-6 ml-2'
-              onClick={e => {
+              onClick={(e): void => {
                 (e as React.MouseEvent).stopPropagation();
                 onClose();
               }}

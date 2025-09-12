@@ -1,8 +1,5 @@
 #!/usr/bin/env node
-/* eslint-disable @typescript-eslint/no-explicit-any */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+
 /**
  * Seed script to create a test device for local development
  * Run with: npx tsx packages/api/src/scripts/seed-test-device.ts

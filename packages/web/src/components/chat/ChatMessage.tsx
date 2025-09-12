@@ -64,7 +64,7 @@ export function ChatMessage({
     ? deviceActions.filter(action => action.message_id === message.id)
     : [];
 
-  const renderContent = () => {
+  const renderContent = (): JSX.Element => {
     if (isAssistant) {
       return (
         <div className='prose prose-sm dark:prose-invert max-w-none'>
@@ -97,7 +97,7 @@ export function ChatMessage({
     return <p className='text-sm'>{message.content}</p>;
   };
 
-  const renderStatus = () => {
+  const renderStatus = (): JSX.Element | null => {
     if (!message.status || message.status === 'sent') return null;
 
     if (message.status === 'sending') {
@@ -132,7 +132,7 @@ export function ChatMessage({
     return null;
   };
 
-  const renderDeviceActions = () => {
+  const renderDeviceActions = (): JSX.Element | null => {
     if (messageActions.length === 0) return null;
 
     return (

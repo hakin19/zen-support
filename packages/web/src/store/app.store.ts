@@ -69,28 +69,30 @@ export const useAppStore = create<AppState>()(
       ...initialState,
 
       // User actions
-      setUser: user => set({ user }, false, 'setUser'),
+      setUser: (user: User | null): void => set({ user }, false, 'setUser'),
 
       // Session actions
-      setSession: session =>
+      setSession: (session: DiagnosticSession | null): void =>
         set({ currentSession: session }, false, 'setSession'),
-      clearSession: () => set({ currentSession: null }, false, 'clearSession'),
+      clearSession: (): void =>
+        set({ currentSession: null }, false, 'clearSession'),
 
       // Loading actions
-      setLoading: loading => set({ isLoading: loading }, false, 'setLoading'),
+      setLoading: (loading: boolean): void =>
+        set({ isLoading: loading }, false, 'setLoading'),
 
       // Sidebar actions
-      toggleSidebar: () =>
+      toggleSidebar: (): void =>
         set(
           state => ({ isSidebarOpen: !state.isSidebarOpen }),
           false,
           'toggleSidebar'
         ),
-      setSidebarOpen: open =>
+      setSidebarOpen: (open: boolean): void =>
         set({ isSidebarOpen: open }, false, 'setSidebarOpen'),
 
       // Theme actions
-      setTheme: theme => {
+      setTheme: (theme: 'light' | 'dark' | 'system'): void => {
         set({ theme }, false, 'setTheme');
         // Apply theme to document
         if (theme === 'dark') {
@@ -120,7 +122,7 @@ export const useAppStore = create<AppState>()(
       },
 
       // Notification actions
-      addNotification: notification => {
+      addNotification: (notification: Notification): void => {
         set(
           state => ({
             notifications: [...state.notifications, notification],
@@ -139,7 +141,7 @@ export const useAppStore = create<AppState>()(
         }
       },
 
-      removeNotification: id => {
+      removeNotification: (id: string): void => {
         set(
           state => ({
             notifications: state.notifications.filter(n => n.id !== id),
@@ -149,11 +151,11 @@ export const useAppStore = create<AppState>()(
         );
       },
 
-      clearNotifications: () =>
+      clearNotifications: (): void =>
         set({ notifications: [] }, false, 'clearNotifications'),
 
       // Reset action
-      reset: () => set(initialState, false, 'reset'),
+      reset: (): void => set(initialState, false, 'reset'),
     }),
     { name: 'app-store' }
   )

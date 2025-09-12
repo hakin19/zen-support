@@ -32,7 +32,7 @@ export function Sidebar({ user, onSignOut }: SidebarProps): React.ReactElement {
     },
   ];
 
-  const toggleSidebar = () => {
+  const toggleSidebar = (): void => {
     setIsOpen(!isOpen);
   };
 
@@ -83,9 +83,9 @@ export function Sidebar({ user, onSignOut }: SidebarProps): React.ReactElement {
           {/* User Info & Sign Out */}
           <div className='border-t p-4'>
             <div className='mb-3'>
-              <p className='text-sm font-medium'>{user.email}</p>
+              <p className='text-sm font-medium'>{user.email ?? 'No email'}</p>
               <p className='text-xs text-muted-foreground capitalize'>
-                {user.role}
+                {user.role ?? 'viewer'}
               </p>
             </div>
             {onSignOut && (

@@ -35,12 +35,20 @@ export default function ChatPage(): React.ReactElement {
   } = useChatStore();
 
   // Derive currentSession from sessions and activeSessionId
-  const currentSession: { id: string; title?: string } | null =
-    (sessions as Array<{ id: string; title?: string }>).find(
-      s => s.id === activeSessionId
-    ) ?? null;
+  const currentSession: { id: string; title?: string } | null = ((): {
+    id: string;
+    title?: string;
+  } | null => {
+    const found = sessions.find(s => s.id === activeSessionId);
+    return found
+      ? {
+          id: found.id,
+          title: found.title ?? undefined,
+        }
+      : null;
+  })();
 
-  const handleSessionCreate = () => {
+  const handleSessionCreate = (): void => {
     // Create a new session with all required fields
     const sessionId = globalThis.crypto.randomUUID();
     const newSession = {
@@ -58,11 +66,11 @@ export default function ChatPage(): React.ReactElement {
     setActiveSession(sessionId);
   };
 
-  const handleSessionRename = (id: string, title: string) => {
+  const handleSessionRename = (id: string, title: string): void => {
     updateSession(id, { title });
   };
 
-  const handleViewAction = (id: string) => {
+  const handleViewAction = (id: string): void => {
     setSelectedAction(id);
     setDeviceModalOpen(true);
   };

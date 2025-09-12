@@ -329,6 +329,8 @@ export default [
       'scripts/workflow.ts',
       'scripts/deps-check.ts',
       'scripts/pre-release.ts',
+      'packages/*/src/scripts/seed-*.ts',
+      'packages/*/src/scripts/test-*.ts',
     ],
     languageOptions: {
       globals: {

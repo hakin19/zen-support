@@ -51,7 +51,7 @@ export function AuthProvider({
   };
 
   useEffect(() => {
-    const checkSession = async () => {
+    const checkSession = async (): Promise<void> => {
       try {
         const {
           data: { session },
@@ -70,7 +70,7 @@ export function AuthProvider({
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(
-      (_event: AuthChangeEvent, session: Session | null) => {
+      (_event: AuthChangeEvent, session: Session | null): void => {
         setSession(session);
         setUser(mapSupabaseUserToUser(session?.user ?? null));
 
@@ -80,12 +80,12 @@ export function AuthProvider({
       }
     );
 
-    return () => {
+    return (): void => {
       subscription.unsubscribe();
     };
   }, [router, supabase]);
 
-  const signIn = async (email: string, password: string) => {
+  const signIn = async (email: string, password: string): Promise<void> => {
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
@@ -94,7 +94,7 @@ export function AuthProvider({
     if (error) throw error;
   };
 
-  const signInWithOTP = async (email: string) => {
+  const signInWithOTP = async (email: string): Promise<void> => {
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
@@ -105,7 +105,7 @@ export function AuthProvider({
     if (error) throw error;
   };
 
-  const signOut = async () => {
+  const signOut = async (): Promise<void> => {
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
     router.replace('/login');

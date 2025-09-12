@@ -92,8 +92,8 @@ export function MessageList({
   }, [messages.length, isUserScrolling, scrollToBottom]);
 
   // Cleanup timeout on unmount
-  useEffect(() => {
-    return () => {
+  useEffect((): (() => void) => {
+    return (): void => {
       if (scrollTimeoutRef.current) {
         clearTimeout(scrollTimeoutRef.current);
       }
@@ -116,7 +116,7 @@ export function MessageList({
     );
   }
 
-  const renderDateSeparator = (date: string) => {
+  const renderDateSeparator = (date: string): JSX.Element => {
     const messageDate = new Date(date);
     const today = new Date();
     const yesterday = new Date(today);
@@ -139,7 +139,10 @@ export function MessageList({
     );
   };
 
-  const groupMessagesByDate = () => {
+  const groupMessagesByDate = (): Array<{
+    date: string;
+    messages: MessageWithStatus[];
+  }> => {
     const groups: { date: string; messages: MessageWithStatus[] }[] = [];
     let currentDate = '';
 
@@ -198,7 +201,7 @@ export function MessageList({
             {renderDateSeparator(group.date)}
             {group.messages.map(message => (
               <ChatMessage
-                key={(message as { id: string }).id}
+                key={message.id}
                 message={message}
                 deviceActions={deviceActions}
                 onRetry={onRetry}

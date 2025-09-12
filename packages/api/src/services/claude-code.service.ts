@@ -267,25 +267,20 @@ export class ClaudeCodeService {
    */
   async savePromptTemplate(template: PromptTemplate): Promise<void> {
     // Type-safe approach with explicit types
-    const dbClient = supabase.from('ai_prompts');
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call
-    const { error } = await (dbClient as ReturnType<typeof supabase.from>)
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-      .upsert([
-        {
-          name: template.name,
-          template: template.template,
-          variables: template.variables,
-          category: template.category,
-          description: template.description,
-          is_active: template.is_active !== false,
-        },
-      ]);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+    const { error } = await (supabase as any).from('ai_prompts').upsert([
+      {
+        name: template.name,
+        template: template.template,
+        variables: template.variables,
+        category: template.category,
+        description: template.description,
+        is_active: template.is_active !== false,
+      },
+    ]);
 
     if (error) {
-      throw new Error(
-        `Failed to save prompt template: ${(error as { message: string }).message}`
-      );
+      throw new Error(`Failed to save prompt template: ${error.message}`);
     }
 
     this.promptTemplates.set(template.name, template);
