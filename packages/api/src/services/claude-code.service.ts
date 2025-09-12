@@ -10,7 +10,9 @@ import {
   type ToolName,
 } from '@instantlyeasy/claude-code-sdk-ts';
 
-import { supabase } from '@aizen/shared';
+import { getSupabase } from '@aizen/shared';
+
+import type { Json } from '@aizen/shared/dist/types/database.generated';
 
 export interface ClaudeCodeOptions {
   model?: 'sonnet' | 'opus';
@@ -207,6 +209,7 @@ export class ClaudeCodeService {
       return this.promptTemplates.get(name) as PromptTemplate;
     }
 
+    const supabase = getSupabase();
     const { data, error } = await supabase
       .from('ai_prompts')
       .select('*')
@@ -277,15 +280,14 @@ export class ClaudeCodeService {
   async savePromptTemplate(template: PromptTemplate): Promise<void> {
     // Note: customer_id and created_by would normally come from auth context
     // For now, using placeholders that would be replaced in production
-    // Using type assertion to handle the Supabase client typing issue
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-    const { error } = await (supabase as any).from('ai_prompts').upsert([
+    const supabase = getSupabase();
+    const { error } = await supabase.from('ai_prompts').upsert([
       {
         name: template.name,
         template: template.template,
-        variables: template.variables,
+        variables: template.variables as Json,
         category: template.category,
-        metadata: template.metadata,
+        metadata: template.metadata as Json,
         is_active: template.is_active !== false,
         customer_id: template.customer_id ?? 'system',
         created_by: template.created_by ?? 'system',
@@ -293,7 +295,6 @@ export class ClaudeCodeService {
     ]);
 
     if (error) {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       throw new Error(`Failed to save prompt template: ${error.message}`);
     }
 

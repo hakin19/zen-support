@@ -7,6 +7,8 @@
 export {
   supabase,
   supabaseAdmin,
+  getSupabase,
+  getSupabaseAdmin,
   createSupabaseClient,
   auth,
   db,
