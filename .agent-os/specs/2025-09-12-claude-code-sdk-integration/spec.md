@@ -7,6 +7,11 @@
 
 Implement an AI orchestration service that uses the Claude Code SDK to analyze device diagnostics, synthesize findings, and generate safe, reviewable remediation scripts. The orchestrator runs in the cloud, integrates with the API gateway, and drives a human-in-the-loop workflow where customers approve AI-generated actions via the web portal before the device agent executes them. The system enforces PII sanitization, strict execution guardrails, and complete auditability.
 
+Notes on SDK and runtime:
+
+- Use the official Claude Code SDK (Python) with the Claude Code CLI installed. Expose the SDK via a minimal internal HTTP interface (sidecar) consumed by `@aizen/api`.
+- Default to analysis-only mode: no file edits or shell execution; explicitly disable tools unless a future spec approves enabling them.
+
 ## User Stories
 
 ### AI-Assisted Diagnostics (Customer)
@@ -27,7 +32,7 @@ As the system, I want generated scripts to be validated against a safety policy 
 
 ## Spec Scope
 
-1. **Orchestrator Service** – Claude Code SDK client, prompt/program design, and response parsing
+1. **Orchestrator Service** – Claude Code SDK (Python) sidecar + client adapter in `@aizen/api`, prompt/program design, and response parsing
 2. **Safety & Policy** – PII sanitization pre-processing, command allowlist/denylist, and script validation
 3. **Workflow APIs** – Endpoints to request analysis, generate scripts, validate/score risk, and submit for approval
 4. **HITL Integration** – Web-portal surfaced approval with immutable audit trail and diff of proposed changes
@@ -42,7 +47,7 @@ As the system, I want generated scripts to be validated against a safety policy 
 
 ## Expected Deliverable
 
-1. Cloud service exposing analysis and script-generation APIs with Claude Code SDK wired and tested
+1. Cloud service exposing analysis and script-generation APIs with Claude Code SDK wired and tested (Python sidecar + Node adapter)
 2. PII sanitization pipeline and policy-based script validator with unit and integration tests
 3. End-to-end flow: diagnostics → analysis → script proposal → portal approval → device execution → results
 4. Documentation for prompts, policies, and API usage for `api`, `web`, and `device-agent` packages

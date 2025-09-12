@@ -51,3 +51,20 @@ The setup provides clear commands to start Redis, API, Web, and Device Agent ser
 1. API health endpoint returns 200 OK, device heartbeats update last_seen timestamp and online status, metrics are stored in database
 2. Device Agent container health endpoint reports healthy status, logs show successful authentication and recurring heartbeats, WebSocket connects and acknowledges test commands
 3. Web portal displays device online within 2 seconds of agent start, shows offline status within timeout window after agent stop, real-time updates visible in device dashboard
+
+## Device-Runner Isolation (Preview)
+
+While this spec focuses on local bootstrap, the device agent must execute approved scripts within a sandbox to protect the Raspberry Pi OS and customer network.
+
+- Baseline (systemd-run): run jobs as non-root user `aizen-runner` in an ephemeral workspace, with strict systemd protections:
+  - `NoNewPrivileges=yes`, `PrivateTmp=yes`, `ProtectSystem=strict`, `ProtectHome=yes`, `PrivateDevices=yes`, `RestrictSUIDSGID=yes`, `RestrictAddressFamilies=AF_INET,AF_INET6`, `LockPersonality=yes`.
+  - Minimal `CapabilityBoundingSet=`; add only what’s required (e.g., `CAP_NET_RAW` for ping). `CAP_NET_ADMIN` requires explicit approval.
+  - Resource limits: `CPUQuota`, `MemoryMax`, `TasksMax`, stdout/stderr size caps, and hard timeout.
+  - Example: `systemd-run --property=NoNewPrivileges=yes --property=ProtectSystem=strict --uid=aizen-runner --working-directory=/var/lib/aizen/runner/123 bash -lc './script.sh'`.
+
+- Upgrade paths (when moving beyond bootstrap):
+  - Rootless Podman with `--read-only`, `--cap-drop=ALL`, selective `--cap-add`, `--pids-limit`, memory/CPU limits, and controlled networking.
+  - nsjail/bubblewrap for ultra-light namespace+seccomp isolation on constrained Pis.
+
+- Policy + audit hooks:
+  - Every package from the cloud includes a manifest (allowed binaries, timeout, capabilities, network policy, rollback plan) and checksum/signature. The agent verifies, runs inside the sandbox, captures logs and exit code, and reports back.

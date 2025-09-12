@@ -89,8 +89,19 @@ export async function registerWebSocketRoutes(
         const connectionId = generateCorrelationId();
         let deviceId: string | null = null;
 
-        // Extract session token from headers
-        const sessionToken = request.headers['x-device-session'] as string;
+        // Extract session token from headers (primary) or Sec-WebSocket-Protocol (fallback)
+        let sessionToken = request.headers['x-device-session'] as string;
+        if (!sessionToken) {
+          const proto = request.headers['sec-websocket-protocol'];
+          if (typeof proto === 'string' && proto.trim().length > 0) {
+            // Accept either raw token or a prefixed form like "auth <token>"
+            const parts = proto.split(',').map(p => p.trim());
+            const candidate = parts[0] ?? '';
+            sessionToken = candidate.startsWith('auth ')
+              ? candidate.slice(5)
+              : candidate;
+          }
+        }
 
         if (!sessionToken) {
           ws.close(1008, 'Unauthorized');
@@ -111,6 +122,17 @@ export async function registerWebSocketRoutes(
           }
 
           deviceId = session.deviceId;
+
+          // Mark device online in DB on successful WS auth (helps presence quickly reflect online)
+          try {
+            const supabase = getSupabaseAdminClient();
+            await supabase
+              .from('devices')
+              .update({ status: 'online', last_seen: new Date().toISOString() })
+              .eq('device_id', deviceId);
+          } catch {
+            // Non-fatal for WS
+          }
 
           // Add connection to manager
           manager.addConnection(connectionId, ws, {

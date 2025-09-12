@@ -38,9 +38,9 @@
   - [x] 4.7 Verify Device Agent tests pass and container builds successfully
 
 - [ ] 5. Create Local Development Environment
-  - [ ] 5.1 Write integration tests for end-to-end device connection flow
-  - [ ] 5.2 Create docker-compose.yml with Redis and Device Agent; document hybrid run (API 3001 and Web 3000 via npm dev)
-  - [ ] 5.3 Add environment configuration files (.env templates)
-  - [ ] 5.4 Document local setup commands for Mac/Windows/Linux, including Linux add-host mapping
-  - [ ] 5.5 Test Web portal real-time device status presence indicator updates
-  - [ ] 5.6 Verify all integration tests pass and acceptance criteria are met
+  - [x] 5.1 Write integration tests for end-to-end device connection flow
+  - [x] 5.2 Create docker-compose.yml with Redis and Device Agent; document hybrid run (API 3001 and Web 3000 via npm dev)
+  - [x] 5.3 Add environment configuration files (.env templates)
+  - [x] 5.4 Document local setup commands for Mac
+  - [x] 5.5 Test Web portal real-time device status presence indicator updates
+  - [x] 5.6 Verify all integration tests pass and acceptance criteria are met

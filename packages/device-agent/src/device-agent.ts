@@ -195,10 +195,9 @@ export class DeviceAgent extends EventEmitter {
       // Register with the API
       await this.register();
 
-      // Auto-start heartbeat only in mock mode to keep unit tests deterministic
-      if (this.#config.mockMode) {
-        this.startHeartbeat();
-      }
+      // Start heartbeat in all modes so the API reflects online status promptly in integration tests
+      // (API client handles scheduling and backoff internally)
+      this.startHeartbeat();
 
       this.emit('started');
     } catch (error) {
