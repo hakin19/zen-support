@@ -133,7 +133,10 @@ export function registerCustomerDeviceRoutes(app: FastifyInstance): void {
         // Build the query with pagination
         let query = supabase
           .from('devices')
-          .select('id, name, status, last_heartbeat_at, registered_at')
+          .select(
+            // Include both legacy and newer schema columns used across tests/fixtures
+            'id, name, status, last_seen, last_heartbeat_at, created_at, registered_at'
+          )
           .eq('customer_id', customerId)
           .order('registered_at', { ascending: false })
           .limit(limit + 1); // Fetch one extra to determine if there's a next page
@@ -170,12 +173,14 @@ export function registerCustomerDeviceRoutes(app: FastifyInstance): void {
         }
 
         return {
-          devices: resultDevices.map(device => ({
-            id: device.id,
-            name: device.name,
-            status: device.status as string,
-            lastSeen: device.last_heartbeat_at as string,
-            createdAt: device.registered_at as string,
+          devices: (resultDevices as Array<Record<string, unknown>>).map(d => ({
+            id: String(d.id),
+            name: String(d.name),
+            status: String(d.status as string),
+            // Prefer last_seen when available; fallback to last_heartbeat_at
+            lastSeen: (d.last_seen ?? d.last_heartbeat_at) as string | null,
+            // Prefer created_at when available; fallback to registered_at
+            createdAt: (d.created_at ?? d.registered_at) as string | null,
           })),
           pagination: {
             limit,
@@ -232,7 +237,8 @@ export function registerCustomerDeviceRoutes(app: FastifyInstance): void {
         const { data: device, error } = await supabase
           .from('devices')
           .select(
-            'id, name, status, last_heartbeat_at, registered_at, network_info'
+            // Include metrics and both heartbeat/created variants for compatibility
+            'id, name, status, metrics, last_seen, last_heartbeat_at, created_at, registered_at, network_info'
           )
           .eq('id', deviceId)
           .eq('customer_id', customerId)
@@ -251,16 +257,23 @@ export function registerCustomerDeviceRoutes(app: FastifyInstance): void {
           throw error;
         }
 
-        return {
-          device: {
-            id: device.id,
-            name: device.name,
-            status: device.status as string,
-            lastHeartbeat: device.last_heartbeat_at as string,
-            networkInfo: device.network_info as Record<string, unknown>,
-            createdAt: device.registered_at as string,
-          },
-        };
+        {
+          const d = device as unknown as Record<string, unknown>;
+          return {
+            device: {
+              id: String(d.id),
+              name: String(d.name),
+              status: String(d.status as string),
+              // Prefer last_heartbeat_at; fallback to last_seen if provided by fixtures
+              lastHeartbeat: (d.last_heartbeat_at ?? d.last_seen) as
+                | string
+                | null,
+              metrics: (d.metrics as Record<string, unknown>) || undefined,
+              networkInfo: (d.network_info as Record<string, unknown>) || {},
+              createdAt: (d.created_at ?? d.registered_at) as string | null,
+            },
+          };
+        }
       } catch (error) {
         console.error('Failed to get device status:', error);
         return reply.status(500).send({

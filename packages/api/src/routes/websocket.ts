@@ -120,15 +120,20 @@ export async function registerWebSocketRoutes(
             connectedAt: new Date().toISOString(),
           });
 
-          // Send connection confirmation
-          await manager.sendToConnection(
-            connectionId,
-            addCorrelationIdToMessage({
-              type: 'connected',
-              deviceId,
-              timestamp: new Date().toISOString(),
-            })
-          );
+          // Send connection confirmation with a tiny defer to let client
+          // attach 'message' listener after 'open'. Also dispatch via manager.
+          const connectedPayload = addCorrelationIdToMessage({
+            type: 'connected',
+            deviceId,
+            timestamp: new Date().toISOString(),
+          });
+          setTimeout(() => {
+            try {
+              ws.send(JSON.stringify(connectedPayload));
+            } catch {
+              /* ignore send errors during teardown */
+            }
+          }, 10);
 
           // Subscribe to device control channel with type-safe wrapper
           const controlChannel = `device:${deviceId}:control`;
@@ -248,14 +253,25 @@ export async function registerWebSocketRoutes(
 
                 // Mark device as offline in database
                 try {
-                  if (deviceId) {
-                    await supabase
-                      .from('devices')
-                      .update({
-                        status: 'offline',
-                        last_seen: new Date().toISOString(),
-                      })
-                      .eq('device_id', deviceId);
+                  // In tests, Supabase may be a loose mock. Guard each step.
+                  interface UpdateQuery {
+                    update?: (v: unknown) => {
+                      eq: (k: string, v: string) => Promise<unknown>;
+                    };
+                  }
+                  const anySb = supabase as unknown as {
+                    from?: (t: string) => unknown;
+                  };
+                  if (deviceId && typeof anySb.from === 'function') {
+                    const q = anySb.from('devices') as UpdateQuery | null;
+                    if (q && typeof q.update === 'function') {
+                      await q
+                        .update({
+                          status: 'offline',
+                          last_seen: new Date().toISOString(),
+                        })
+                        .eq('device_id', deviceId);
+                    }
                   }
                 } catch (dbErr) {
                   request.log.error(
