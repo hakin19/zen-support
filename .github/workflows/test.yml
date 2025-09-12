@@ -56,7 +56,10 @@ jobs:
       - name: Seed test data
         run: |
           for file in supabase/seed/*.sql; do
-            supabase db seed -f "$file"
+            if [ -f "$file" ]; then
+              echo "Seeding with $file"
+              psql "postgresql://postgres:postgres@localhost:54322/postgres" -f "$file"
+            fi
           done
 
       - name: Run linter
