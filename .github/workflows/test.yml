@@ -51,12 +51,12 @@ jobs:
 
       - name: Run migrations
         run: |
-          supabase db push
+          supabase db push --local
 
       - name: Seed test data
         run: |
           for file in supabase/seed/*.sql; do
-            supabase db seed -f "$file"
+            supabase db seed --local -f "$file"
           done
 
       - name: Run linter
