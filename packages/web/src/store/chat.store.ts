@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 
-import type { Database } from '@aizen/shared/types/database.generated';
+import type { Database } from '@aizen/shared';
 
 type ChatSession = Database['public']['Tables']['chat_sessions']['Row'];
 type ChatMessage = Database['public']['Tables']['chat_messages']['Row'];

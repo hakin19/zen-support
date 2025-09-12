@@ -69,9 +69,9 @@ export const organizationRoutes: FastifyPluginAsync = async fastify => {
           .from('customers')
           .select('*')
           .eq('id', user.customerId)
-          .single()) as { data: Customer | null; error: unknown };
+          .single()) as { data: Customer | null; error: Error | null };
 
-        if (error ?? !org) {
+        if (error || !org) {
           fastify.log.error('Failed to fetch organization: %s', error);
           return reply.code(404).send({ error: 'Organization not found' });
         }
@@ -100,36 +100,28 @@ export const organizationRoutes: FastifyPluginAsync = async fastify => {
           status: string;
         } | null = null; // Placeholder until subscriptions table is implemented
 
-        // Extract metadata fields - use type assertion to handle query result types
-        const orgWithMetadata = org as Customer & {
-          metadata?: Record<string, unknown>;
-        };
-        const metadata = orgWithMetadata.metadata || {};
+        // Extract metadata fields safely
+        const metadata = (org.metadata as Record<string, unknown>) || {};
 
         // Mock organization data structure for UI compatibility
         const organization = {
-          id: String(org.id),
-          name: String(
-            (metadata.business_name as string) ?? org.name ?? 'Organization'
-          ),
-          subdomain: String((metadata.subdomain as string) ?? ''),
-          logo_url: String((metadata.logo_url as string) ?? ''),
-          primary_color: String(
-            (metadata.primary_color as string) ?? '#007bff'
-          ),
-          secondary_color: String(
-            (metadata.secondary_color as string) ?? '#6c757d'
-          ),
-          contact_email: String(org.email ?? ''),
-          contact_phone: String(org.phone ?? ''),
-          address: String((org as { address?: string }).address ?? ''),
-          city: String((metadata.city as string) ?? ''),
-          state: String((metadata.state as string) ?? ''),
-          zip: String((metadata.zip as string) ?? ''),
-          country: String((metadata.country as string) ?? 'US'),
-          timezone: String((metadata.timezone as string) ?? 'America/New_York'),
-          created_at: String(org.created_at),
-          updated_at: String(org.updated_at),
+          id: org.id,
+          name:
+            (metadata.business_name as string) ?? org.name ?? 'Organization',
+          subdomain: (metadata.subdomain as string) ?? '',
+          logo_url: (metadata.logo_url as string) ?? '',
+          primary_color: (metadata.primary_color as string) ?? '#007bff',
+          secondary_color: (metadata.secondary_color as string) ?? '#6c757d',
+          contact_email: org.email ?? '',
+          contact_phone: org.phone ?? '',
+          address: org.address ?? '',
+          city: (metadata.city as string) ?? '',
+          state: (metadata.state as string) ?? '',
+          zip: (metadata.zip as string) ?? '',
+          country: (metadata.country as string) ?? 'US',
+          timezone: (metadata.timezone as string) ?? 'America/New_York',
+          created_at: org.created_at ?? '',
+          updated_at: org.updated_at ?? '',
           settings: {
             allow_sso: settings.allow_sso ?? false,
             enforce_2fa: settings.enforce_2fa ?? false,
@@ -178,28 +170,41 @@ export const organizationRoutes: FastifyPluginAsync = async fastify => {
       try {
         const body = organizationSchema.parse(request.body);
 
+        // Get current organization data to preserve metadata
+        const { data: currentOrg } = await supabase
+          .from('customers')
+          .select('metadata')
+          .eq('id', user.customerId)
+          .single();
+
+        const currentMetadata =
+          (currentOrg?.metadata as Record<string, unknown>) || {};
+
         // Update organization
         const { data: updatedOrg, error } = (await supabase
           .from('customers')
           .update({
-            business_name: body.name,
-            subdomain: body.subdomain,
+            name: body.name,
             email: body.contact_email,
             phone: body.contact_phone,
             address: body.address,
-            city: body.city,
-            state: body.state,
-            zip: body.zip,
-            country: body.country,
-            timezone: body.timezone,
-            logo_url: body.logo_url,
-            primary_color: body.primary_color,
-            secondary_color: body.secondary_color,
+            metadata: {
+              ...currentMetadata,
+              subdomain: body.subdomain,
+              city: body.city,
+              state: body.state,
+              zip: body.zip,
+              country: body.country,
+              timezone: body.timezone,
+              logo_url: body.logo_url,
+              primary_color: body.primary_color,
+              secondary_color: body.secondary_color,
+            },
             updated_at: new Date().toISOString(),
           })
           .eq('id', user.customerId)
           .select()
-          .single()) as { data: unknown; error: unknown };
+          .single()) as { data: Customer | null; error: Error | null };
 
         if (error) {
           fastify.log.error('Failed to update organization: %s', error);
@@ -208,12 +213,14 @@ export const organizationRoutes: FastifyPluginAsync = async fastify => {
             .send({ error: 'Failed to update organization' });
         }
 
-        // Broadcast to WebSocket clients
-        const connectionManager = getConnectionManager();
-        await connectionManager.broadcast({
-          type: 'organization_update',
-          organization: updatedOrg,
-        });
+        // Broadcast to WebSocket clients (if update successful)
+        if (updatedOrg) {
+          const connectionManager = getConnectionManager();
+          await connectionManager.broadcast({
+            type: 'organization_update',
+            organization: updatedOrg,
+          });
+        }
 
         return reply.send({ success: true });
       } catch (error) {
@@ -346,13 +353,13 @@ export const organizationRoutes: FastifyPluginAsync = async fastify => {
         const body = ipWhitelistSchema.parse(request.body);
 
         // Get current whitelist
-        const { data: settings } = (await supabase
+        const { data: settings } = await supabase
           .from('organization_settings')
           .select('ip_whitelist')
           .eq('organization_id', user.customerId)
-          .single()) as { data: { ip_whitelist?: unknown[] } | null };
+          .single();
 
-        const currentWhitelist = settings?.ip_whitelist ?? [];
+        const currentWhitelist = (settings?.ip_whitelist as unknown[]) ?? [];
 
         interface WhitelistEntry {
           ip: string;
@@ -413,11 +420,11 @@ export const organizationRoutes: FastifyPluginAsync = async fastify => {
         const { ip } = request.params as { ip: string };
 
         // Get current whitelist
-        const { data: settings } = (await supabase
+        const { data: settings } = await supabase
           .from('organization_settings')
           .select('ip_whitelist')
           .eq('organization_id', user.customerId)
-          .single()) as { data: { ip_whitelist?: unknown[] } | null };
+          .single();
 
         interface WhitelistEntry {
           ip: string;
@@ -425,8 +432,9 @@ export const organizationRoutes: FastifyPluginAsync = async fastify => {
           created_at?: string;
         }
 
-        const currentWhitelist = settings?.ip_whitelist ?? [];
-        const newWhitelist = (currentWhitelist as WhitelistEntry[]).filter(
+        const currentWhitelist =
+          (settings?.ip_whitelist as WhitelistEntry[]) ?? [];
+        const newWhitelist = currentWhitelist.filter(
           (entry: WhitelistEntry) => entry.ip !== ip
         );
 
@@ -465,13 +473,13 @@ export const organizationRoutes: FastifyPluginAsync = async fastify => {
         const body = allowedOriginSchema.parse(request.body);
 
         // Get current origins
-        const { data: settings } = (await supabase
+        const { data: settings } = await supabase
           .from('organization_settings')
           .select('allowed_origins')
           .eq('organization_id', user.customerId)
-          .single()) as { data: { allowed_origins?: string[] } | null };
+          .single();
 
-        const currentOrigins = settings?.allowed_origins ?? [];
+        const currentOrigins = (settings?.allowed_origins as string[]) ?? [];
 
         // Check if origin already exists
         if (currentOrigins.includes(body.origin)) {
@@ -513,13 +521,13 @@ export const organizationRoutes: FastifyPluginAsync = async fastify => {
         const { origin } = request.params as { origin: string };
 
         // Get current origins
-        const { data: settings } = (await supabase
+        const { data: settings } = await supabase
           .from('organization_settings')
           .select('allowed_origins')
           .eq('organization_id', user.customerId)
-          .single()) as { data: { allowed_origins?: string[] } | null };
+          .single();
 
-        const currentOrigins = settings?.allowed_origins ?? [];
+        const currentOrigins = (settings?.allowed_origins as string[]) ?? [];
         const newOrigins = currentOrigins.filter((o: string) => o !== origin);
 
         const result = await supabase.from('organization_settings').upsert({
