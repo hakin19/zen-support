@@ -53,6 +53,10 @@ jobs:
         run: |
           supabase db push --local
 
+      - name: Generate TypeScript types
+        run: |
+          npx supabase gen types --local typescript > packages/shared/src/types/database.generated.ts
+
       - name: Seed test data
         run: |
           for file in supabase/seed/*.sql; do
