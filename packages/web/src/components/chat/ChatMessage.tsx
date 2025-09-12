@@ -16,7 +16,7 @@ import type {
   MessageWithStatus,
   DeviceActionWithStatus,
 } from '@/store/chat.store';
-import type { Database } from '@aizen/shared/types/database.generated';
+import type { Database } from '@aizen/shared';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
