@@ -56,7 +56,7 @@ jobs:
       - name: Seed test data
         run: |
           for file in supabase/seed/*.sql; do
-            supabase db seed --local -f "$file"
+            supabase db seed -f "$file"
           done
 
       - name: Run linter
