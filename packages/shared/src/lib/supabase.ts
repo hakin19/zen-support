@@ -5,7 +5,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 
-import type { Database } from '../types/supabase.types';
+import type { Database } from '../types/database.generated';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 // Lazy initialization of clients

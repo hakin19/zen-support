@@ -7,14 +7,15 @@ import {
   type ResponseParser,
   type CLIMessage,
   type ToolUseBlock,
+  type ToolName,
 } from '@instantlyeasy/claude-code-sdk-ts';
 
 import { supabase } from '@aizen/shared';
 
 export interface ClaudeCodeOptions {
   model?: 'sonnet' | 'opus';
-  allowedTools?: string[];
-  deniedTools?: string[];
+  allowedTools?: ToolName[];
+  deniedTools?: ToolName[];
   skipPermissions?: boolean;
   acceptEdits?: boolean;
   timeout?: number;
@@ -34,8 +35,10 @@ export interface PromptTemplate {
   template: string;
   variables: string[];
   category?: string;
-  description?: string;
+  metadata?: Record<string, unknown>;
   is_active?: boolean;
+  customer_id?: string;
+  created_by?: string;
 }
 
 export interface UsageMetrics {
@@ -219,19 +222,25 @@ export class ClaudeCodeService {
     const dbRow = data as {
       name: string;
       template: string;
-      variables?: string[];
+      variables?: unknown;
       category?: string;
-      description?: string;
+      metadata?: unknown;
       is_active?: boolean;
+      customer_id?: string;
+      created_by?: string;
     };
 
     const template: PromptTemplate = {
       name: dbRow.name,
       template: dbRow.template,
-      variables: dbRow.variables ?? [],
+      variables: Array.isArray(dbRow.variables)
+        ? (dbRow.variables as string[])
+        : [],
       category: dbRow.category,
-      description: dbRow.description,
+      metadata: dbRow.metadata as Record<string, unknown> | undefined,
       is_active: dbRow.is_active,
+      customer_id: dbRow.customer_id,
+      created_by: dbRow.created_by,
     };
 
     this.promptTemplates.set(name, template);
@@ -266,20 +275,25 @@ export class ClaudeCodeService {
    * Save a custom prompt template
    */
   async savePromptTemplate(template: PromptTemplate): Promise<void> {
-    // Note: Using supabase directly without type assertion
-    // The upsert method is available on the Supabase client
-    const { error } = await supabase.from('ai_prompts').upsert([
+    // Note: customer_id and created_by would normally come from auth context
+    // For now, using placeholders that would be replaced in production
+    // Using type assertion to handle the Supabase client typing issue
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+    const { error } = await (supabase as any).from('ai_prompts').upsert([
       {
         name: template.name,
         template: template.template,
         variables: template.variables,
         category: template.category,
-        description: template.description,
+        metadata: template.metadata,
         is_active: template.is_active !== false,
+        customer_id: template.customer_id ?? 'system',
+        created_by: template.created_by ?? 'system',
       },
     ]);
 
     if (error) {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       throw new Error(`Failed to save prompt template: ${error.message}`);
     }
 
