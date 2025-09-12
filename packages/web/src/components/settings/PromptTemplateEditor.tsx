@@ -19,7 +19,13 @@ import {
   Clock,
   Code2,
 } from 'lucide-react';
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  useRef,
+} from 'react';
 
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
@@ -695,7 +701,8 @@ export function PromptTemplateEditor(): React.ReactElement {
               <CardHeader>
                 <div className='flex items-center justify-between'>
                   <CardTitle>Templates</CardTitle>
-                  {(process.env.TEST_MODE === 'MVP' || process.env.NODE_ENV === 'test') && (
+                  {(process.env.TEST_MODE === 'MVP' ||
+                    process.env.NODE_ENV === 'test') && (
                     <span className='sr-only' tabIndex={0} autoFocus />
                   )}
                   <Button
@@ -713,7 +720,9 @@ export function PromptTemplateEditor(): React.ReactElement {
                   </Button>
                 </div>
               </CardHeader>
-              <CardContent tabIndex={process.env.TEST_MODE === 'MVP' ? -1 : undefined}>
+              <CardContent
+                tabIndex={process.env.TEST_MODE === 'MVP' ? -1 : undefined}
+              >
                 <div className='space-y-4'>
                   {/* Search and filters */}
                   <div className='space-y-2'>
@@ -724,7 +733,9 @@ export function PromptTemplateEditor(): React.ReactElement {
                         value={searchQuery}
                         onChange={e => setSearchQuery(e.target.value)}
                         className='pl-9'
-                        tabIndex={process.env.TEST_MODE === 'MVP' ? -1 : undefined}
+                        tabIndex={
+                          process.env.TEST_MODE === 'MVP' ? -1 : undefined
+                        }
                       />
                     </div>
 
@@ -733,7 +744,12 @@ export function PromptTemplateEditor(): React.ReactElement {
                         value={categoryFilter}
                         onValueChange={setCategoryFilter}
                       >
-                        <SelectTrigger className='flex-1' tabIndex={process.env.TEST_MODE === 'MVP' ? -1 : undefined}>
+                        <SelectTrigger
+                          className='flex-1'
+                          tabIndex={
+                            process.env.TEST_MODE === 'MVP' ? -1 : undefined
+                          }
+                        >
                           <SelectValue placeholder='Category' />
                         </SelectTrigger>
                         <SelectContent>
@@ -754,7 +770,12 @@ export function PromptTemplateEditor(): React.ReactElement {
                           )
                         }
                       >
-                        <SelectTrigger className='flex-1' tabIndex={process.env.TEST_MODE === 'MVP' ? -1 : undefined}>
+                        <SelectTrigger
+                          className='flex-1'
+                          tabIndex={
+                            process.env.TEST_MODE === 'MVP' ? -1 : undefined
+                          }
+                        >
                           <SelectValue placeholder='Status' />
                         </SelectTrigger>
                         <SelectContent>
@@ -775,7 +796,9 @@ export function PromptTemplateEditor(): React.ReactElement {
                         void handleExport(false);
                       }}
                       className='flex-1'
-                      tabIndex={process.env.TEST_MODE === 'MVP' ? -1 : undefined}
+                      tabIndex={
+                        process.env.TEST_MODE === 'MVP' ? -1 : undefined
+                      }
                     >
                       <Download className='h-4 w-4 mr-2' />
                       Export All
@@ -795,7 +818,9 @@ export function PromptTemplateEditor(): React.ReactElement {
                       variant='outline'
                       size='sm'
                       onClick={() => setIsImportDialogOpen(true)}
-                      tabIndex={process.env.TEST_MODE === 'MVP' ? -1 : undefined}
+                      tabIndex={
+                        process.env.TEST_MODE === 'MVP' ? -1 : undefined
+                      }
                     >
                       <Upload className='h-4 w-4' />
                       Import
@@ -942,7 +967,11 @@ export function PromptTemplateEditor(): React.ReactElement {
                       <CardDescription>
                         <span>Version: {selectedPrompt.version}</span>
                         <span>
-                          {' '}• Last updated: {new Date(selectedPrompt.updated_at).toLocaleDateString()}
+                          {' '}
+                          • Last updated:{' '}
+                          {new Date(
+                            selectedPrompt.updated_at
+                          ).toLocaleDateString()}
                         </span>
                       </CardDescription>
                     </div>
@@ -1073,16 +1102,33 @@ export function PromptTemplateEditor(): React.ReactElement {
                             automaticLayout: true,
                           })}
                           value={formData.template}
-                          onChange={e => handleFormChange('template', e.target.value)}
-                          onInput={e => handleFormChange('template', (e.target as HTMLTextAreaElement).value)}
+                          onChange={e =>
+                            handleFormChange('template', e.target.value)
+                          }
+                          onInput={e =>
+                            handleFormChange(
+                              'template',
+                              (e.target as HTMLTextAreaElement).value
+                            )
+                          }
                           onPaste={e => {
                             e.preventDefault();
-                            const clip = (e.clipboardData || (window as any).clipboardData);
+                            const clip =
+                              e.clipboardData ||
+                              (
+                                window as unknown as {
+                                  clipboardData?: DataTransfer;
+                                }
+                              ).clipboardData;
                             const text = clip?.getData?.('text') ?? '';
                             const target = e.target as HTMLTextAreaElement;
-                            const start = (target.selectionStart ?? target.value.length);
-                            const end = (target.selectionEnd ?? start);
-                            const next = target.value.slice(0, start) + text + target.value.slice(end);
+                            const start =
+                              target.selectionStart ?? target.value.length;
+                            const end = target.selectionEnd ?? start;
+                            const next =
+                              target.value.slice(0, start) +
+                              text +
+                              target.value.slice(end);
                             handleFormChange('template', next);
                           }}
                           className={`min-h-[300px] font-mono text-sm ${
@@ -1148,8 +1194,9 @@ export function PromptTemplateEditor(): React.ReactElement {
 
                         {/* Invalid variable names */}
                         {(() => {
-                          const vars = (formData.template.match(/\{\{([^}]+)\}\}/g) || [])
-                            .map(v => v.replace(/^\{\{|\}\}$/g, ''));
+                          const vars = (
+                            formData.template.match(/\{\{([^}]+)\}\}/g) || []
+                          ).map(v => v.replace(/^\{\{|\}\}$/g, ''));
                           const invalid = vars.filter(
                             v => !/^[a-zA-Z][a-zA-Z0-9_]*$/.test(v)
                           );
@@ -1168,7 +1215,8 @@ export function PromptTemplateEditor(): React.ReactElement {
                           <Alert variant='destructive' role='status'>
                             <AlertCircle className='h-4 w-4' />
                             <AlertDescription>
-                              Template exceeds maximum length of 10,000 characters
+                              Template exceeds maximum length of 10,000
+                              characters
                             </AlertDescription>
                           </Alert>
                         )}
@@ -1256,15 +1304,26 @@ export function PromptTemplateEditor(): React.ReactElement {
                 autoFocus
                 value={formData.template}
                 onChange={e => handleFormChange('template', e.target.value)}
-                onInput={e => handleFormChange('template', (e.target as HTMLTextAreaElement).value)}
+                onInput={e =>
+                  handleFormChange(
+                    'template',
+                    (e.target as HTMLTextAreaElement).value
+                  )
+                }
                 onPaste={e => {
                   e.preventDefault();
-                  const clip = (e.clipboardData || (window as any).clipboardData);
+                  const clip =
+                    e.clipboardData ||
+                    (window as unknown as { clipboardData?: DataTransfer })
+                      .clipboardData;
                   const text = clip?.getData?.('text') ?? '';
                   const target = e.target as HTMLTextAreaElement;
-                  const start = (target.selectionStart ?? target.value.length);
-                  const end = (target.selectionEnd ?? start);
-                  const next = target.value.slice(0, start) + text + target.value.slice(end);
+                  const start = target.selectionStart ?? target.value.length;
+                  const end = target.selectionEnd ?? start;
+                  const next =
+                    target.value.slice(0, start) +
+                    text +
+                    target.value.slice(end);
                   handleFormChange('template', next);
                 }}
                 className={`min-h-[300px] font-mono text-sm ${
@@ -1294,15 +1353,18 @@ export function PromptTemplateEditor(): React.ReactElement {
                     return malformed || unmatched ? (
                       <Alert variant='destructive' role='status'>
                         <AlertCircle className='h-4 w-4' />
-                        <AlertDescription>Invalid variable syntax detected</AlertDescription>
+                        <AlertDescription>
+                          Invalid variable syntax detected
+                        </AlertDescription>
                       </Alert>
                     ) : null;
                   })()}
 
                   {/* Invalid variable names */}
                   {(() => {
-                    const vars = (formData.template.match(/\{\{([^}]+)\}\}/g) || [])
-                      .map(v => v.replace(/^\{\{|\}\}$/g, ''));
+                    const vars = (
+                      formData.template.match(/\{\{([^}]+)\}\}/g) || []
+                    ).map(v => v.replace(/^\{\{|\}\}$/g, ''));
                     const invalid = vars.filter(
                       v => !/^[a-zA-Z][a-zA-Z0-9_]*$/.test(v)
                     );
@@ -1330,9 +1392,7 @@ export function PromptTemplateEditor(): React.ReactElement {
             </div>
 
             <div>
-              <h4 className='text-sm font-medium mb-2'>
-                Variables detected:
-              </h4>
+              <h4 className='text-sm font-medium mb-2'>Variables detected:</h4>
               <div className='flex flex-wrap gap-1'>
                 {detectVariables(formData.template).map(variable => (
                   <Badge key={variable} variant='secondary'>
@@ -1407,11 +1467,18 @@ export function PromptTemplateEditor(): React.ReactElement {
                     const preview = (() => {
                       let out = formData.template;
                       Object.entries(testVariables).forEach(([k, v]) => {
-                        out = out.replace(new RegExp(`\\\\{\\\\{${k}\\\\}\\\\}`, 'g'), v);
+                        out = out.replace(
+                          new RegExp(`\\\\{\\\\{${k}\\\\}\\\\}`, 'g'),
+                          v
+                        );
                       });
                       return out;
                     })();
-                    setTestResult({ response: preview, tokens_used: 0, execution_time: 0 });
+                    setTestResult({
+                      response: preview,
+                      tokens_used: 0,
+                      execution_time: 0,
+                    });
                   }}
                 >
                   Preview

@@ -525,7 +525,11 @@ export function UserManagement(): JSX.Element {
           Manage team members and their permissions
         </CardDescription>
       </CardHeader>
-      <CardContent aria-hidden={isInviteDialogOpen || isRoleDialogOpen || isDeleteDialogOpen}>
+      <CardContent
+        aria-hidden={
+          isInviteDialogOpen || isRoleDialogOpen || isDeleteDialogOpen
+        }
+      >
         <div className='space-y-4'>
           <div className='flex items-center justify-between gap-4'>
             <div className='flex flex-1 items-center gap-2'>
@@ -542,7 +546,13 @@ export function UserManagement(): JSX.Element {
                   }}
                   className='pl-9'
                   aria-label='Search users'
-                  tabIndex={process.env.TEST_MODE === 'MVP' ? -1 : process.env.NODE_ENV === 'test' ? -1 : undefined}
+                  tabIndex={
+                    process.env.TEST_MODE === 'MVP'
+                      ? -1
+                      : process.env.NODE_ENV === 'test'
+                        ? -1
+                        : undefined
+                  }
                 />
               </div>
 
@@ -637,7 +647,13 @@ export function UserManagement(): JSX.Element {
                 size='icon'
                 onClick={() => void handleExportUsers()}
                 aria-label='Export users'
-                tabIndex={process.env.TEST_MODE === 'MVP' ? -1 : process.env.NODE_ENV === 'test' ? -1 : undefined}
+                tabIndex={
+                  process.env.TEST_MODE === 'MVP'
+                    ? -1
+                    : process.env.NODE_ENV === 'test'
+                      ? -1
+                      : undefined
+                }
               >
                 <Download className='h-4 w-4' />
               </Button>
@@ -647,7 +663,13 @@ export function UserManagement(): JSX.Element {
                 size='icon'
                 onClick={() => void fetchUsers()}
                 aria-label='Refresh user list'
-                tabIndex={process.env.TEST_MODE === 'MVP' ? -1 : process.env.NODE_ENV === 'test' ? -1 : undefined}
+                tabIndex={
+                  process.env.TEST_MODE === 'MVP'
+                    ? -1
+                    : process.env.NODE_ENV === 'test'
+                      ? -1
+                      : undefined
+                }
               >
                 <RefreshCw className='h-4 w-4' />
               </Button>
@@ -874,29 +896,36 @@ export function UserManagement(): JSX.Element {
                                       <Button
                                         variant='ghost'
                                         className='w-full justify-start font-normal text-destructive'
-                                        onClick={async () => {
-                                          setSelectedUserForAction(u);
-                                          try {
-                                            setIsSubmitting(true);
-                                            await api.delete(`/api/users/${u.id}/invitation`);
-                                            setSuccessMessage('Invitation cancelled');
-                                            toast({
-                                              title: 'Success',
-                                              description: 'Invitation cancelled',
-                                            });
-                                            void fetchUsers();
-                                          } catch (error: unknown) {
-                                            toast({
-                                              title: 'Error',
-                                              description:
-                                                error instanceof Error
-                                                  ? error.message
-                                                  : 'Failed to cancel invitation',
-                                              variant: 'destructive',
-                                            });
-                                          } finally {
-                                            setIsSubmitting(false);
-                                          }
+                                        onClick={() => {
+                                          void (async () => {
+                                            setSelectedUserForAction(u);
+                                            try {
+                                              setIsSubmitting(true);
+                                              await api.delete(
+                                                `/api/users/${u.id}/invitation`
+                                              );
+                                              setSuccessMessage(
+                                                'Invitation cancelled'
+                                              );
+                                              toast({
+                                                title: 'Success',
+                                                description:
+                                                  'Invitation cancelled',
+                                              });
+                                              void fetchUsers();
+                                            } catch (error: unknown) {
+                                              toast({
+                                                title: 'Error',
+                                                description:
+                                                  error instanceof Error
+                                                    ? error.message
+                                                    : 'Failed to cancel invitation',
+                                                variant: 'destructive',
+                                              });
+                                            } finally {
+                                              setIsSubmitting(false);
+                                            }
+                                          })();
                                         }}
                                       >
                                         Cancel
@@ -1094,7 +1123,7 @@ export function UserManagement(): JSX.Element {
               <DialogTitle>Change User Role</DialogTitle>
               <DialogDescription>
                 Are you sure you want to change the role for{' '}
-                {selectedUserForAction?.full_name ||
+                {selectedUserForAction?.full_name ??
                   selectedUserForAction?.email}
                 ?
               </DialogDescription>
@@ -1139,7 +1168,7 @@ export function UserManagement(): JSX.Element {
                 ) : (
                   <>
                     Are you sure you want to remove{' '}
-                    {selectedUserForAction?.full_name ||
+                    {selectedUserForAction?.full_name ??
                       selectedUserForAction?.email}
                     ? This action cannot be undone.
                   </>
