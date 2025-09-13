@@ -178,8 +178,7 @@ export class WebSocketClient extends EventEmitter {
           data.map(d => (Buffer.isBuffer(d) ? d : Buffer.from(d)))
         ).toString('utf-8');
       } else {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-        dataStr = (data as any).toString();
+        dataStr = (data as unknown as { toString: () => string }).toString();
       }
       const message = JSON.parse(dataStr) as WebSocketMessage;
       this.metrics.messagesReceived++;

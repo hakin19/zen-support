@@ -488,7 +488,9 @@ export class DeviceAgent extends EventEmitter {
     const observed401 = this.#lastHeartbeatWas401;
     this.#lastHeartbeatWas401 = false;
     const is401 = Boolean(
-      observed401 || last?.code === 'HTTP_401' || /401/.test(last?.message ?? '')
+      observed401 ||
+        last?.code === 'HTTP_401' ||
+        /401/.test(last?.message ?? '')
     );
 
     if (!is401) {
