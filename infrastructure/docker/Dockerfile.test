@@ -21,11 +21,14 @@ RUN npm ci
 # Copy source code
 COPY . .
 
+# Disable Nx daemon in Docker to avoid issues
+ENV NX_DAEMON=false
+
 # Build only the necessary packages for testing (skip web which requires env vars)
-# Build shared first as it's a dependency
-RUN npx nx run shared:build
-RUN npx nx run api:build
-RUN npx nx run device-agent:build
+# Use TypeScript compiler directly to avoid Nx daemon issues
+RUN cd packages/shared && npm run build
+RUN cd packages/api && npm run build
+RUN cd packages/device-agent && npm run build
 # Skip web:build as it requires runtime environment variables
 
 # Create directories for test outputs
