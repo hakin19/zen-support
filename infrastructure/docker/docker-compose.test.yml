@@ -2,41 +2,8 @@
 # Usage: docker-compose -f docker-compose.test.yml up
 
 services:
-  # Supabase Local Development Stack
-  # This service starts the full Supabase stack locally
-  supabase:
-    image: node:20-alpine
-    container_name: aizen-supabase-local
-    working_dir: /app
-    volumes:
-      - ../../:/app
-      - supabase-data:/app/.supabase
-    environment:
-      - SUPABASE_ACCESS_TOKEN=${SUPABASE_ACCESS_TOKEN:-}
-    command: >
-      sh -c "
-        npx supabase start --workdir /app &&
-        tail -f /dev/null
-      "
-    healthcheck:
-      test: ["CMD", "npx", "supabase", "status", "--workdir", "/app"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-    ports:
-      - "54321:54321" # API Gateway
-      - "54322:54322" # PostgreSQL
-      - "54323:54323" # Studio
-      - "54324:54324" # Inbucket (Email testing)
-      - "54325:54325" # Vector (Logs)
-      - "54326:54326" # Auth
-      - "54327:54327" # PostgREST
-      - "54328:54328" # Realtime
-      - "54329:54329" # Storage
-      - "54330:54330" # Edge Functions
-    networks:
-      - aizen-network
-    restart: unless-stopped
+  # Note: Supabase is started by the CI workflow before Docker Compose
+  # so we don't need a Supabase container here
 
   # Test Runner Service - Runs all tests in containers
   test-runner:
@@ -47,18 +14,16 @@ services:
     environment:
       NODE_ENV: test
       CI: true
-      # Use local Supabase
-      SUPABASE_URL: http://supabase:54321
+      # Use Supabase running on host (started by CI)
+      SUPABASE_URL: http://host.docker.internal:54321
       SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0
       SUPABASE_SERVICE_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU
-      DATABASE_URL: postgresql://postgres:postgres@supabase:54322/postgres
+      DATABASE_URL: postgresql://postgres:postgres@host.docker.internal:54322/postgres
       # Redis test connection
       REDIS_HOST: redis
       REDIS_PORT: 6379
     depends_on:
       redis:
-        condition: service_healthy
-      supabase:
         condition: service_healthy
     volumes:
       - ../../:/app
@@ -102,11 +67,11 @@ services:
     environment:
       NODE_ENV: test
       PORT: 3000
-      # Use local Supabase
-      SUPABASE_URL: http://supabase:54321
+      # Use Supabase running on host (started by CI)
+      SUPABASE_URL: http://host.docker.internal:54321
       SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0
       SUPABASE_SERVICE_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU
-      DATABASE_URL: postgresql://postgres:postgres@supabase:54322/postgres
+      DATABASE_URL: postgresql://postgres:postgres@host.docker.internal:54322/postgres
       # Redis connection
       REDIS_HOST: redis
       REDIS_PORT: 6379
@@ -119,8 +84,6 @@ services:
       - aizen-network
     depends_on:
       redis:
-        condition: service_healthy
-      supabase:
         condition: service_healthy
 
   # Web Portal Test Configuration
@@ -137,7 +100,7 @@ services:
       NODE_ENV: test
       PORT: 3001
       NEXT_PUBLIC_API_URL: http://api-gateway:3000
-      NEXT_PUBLIC_SUPABASE_URL: http://supabase:54321
+      NEXT_PUBLIC_SUPABASE_URL: http://host.docker.internal:54321
       NEXT_PUBLIC_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0
       # Disable analytics in test
       NEXT_PUBLIC_DISABLE_ANALYTICS: true
@@ -211,5 +174,3 @@ volumes:
     name: aizen-test-results
   coverage:
     name: aizen-test-coverage
-  supabase-data:
-    name: aizen-supabase-test-data
