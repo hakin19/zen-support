@@ -354,9 +354,10 @@ export class DeviceAgent extends EventEmitter {
     if (!authenticated) {
       const last = this.#apiClient.getLastError();
       const msg =
+        // Prefer the earliest captured original error message for clarity in tests
+        lastError?.message ??
         last?.originalError?.message ??
         last?.message ??
-        lastError?.message ??
         'Authentication failed';
       throw new Error(msg);
     }

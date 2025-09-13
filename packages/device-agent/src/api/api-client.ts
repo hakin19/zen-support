@@ -582,12 +582,22 @@ export class ApiClient extends EventEmitter {
 
       return response;
     } catch (error) {
+      // Preserve original HTTP error (e.g., HTTP_401) for higher layers
+      if (error instanceof ApiClientError) {
+        this.#lastError = error;
+      }
       const normalized = this.normalizeError(
         error,
         'Heartbeat failed',
         'HEARTBEAT_ERROR',
         true
       );
+      // Record last error for higher-level handlers (e.g., DeviceAgent)
+      // Prefer underlying HTTP error (e.g., HTTP_401) when available
+      // If we didn't already record a specific HTTP error, record normalized
+      if (!this.#lastError) {
+        this.#lastError = normalized;
+      }
       // Prefer the original HTTP error for downstream handlers (e.g., to detect 401)
       if (
         normalized instanceof ApiClientError &&
