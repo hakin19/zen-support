@@ -21,8 +21,12 @@ RUN npm ci
 # Copy source code
 COPY . .
 
-# Build the project
-RUN npm run build
+# Build only the necessary packages for testing (skip web which requires env vars)
+# Build shared first as it's a dependency
+RUN npx nx run shared:build
+RUN npx nx run api:build
+RUN npx nx run device-agent:build
+# Skip web:build as it requires runtime environment variables
 
 # Create directories for test outputs
 RUN mkdir -p test-results coverage
