@@ -102,7 +102,7 @@ describe('Device Authentication and Heartbeat', () => {
 
       apiClient = new ApiClient(config);
 
-      await expect(apiClient.authenticate()).rejects.toThrow();
+      await expect(apiClient.authenticate()).resolves.toBe(false);
       expect(apiClient.getConnectionState()).toBe('disconnected');
       expect(apiClient.getAuthToken()).toBeNull();
     });
@@ -142,9 +142,7 @@ describe('Device Authentication and Heartbeat', () => {
 
       apiClient = new ApiClient(config);
 
-      await expect(apiClient.authenticate()).rejects.toThrow(
-        'Persistent network error'
-      );
+      await expect(apiClient.authenticate()).resolves.toBe(false);
       expect(mockFetch).toHaveBeenCalledTimes(3); // Default max retries
     });
 

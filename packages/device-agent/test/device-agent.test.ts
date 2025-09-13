@@ -358,10 +358,12 @@ describe('DeviceAgent', () => {
       // Wait for the heartbeat cycle to process the 401 and attempt re-auth
       // The re-auth attempts will take time due to retries (3 attempts with exponential backoff)
       await vi.advanceTimersByTimeAsync(10000);
-
-      // Verify auth:failed event was emitted
-      expect(authFailedHandler).toHaveBeenCalled();
-      expect(heartbeatErrorHandler).toHaveBeenCalled();
+      await vi.waitFor(() => {
+        expect(authFailedHandler).toHaveBeenCalled();
+      });
+      await vi.waitFor(() => {
+        expect(heartbeatErrorHandler).toHaveBeenCalled();
+      });
     });
 
     it('should handle non-401 errors normally', async () => {
@@ -432,10 +434,11 @@ describe('DeviceAgent', () => {
     it('should attempt recovery from error state', async () => {
       agent = new DeviceAgent(config);
 
-      // First attempt fails
-      mockFetch.mockRejectedValueOnce(new Error('Temporary failure'));
-      mockFetch.mockRejectedValueOnce(new Error('Temporary failure'));
-      mockFetch.mockRejectedValueOnce(new Error('Temporary failure'));
+      // First start should fail: exhaust ApiClient's internal 3 retries
+      // for each of the DeviceAgent's 2 registration attempts (total 6).
+      for (let i = 0; i < 6; i++) {
+        mockFetch.mockRejectedValueOnce(new Error('Temporary failure'));
+      }
 
       await expect(agent.start()).rejects.toThrow('Temporary failure');
       expect(agent.getStatus()).toBe('error');

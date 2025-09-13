@@ -31,6 +31,10 @@ export class DeviceAgent extends EventEmitter {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   #mockSimulator: any = null; // Use any to avoid type issues with dynamic import
   #websocketState: 'connected' | 'disconnected' = 'disconnected';
+  // Track whether the last heartbeat failure was a 401 so we can
+  // reliably trigger re-auth logic even if the ApiClient updates
+  // its lastError during internal retries.
+  #lastHeartbeatWas401 = false;
 
   constructor(config: DeviceConfig) {
     super();
@@ -80,6 +84,21 @@ export class DeviceAgent extends EventEmitter {
       // to prevent unhandled exceptions in tests when no listeners are attached.
       this.#lastError = error;
       this.emit('api:error', error);
+    });
+
+    // Observe heartbeat errors from ApiClient to detect 401 specifically.
+    // We don't re-emit here to avoid duplicate events at the agent level;
+    // DeviceAgent emits its own heartbeat:error where appropriate.
+    this.#apiClient.on('heartbeat:error', err => {
+      try {
+        const msg =
+          err && typeof err === 'object' && 'message' in err
+            ? String((err as Error).message)
+            : String(err);
+        this.#lastHeartbeatWas401 = /\b401\b|Unauthorized/i.test(msg);
+      } catch {
+        this.#lastHeartbeatWas401 = false;
+      }
     });
 
     // WebSocket events
@@ -419,6 +438,8 @@ export class DeviceAgent extends EventEmitter {
           // Successful heartbeat; update counters and schedule next
           this.#lastHeartbeat = new Date();
           this.#heartbeatCount++;
+          // Clear any previous 401 marker on success
+          this.#lastHeartbeatWas401 = false;
           // Update interval if server suggests a new one
           if (typeof result.nextHeartbeat === 'number') {
             this.#heartbeatInterval = result.nextHeartbeat;
@@ -462,8 +483,12 @@ export class DeviceAgent extends EventEmitter {
   private async handleHeartbeatFailure(): Promise<boolean> {
     if (!this.#apiClient) return false;
     const last = this.#apiClient.getLastError();
+    // Capture and reset our 401 marker; prefer this over ApiClient's
+    // lastError which may have been replaced by a subsequent auth attempt.
+    const observed401 = this.#lastHeartbeatWas401;
+    this.#lastHeartbeatWas401 = false;
     const is401 = Boolean(
-      last?.code === 'HTTP_401' || /401/.test(last?.message ?? '')
+      observed401 || last?.code === 'HTTP_401' || /401/.test(last?.message ?? '')
     );
 
     if (!is401) {
