@@ -71,6 +71,7 @@ services:
 
   # Redis for test environment (isolated from dev)
   redis:
+    image: redis:7.4-alpine
     container_name: aizen-redis-test
     ports:
       - "6380:6379" # Different port to avoid conflicts
@@ -80,10 +81,22 @@ services:
       # Test-specific Redis configuration
       REDIS_MAXMEMORY: 100mb
       REDIS_MAXMEMORY_POLICY: allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - aizen-network
 
   # API Gateway Test Configuration
   api-gateway:
+    image: node:20-alpine
     container_name: aizen-api-gateway-test
+    working_dir: /app
+    volumes:
+      - ../../:/app
+      - /app/node_modules
     ports:
       - "3100:3000" # Different port for test
     environment:
@@ -102,10 +115,22 @@ services:
       ENABLE_TEST_ENDPOINTS: true
       DISABLE_RATE_LIMITING: true
     command: npm run test
+    networks:
+      - aizen-network
+    depends_on:
+      redis:
+        condition: service_healthy
+      supabase:
+        condition: service_healthy
 
   # Web Portal Test Configuration
   web-portal:
+    image: node:20-alpine
     container_name: aizen-web-portal-test
+    working_dir: /app
+    volumes:
+      - ../../:/app
+      - /app/node_modules
     ports:
       - "3101:3001" # Different port for test
     environment:
@@ -117,10 +142,20 @@ services:
       # Disable analytics in test
       NEXT_PUBLIC_DISABLE_ANALYTICS: true
     command: npm run test
+    networks:
+      - aizen-network
+    depends_on:
+      api-gateway:
+        condition: service_started
 
   # Device Agent Test Configuration
   device-agent:
+    image: node:20-alpine
     container_name: aizen-device-agent-test
+    working_dir: /app
+    volumes:
+      - ../../:/app
+      - /app/node_modules
     ports:
       - "3102:3002" # Different port for test
     environment:
@@ -132,10 +167,20 @@ services:
       HEARTBEAT_INTERVAL: 5000
       DIAGNOSTIC_INTERVAL: 10000
     command: npm run test
+    networks:
+      - aizen-network
+    depends_on:
+      api-gateway:
+        condition: service_started
 
   # AI Orchestrator Test Configuration
   ai-orchestrator:
+    image: node:20-alpine
     container_name: aizen-ai-orchestrator-test
+    working_dir: /app
+    volumes:
+      - ../../:/app
+      - /app/node_modules
     ports:
       - "3103:3003" # Different port for test
     environment:
@@ -147,6 +192,8 @@ services:
       # Disable external API calls
       CLAUDE_API_KEY: test-key-not-used
     command: npm run test
+    networks:
+      - aizen-network
 
   # Disable Redis Commander in test environment
   redis-commander:
