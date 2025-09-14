@@ -2,10 +2,10 @@
 
 ## Tasks
 
-- [ ] 1. Define orchestrator prompts and SDK configuration
-  - [ ] 1.1 Draft analysis prompt templates with TypeScript interfaces
-  - [ ] 1.2 Configure SDK Options interface with safety defaults
-  - [ ] 1.3 Design MCP tool schemas using Zod for type safety
+- [x] 1. Define orchestrator prompts and SDK configuration
+  - [x] 1.1 Draft analysis prompt templates with TypeScript interfaces
+  - [x] 1.2 Configure SDK Options interface with safety defaults
+  - [x] 1.3 Design MCP tool schemas using Zod for type safety
 
 - [ ] 2. Implement TypeScript SDK integration in `@aizen/api`
   - [ ] 2.1 Install `@anthropic/claude-code-sdk` package and configure TypeScript types
