@@ -31,8 +31,9 @@ RUN cd packages/api && npm run build
 RUN cd packages/device-agent && npm run build
 # Skip web:build as it requires runtime environment variables
 
-# Create directories for test outputs
-RUN mkdir -p test-results coverage
+# Create directories for test outputs with proper permissions
+RUN mkdir -p test-results coverage && \
+    chmod -R 777 test-results coverage
 
 # Set test environment
 ENV NODE_ENV=test

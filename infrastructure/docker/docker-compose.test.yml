@@ -28,8 +28,6 @@ services:
     volumes:
       - ../../:/app
       - /app/node_modules
-      - test-results:/app/test-results
-      - coverage:/app/coverage
     command: npm run test:coverage
     networks:
       - aizen-network
@@ -64,7 +62,3 @@ networks:
 volumes:
   redis-test-data:
     name: aizen-redis-test-data
-  test-results:
-    name: aizen-test-results
-  coverage:
-    name: aizen-test-coverage
