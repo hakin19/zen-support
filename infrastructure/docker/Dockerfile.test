@@ -38,6 +38,7 @@ RUN mkdir -p test-results coverage && \
 # Set test environment
 ENV NODE_ENV=test
 ENV CI=true
+ENV TEST_MODE=MVP
 
 # Default command runs all tests with coverage
 CMD ["npm", "run", "test:coverage"]
