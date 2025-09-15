@@ -14,13 +14,13 @@
   - [x] 2.4 Build `canUseTool` permission handler for HITL workflow
   - [x] 2.5 Create message processing pipeline for SDK message types
 
-- [ ] 3. Build workflow APIs with SDK streaming
-  - [ ] 3.1 POST `/api/v1/ai/diagnostics/analyze` with AsyncGenerator SSE streaming
-  - [ ] 3.2 POST `/api/v1/ai/scripts/generate` using MCP tools
-  - [ ] 3.3 POST `/api/v1/ai/scripts/validate` with SDK validation
-  - [ ] 3.4 POST `/api/v1/ai/scripts/submit-for-approval` integrated with `canUseTool`
-  - [ ] 3.5 WS `/api/v1/ai/approval-stream` for real-time HITL approvals
-  - [ ] 3.6 GET `/api/v1/ai/mcp-tools` to list available SDK tools
+- [x] 3. Build workflow APIs with SDK streaming
+  - [x] 3.1 POST `/api/v1/ai/diagnostics/analyze` with AsyncGenerator SSE streaming
+  - [x] 3.2 POST `/api/v1/ai/scripts/generate` using MCP tools
+  - [x] 3.3 POST `/api/v1/ai/scripts/validate` with SDK validation
+  - [x] 3.4 POST `/api/v1/ai/scripts/submit-for-approval` integrated with `canUseTool`
+  - [x] 3.5 WS `/api/v1/ai/approval-stream` for real-time HITL approvals
+  - [x] 3.6 GET `/api/v1/ai/mcp-tools` to list available SDK tools
 
 - [ ] 4. HITL integration with SDK permission system
   - [ ] 4.1 WebSocket server for real-time approval requests from `canUseTool`

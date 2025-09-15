@@ -121,6 +121,17 @@ export async function webPortalAuthMiddleware(
 }
 
 /**
+ * PreHandler-compatible hook (no options)
+ * Use this when passing directly as Fastify preHandler.
+ */
+export const webPortalAuthHook = async (
+  request: FastifyRequest,
+  reply: FastifyReply
+): Promise<void> => {
+  return webPortalAuthMiddleware(request, reply);
+};
+
+/**
  * Optional Web Portal Authentication Middleware
  * Attempts authentication but doesn't fail if token is missing or invalid
  */

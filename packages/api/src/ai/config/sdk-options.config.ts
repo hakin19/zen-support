@@ -12,14 +12,14 @@
 //   McpServerConfig,
 // } from '../types/sdk-types';
 
-// Temporary imports - will be replaced in Task 2
+// Use official SDK types to avoid mismatch with orchestrator
 import type {
   Options,
   PermissionMode,
   CanUseTool,
   PermissionResult,
   McpServerConfig,
-} from '../types/sdk-types';
+} from '@anthropic-ai/claude-code';
 
 /**
  * Enhanced SDK Options with safety and security controls
@@ -330,7 +330,7 @@ You are generating remediation scripts for network devices. Requirements:
         return {
           behavior: 'deny',
           message: `Unknown tool: ${toolName}. Access denied for safety.`,
-        };
+        } as unknown as PermissionResult;
       }
 
       // Check if always allowed
@@ -338,7 +338,7 @@ You are generating remediation scripts for network devices. Requirements:
         return {
           behavior: 'allow',
           updatedInput: input,
-        };
+        } as unknown as PermissionResult;
       }
 
       // Check if always denied
@@ -346,7 +346,7 @@ You are generating remediation scripts for network devices. Requirements:
         return {
           behavior: 'deny',
           message: `Tool ${toolName} is not allowed in the current safety mode.`,
-        };
+        } as unknown as PermissionResult;
       }
 
       // Require approval for medium/high risk tools
@@ -365,18 +365,18 @@ You are generating remediation scripts for network devices. Requirements:
             return {
               behavior: 'allow',
               updatedInput: input,
-            };
+            } as unknown as PermissionResult;
           } else {
             return {
               behavior: 'deny',
               message: `User denied permission for ${toolName}`,
-            };
+            } as unknown as PermissionResult;
           }
         } catch (error) {
           return {
             behavior: 'deny',
             message: `Approval timeout or error for ${toolName}`,
-          };
+          } as unknown as PermissionResult;
         }
       }
 
@@ -384,7 +384,7 @@ You are generating remediation scripts for network devices. Requirements:
       return {
         behavior: 'allow',
         updatedInput: input,
-      };
+      } as unknown as PermissionResult;
     };
   }
 

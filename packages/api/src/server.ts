@@ -12,6 +12,7 @@ if (process.env.NODE_ENV === 'test') {
 }
 
 import { config } from './config';
+import { aiRoutes } from './routes/ai';
 import { registerChatRoutes } from './routes/chat';
 import { registerCustomerDeviceRoutes } from './routes/customer-devices';
 import { registerCustomerSessionRoutes } from './routes/customer-sessions';
@@ -95,6 +96,9 @@ export async function createApp(): Promise<FastifyInstance> {
   registerPromptsRoutes(app);
   await app.register(devicesRoutes);
   await app.register(usersRoutes);
+
+  // Register AI orchestration routes
+  await app.register(aiRoutes);
 
   // Register WebSocket routes before chat routes (chat routes depend on websocketConnectionManager)
   await registerWebSocketRoutes(app);

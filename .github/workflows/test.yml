@@ -104,6 +104,7 @@ jobs:
           path: |
             coverage/
             test-results/
+          if-no-files-found: warn
 
       - name: Stop Supabase
         if: always()

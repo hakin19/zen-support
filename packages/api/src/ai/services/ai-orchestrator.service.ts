@@ -24,9 +24,9 @@ import { SDKOptionsFactory } from '../config/sdk-options.config';
 
 import type {
   NetworkDiagnosticPrompt,
-  RemediationPrompt,
+  RemediationScriptPrompt,
   PerformanceAnalysisPrompt,
-  SecurityAnalysisPrompt,
+  SecurityAssessmentPrompt,
 } from '../prompts/network-analysis.prompts';
 
 /**
@@ -59,12 +59,12 @@ export class AIOrchestrator extends EventEmitter {
    * Generate remediation scripts with HITL approval
    */
   async *generateRemediation(
-    prompt: RemediationPrompt,
+    prompt: RemediationScriptPrompt,
     sessionId: string,
     canUseTool: CanUseTool
   ): AsyncGenerator<SDKMessage, void> {
     const promptText = this.buildRemediationPrompt(prompt);
-    const options: Options = {
+    const options: Partial<Options> = {
       ...SDKOptionsFactory.createRemediationOptions(),
       canUseTool,
     };
@@ -89,7 +89,7 @@ export class AIOrchestrator extends EventEmitter {
    * Perform security assessment
    */
   async *analyzeSecurity(
-    prompt: SecurityAnalysisPrompt,
+    prompt: SecurityAssessmentPrompt,
     sessionId: string
   ): AsyncGenerator<SDKMessage, void> {
     const promptText = this.buildSecurityPrompt(prompt);
@@ -103,7 +103,7 @@ export class AIOrchestrator extends EventEmitter {
    */
   private async *executeStreamingQuery(
     promptText: string,
-    options: Options,
+    options: Partial<Options>,
     sessionId: string
   ): AsyncGenerator<SDKMessage, void> {
     // Create abort controller for this query
@@ -111,16 +111,17 @@ export class AIOrchestrator extends EventEmitter {
     this.abortControllers.set(sessionId, abortController);
 
     // Configure options with abort controller
-    const queryOptions: Options = {
+    const queryOptions: Partial<Options> = {
       ...options,
-      abortController,
+      // Some SDK versions may not type abortController on Options; pass at runtime.
+      abortController: abortController as unknown as never,
     };
 
     try {
       // Create query with SDK
       const queryResponse = query({
         prompt: promptText,
-        options: queryOptions,
+        options: queryOptions as Options,
       });
 
       // Store active query
@@ -180,7 +181,7 @@ export class AIOrchestrator extends EventEmitter {
   /**
    * Handle assistant messages (tool calls, responses)
    */
-  private handleAssistantMessage(
+  private async handleAssistantMessage(
     message: SDKAssistantMessage,
     sessionId: string
   ): Promise<void> {
@@ -208,7 +209,7 @@ export class AIOrchestrator extends EventEmitter {
   /**
    * Handle result messages (completion, errors, usage)
    */
-  private handleResultMessage(
+  private async handleResultMessage(
     message: SDKResultMessage,
     sessionId: string
   ): Promise<void> {
@@ -247,7 +248,7 @@ export class AIOrchestrator extends EventEmitter {
   /**
    * Handle system messages (initialization, configuration)
    */
-  private handleSystemMessage(
+  private async handleSystemMessage(
     message: SDKSystemMessage,
     sessionId: string
   ): Promise<void> {
@@ -357,21 +358,21 @@ export class AIOrchestrator extends EventEmitter {
   /**
    * Build remediation prompt from template
    */
-  private buildRemediationPrompt(prompt: RemediationPrompt): string {
-    const { issueType, targetDevice, constraints, approvedActions } =
+  private buildRemediationPrompt(prompt: RemediationScriptPrompt): string {
+    const { issue, rootCause, targetDevice, constraints, proposedActions } =
       prompt.input as any;
 
     return `
     Generate remediation scripts for the following network issue:
 
-    Issue Type: ${issueType}
-    Target Device: ${targetDevice}
-    undefined
+    Issue: ${issue}
+    Root Cause: ${rootCause}
+    Target Device: ${JSON.stringify(targetDevice)}
+    Proposed Actions: ${Array.isArray(proposedActions) ? proposedActions.map((a: any) => a.description).join('; ') : 'None'}
 
     Constraints:
-    - Risk Level: ${constraints.riskLevel}
-    - Max Downtime: ${constraints.maxDowntime} minutes
-    - Rollback Required: ${constraints.requireRollback}
+    - Max Execution Time: ${constraints.maxExecutionTime} seconds
+    - Rollback Required: ${constraints.rollbackRequired}
 
     Generate safe, idempotent scripts that:
     1. Validate prerequisites before execution
@@ -414,25 +415,18 @@ export class AIOrchestrator extends EventEmitter {
   /**
    * Build security analysis prompt
    */
-  private buildSecurityPrompt(prompt: SecurityAnalysisPrompt): string {
-    const { scanType, targetRange, complianceFramework } = prompt.input as any;
+  private buildSecurityPrompt(prompt: SecurityAssessmentPrompt): string {
+    const { scanResults, complianceRequirements } = prompt.input as any;
 
     return `
     Perform security assessment for network infrastructure:
 
-    Scan Type: ${scanType}
-    Target Range: ${targetRange}
-    Compliance Framework: ${complianceFramework || 'General best practices'}
-
-    Assess:
-    1. Open ports and services
-    2. Configuration vulnerabilities
-    3. Access control policies
-    4. Encryption status
-    5. Compliance gaps
+    Open Ports: ${JSON.stringify(scanResults.openPorts)}
+    Vulnerabilities: ${JSON.stringify(scanResults.vulnerabilities || [])}
+    Compliance Requirements: ${JSON.stringify(complianceRequirements || [])}
 
     Provide:
-    1. Vulnerability assessment with CVSS scores
+    1. Vulnerability assessment with severity and impact
     2. Risk prioritization matrix
     3. Remediation recommendations
     4. Compliance checklist
@@ -444,7 +438,7 @@ export class AIOrchestrator extends EventEmitter {
    */
   async cleanup(): Promise<void> {
     // Abort all active queries
-    for (const [sessionId, controller] of this.abortControllers) {
+    for (const controller of this.abortControllers.values()) {
       controller.abort();
     }
 
