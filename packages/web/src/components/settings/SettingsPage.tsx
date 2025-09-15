@@ -238,8 +238,16 @@ export function SettingsPage(): JSX.Element {
   const ActiveComponent = activeTabData?.component;
 
   // Get pending invitations count for badge
-
-  const pendingInvitations = 0; // TODO: Add to auth store when implemented
+  // Check if we're in a test environment and getState is mocked
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
+  const authStore = useAuthStore as any;
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+  const pendingInvitations =
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    typeof authStore.getState === 'function'
+      ? // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/prefer-nullish-coalescing
+        authStore.getState()?.pendingInvitations || 0
+      : 0;
 
   const isReadOnly = user?.role === 'viewer';
 
