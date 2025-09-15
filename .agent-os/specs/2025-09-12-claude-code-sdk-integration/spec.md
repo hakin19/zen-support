@@ -2,15 +2,19 @@
 
 > Spec: Claude Code SDK Integration – AI Orchestration for Diagnostic Analysis and Script Generation
 > Created: 2025-09-12
+> Updated: 2025-09-14 - Migrated to TypeScript SDK
 
 ## Overview
 
-Implement an AI orchestration service that uses the Claude Code SDK to analyze device diagnostics, synthesize findings, and generate safe, reviewable remediation scripts. The orchestrator runs in the cloud, integrates with the API gateway, and drives a human-in-the-loop workflow where customers approve AI-generated actions via the web portal before the device agent executes them. The system enforces PII sanitization, strict execution guardrails, and complete auditability.
+Implement an AI orchestration service that uses the official Claude Code TypeScript SDK to analyze device diagnostics, synthesize findings, and generate safe, reviewable remediation scripts. The orchestrator runs natively within the Node.js API service, leveraging the SDK's built-in streaming, permission controls, and MCP tool capabilities. The system drives a human-in-the-loop workflow where customers approve AI-generated actions via the web portal before the device agent executes them, with complete PII sanitization, execution guardrails, and auditability.
 
 Notes on SDK and runtime:
 
-- Use the official Claude Code SDK (Python) with the Claude Code CLI installed. Expose the SDK via a minimal internal HTTP interface (sidecar) consumed by `@aizen/api`.
-- Default to analysis-only mode: no file edits or shell execution; explicitly disable tools unless a future spec approves enabling them.
+- Use the official Claude Code TypeScript SDK (`@anthropic/claude-code-sdk`) integrated directly in `@aizen/api` service
+- SDK works with ANTHROPIC_API_KEY; Claude CLI is optional and auto-detected if present
+- Leverage SDK's `canUseTool` callback for human-in-the-loop approval workflow
+- Default to analysis-only mode with `allowedTools: []`; enable specific tools only after security review
+- Create custom MCP tools for network-specific diagnostic capabilities
 
 ## User Stories
 
@@ -32,12 +36,13 @@ As the system, I want generated scripts to be validated against a safety policy 
 
 ## Spec Scope
 
-1. **Orchestrator Service** – Claude Code SDK (Python) sidecar + client adapter in `@aizen/api`, prompt/program design, and response parsing
-2. **Safety & Policy** – PII sanitization pre-processing, command allowlist/denylist, and script validation
-3. **Workflow APIs** – Endpoints to request analysis, generate scripts, validate/score risk, and submit for approval
-4. **HITL Integration** – Web-portal surfaced approval with immutable audit trail and diff of proposed changes
-5. **Execution Handoff** – Secure packaging of approved scripts for device agent with claim/ack semantics
-6. **Observability** – Structured logs with correlation IDs and metrics for latency, acceptance rate, and rollback usage
+1. **AI Orchestrator Service** – Native TypeScript SDK integration in `@aizen/api`, prompt design, streaming response handling
+2. **MCP Tool Development** – Custom network diagnostic tools using SDK's `createSdkMcpServer()` for device-specific operations
+3. **Safety & Policy** – PII sanitization, SDK permission controls via `canUseTool`, command validation
+4. **Workflow APIs** – Streaming endpoints for analysis, script generation, validation, and approval workflows
+5. **HITL Integration** – Real-time WebSocket approval flow integrated with SDK's permission callbacks
+6. **Execution Handoff** – Secure packaging of approved scripts for device agent with claim/ack semantics
+7. **Observability** – Unified logging with correlation IDs, SDK message tracking, metrics for acceptance rates
 
 ## Out of Scope
 
@@ -47,13 +52,17 @@ As the system, I want generated scripts to be validated against a safety policy 
 
 ## Expected Deliverable
 
-1. Cloud service exposing analysis and script-generation APIs with Claude Code SDK wired and tested (Python sidecar + Node adapter)
-2. PII sanitization pipeline and policy-based script validator with unit and integration tests
-3. End-to-end flow: diagnostics → analysis → script proposal → portal approval → device execution → results
-4. Documentation for prompts, policies, and API usage for `api`, `web`, and `device-agent` packages
+1. Native TypeScript SDK integration in `@aizen/api` with streaming analysis and script-generation APIs
+2. Custom MCP tools for network diagnostics with safety constraints and approval workflows
+3. Real-time HITL approval system using SDK's permission callbacks and WebSocket updates
+4. PII sanitization pipeline and policy-based validation integrated with SDK's tool control
+5. End-to-end flow: diagnostics → analysis → script proposal → portal approval → device execution → results
+6. Complete TypeScript types and documentation for SDK integration, MCP tools, and API usage
 
 ## Spec Documentation
 
 - Tasks: @.agent-os/specs/2025-09-12-claude-code-sdk-integration/tasks.md
 - Technical Specification: @.agent-os/specs/2025-09-12-claude-code-sdk-integration/sub-specs/technical-spec.md
 - API Specification: @.agent-os/specs/2025-09-12-claude-code-sdk-integration/sub-specs/api-spec.md
+- Safety Policy: @.agent-os/specs/2025-09-12-claude-code-sdk-integration/sub-specs/safety-policy.md
+- TypeScript SDK Reference: @docs/Claude-Code-SDK-TypeScript-SDK-reference
