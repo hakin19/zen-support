@@ -97,7 +97,7 @@ export class HITLPermissionHandler extends EventEmitter {
     this.sessionCustomerMap.set(sessionId, customerId);
 
     // Return SDK-compatible CanUseTool handler
-    return async (
+    return (
       toolName: string,
       input: Record<string, unknown>,
       options: {
@@ -105,13 +105,16 @@ export class HITLPermissionHandler extends EventEmitter {
         suggestions?: PermissionUpdate[];
       }
     ): Promise<PermissionResult> => {
-      return this.handleToolPermission(
+      const p = this.handleToolPermission(
         sessionId,
         customerId,
         toolName,
         input,
         options
       );
+      // Prevent process-level unhandledRejection if caller attaches handlers later
+      p.catch(() => {});
+      return p;
     };
   }
 
@@ -194,7 +197,7 @@ export class HITLPermissionHandler extends EventEmitter {
   /**
    * Request human approval for tool usage
    */
-  private async requestApproval(
+  private requestApproval(
     sessionId: string,
     customerId: string,
     toolName: string,
@@ -210,7 +213,10 @@ export class HITLPermissionHandler extends EventEmitter {
     const approvalId = `approval-${Date.now()}-${Math.random().toString(36).substring(2)}`;
     const timeout = options.timeout || this.defaultTimeout;
 
-    return new Promise<PermissionResult>((resolve, reject) => {
+    // Create promise explicitly so we can attach a defensive catch handler
+    // to avoid Node/Vitest "unhandledRejection" warnings when the caller
+    // attaches rejection handlers later (e.g., after a timeout has fired).
+    const approvalPromise = new Promise<PermissionResult>((resolve, reject) => {
       // Check if already aborted
       if (options.signal?.aborted) {
         reject(new Error('Request aborted'));
@@ -327,6 +333,14 @@ export class HITLPermissionHandler extends EventEmitter {
         );
       });
     });
+
+    // Attach a no-op catch immediately. This does NOT swallow the rejection
+    // for other listeners; multiple handlers can observe the same promise.
+    // It only prevents process-level unhandledRejection events when the
+    // consumer attaches `.catch` or `await expect(...).rejects` later.
+    approvalPromise.catch(() => {});
+
+    return approvalPromise;
   }
 
   /**
