@@ -24,12 +24,24 @@ import type {
   ScriptApprovalResponse,
   MCPToolsResponse,
 } from '../types/ai-routes.types';
+import type { User } from '@supabase/supabase-js';
 import type {
   FastifyPluginAsync,
   FastifyRequest,
   FastifyReply,
   FastifyInstance,
 } from 'fastify';
+import type { WebSocket } from 'ws';
+
+// Define interfaces for WebSocket connections
+interface WebSocketConnection {
+  socket: WebSocket;
+}
+
+interface AuthenticatedRequest extends FastifyRequest {
+  user?: User;
+  log: FastifyRequest['log'];
+}
 
 // Request/Response schemas (Fastify JSON Schema)
 const diagnosticAnalyzeSchema = {
@@ -247,17 +259,12 @@ export const aiRoutes: FastifyPluginAsync = (
           input: {
             deviceId,
             deviceType: 'raspberry-pi',
-            symptoms: (diagnosticData as any).errors ?? [],
+            symptoms: diagnosticData.errors ?? [],
             diagnosticData: {
-              interfaceStatus:
-                ((diagnosticData as any).networkInfo
-                  ?.interfaces as unknown[]) ?? [],
+              interfaceStatus: (diagnosticData.networkInfo?.interfaces ??
+                []) as unknown[],
               dnsQueries:
-                (
-                  (diagnosticData as any).networkInfo?.dns as
-                    | string[]
-                    | undefined
-                )?.map((dns: string) => ({
+                (diagnosticData.networkInfo?.dns ?? []).map((dns: string) => ({
                   query: dns,
                   result: 'pending',
                 })) ?? [],
@@ -962,7 +969,7 @@ export const aiRoutes: FastifyPluginAsync = (
             }
           } catch (error) {
             req.log.error(error, 'Failed to process approval response');
-            conn.socket.send(
+            socket.send(
               JSON.stringify({
                 type: 'error',
                 message: 'Failed to process approval',
@@ -972,11 +979,11 @@ export const aiRoutes: FastifyPluginAsync = (
         })();
       });
 
-      conn.socket.on('close', () => {
+      socket.on('close', () => {
         connectionManager.removeConnection(connectionId);
       });
 
-      conn.socket.on('error', (error: Error) => {
+      socket.on('error', (error: Error) => {
         req.log.error(error, 'WebSocket error in approval stream');
         connectionManager.removeConnection(connectionId);
       });

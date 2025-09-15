@@ -417,7 +417,7 @@ export function OrganizationSettings(): JSX.Element {
       setErrorMessage(null);
 
       // Build update payload with only changed fields
-      const updatePayload: Record<string, any> = {};
+      const updatePayload: Record<string, string | boolean | number> = {};
       if (formData.name !== organization?.name)
         updatePayload.name = formData.name;
       if (formData.subdomain !== organization?.subdomain)
@@ -476,7 +476,7 @@ export function OrganizationSettings(): JSX.Element {
       setErrorMessage(null);
 
       // Build update payload with only changed fields
-      const updatePayload: Record<string, any> = {};
+      const updatePayload: Record<string, string | boolean | number> = {};
       if (securityData.allow_sso !== organization?.settings?.allow_sso) {
         updatePayload.allow_sso = securityData.allow_sso;
       }
@@ -519,7 +519,7 @@ export function OrganizationSettings(): JSX.Element {
       setErrorMessage(null);
 
       // Build update payload with only changed fields
-      const updatePayload: Record<string, any> = {};
+      const updatePayload: Record<string, string | boolean | number> = {};
       if (
         notificationData.email_alerts !==
         organization?.settings?.notification_preferences?.email_alerts
@@ -571,7 +571,7 @@ export function OrganizationSettings(): JSX.Element {
       setErrorMessage(null);
 
       // Build update payload with only changed fields
-      const updatePayload: Record<string, any> = {};
+      const updatePayload: Record<string, string | boolean | number> = {};
       if (
         apiData.rate_limit !== organization?.settings?.api_settings?.rate_limit
       ) {
@@ -808,7 +808,7 @@ export function OrganizationSettings(): JSX.Element {
       setSuccessMessage(null);
       setErrorMessage(null);
 
-      const updatePayload: Record<string, any> = {};
+      const updatePayload: Record<string, string | boolean | number> = {};
       if (updatedData.enforce_2fa !== organization?.settings?.enforce_2fa) {
         updatePayload.enforce_2fa = updatedData.enforce_2fa;
       }

@@ -541,7 +541,7 @@ export function DeviceRegistration(): JSX.Element {
             </div>
             <Button
               onClick={() => {
-                fetchDevices().catch(console.error);
+                fetchDevices().catch(() => {});
               }}
             >
               <RefreshCw className='mr-2 h-4 w-4' />
@@ -673,7 +673,7 @@ export function DeviceRegistration(): JSX.Element {
                   variant='outline'
                   size='icon'
                   onClick={() => {
-                    handleExportDevices().catch(console.error);
+                    handleExportDevices().catch(() => {});
                   }}
                   aria-label='Export devices'
                 >
@@ -684,7 +684,7 @@ export function DeviceRegistration(): JSX.Element {
                   variant='outline'
                   size='icon'
                   onClick={() => {
-                    fetchDevices().catch(console.error);
+                    fetchDevices().catch(() => {});
                   }}
                   aria-label='Refresh device list'
                 >
@@ -806,7 +806,7 @@ export function DeviceRegistration(): JSX.Element {
                                       handleDeviceAction(
                                         device.id,
                                         'restart'
-                                      ).catch(console.error);
+                                      ).catch(() => {});
                                     }}
                                   >
                                     <RefreshCw className='mr-2 h-4 w-4' />
@@ -819,7 +819,7 @@ export function DeviceRegistration(): JSX.Element {
                                       handleDeviceAction(
                                         device.id,
                                         'wake'
-                                      ).catch(console.error);
+                                      ).catch(() => {});
                                     }}
                                   >
                                     <Zap className='mr-2 h-4 w-4' />
@@ -832,7 +832,7 @@ export function DeviceRegistration(): JSX.Element {
                                       handleDeviceAction(
                                         device.id,
                                         'activate'
-                                      ).catch(console.error);
+                                      ).catch(() => {});
                                     }}
                                   >
                                     <Play className='mr-2 h-4 w-4' />
@@ -915,7 +915,7 @@ export function DeviceRegistration(): JSX.Element {
                                 variant='outline'
                                 onClick={() => {
                                   handleUpdateFirmware(device.id).catch(
-                                    console.error
+                                    () => {}
                                   );
                                 }}
                               >
@@ -936,7 +936,7 @@ export function DeviceRegistration(): JSX.Element {
                                   handleDeviceAction(
                                     device.id,
                                     'restart'
-                                  ).catch(console.error);
+                                  ).catch(() => {});
                                 }}
                               >
                                 <RefreshCw className='mr-1 h-3 w-3' />
@@ -949,7 +949,7 @@ export function DeviceRegistration(): JSX.Element {
                                 variant='outline'
                                 onClick={() => {
                                   handleDeviceAction(device.id, 'wake').catch(
-                                    console.error
+                                    () => {}
                                   );
                                 }}
                               >
@@ -965,7 +965,7 @@ export function DeviceRegistration(): JSX.Element {
                                   handleDeviceAction(
                                     device.id,
                                     'activate'
-                                  ).catch(console.error);
+                                  ).catch(() => {});
                                 }}
                               >
                                 <Play className='mr-1 h-3 w-3' />
@@ -1068,7 +1068,7 @@ export function DeviceRegistration(): JSX.Element {
             </Button>
             <Button
               onClick={() => {
-                handleRegisterDevice().catch(console.error);
+                handleRegisterDevice().catch(() => {});
               }}
               disabled={
                 isSubmitting ||
@@ -1111,7 +1111,7 @@ export function DeviceRegistration(): JSX.Element {
                   size='icon'
                   variant='outline'
                   onClick={() => {
-                    copyRegistrationCode().catch(console.error);
+                    copyRegistrationCode().catch(() => {});
                   }}
                   aria-label='Copy Code'
                 >
@@ -1229,7 +1229,7 @@ export function DeviceRegistration(): JSX.Element {
             </Button>
             <Button
               onClick={() => {
-                handleConfigureDevice().catch(console.error);
+                handleConfigureDevice().catch(() => {});
               }}
               disabled={isSubmitting || !deviceFormData.name}
             >
@@ -1257,7 +1257,7 @@ export function DeviceRegistration(): JSX.Element {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
-                handleRemoveDevice().catch(console.error);
+                handleRemoveDevice().catch(() => {});
               }}
               disabled={isSubmitting}
               className='bg-destructive text-destructive-foreground hover:bg-destructive/90'
@@ -1285,7 +1285,7 @@ export function DeviceRegistration(): JSX.Element {
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
-                handleBulkAction().catch(console.error);
+                handleBulkAction().catch(() => {});
               }}
               disabled={isSubmitting}
             >

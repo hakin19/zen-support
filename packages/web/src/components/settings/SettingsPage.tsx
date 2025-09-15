@@ -1,6 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 'use client';
 
 import {
@@ -177,7 +174,7 @@ export function SettingsPage(): JSX.Element {
   useEffect(() => {
     // Support both searchParams (App Router) and router.query (Pages Router) for testing
 
-    const tabParam = searchParams?.get('tab') ?? (router as any)?.query?.tab;
+    const tabParam = searchParams?.get('tab');
     if (tabParam && visibleTabs.some(tab => tab.id === tabParam)) {
       setActiveTab(tabParam as TabId);
       setLoadedTabs(prev => new Set([...prev, tabParam as TabId]));
@@ -242,8 +239,7 @@ export function SettingsPage(): JSX.Element {
 
   // Get pending invitations count for badge
 
-  const pendingInvitations =
-    (useAuthStore as any).getState()?.pendingInvitations ?? 0;
+  const pendingInvitations = 0; // TODO: Add to auth store when implemented
 
   const isReadOnly = user?.role === 'viewer';
 
