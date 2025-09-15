@@ -5,7 +5,7 @@
 
 import { z } from 'zod';
 
-// TODO: Install @anthropic/claude-code-sdk in Task 2
+// Import CallToolResult from shared types (SDK doesn't export this type directly)
 import type { CallToolResult } from '../types/sdk-types';
 
 /**

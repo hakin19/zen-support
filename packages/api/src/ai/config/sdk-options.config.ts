@@ -3,16 +3,7 @@
  * Defines the SDK configuration with safety-first defaults for the Aizen vNE system
  */
 
-// TODO: Install @anthropic/claude-code-sdk in Task 2
-// import type {
-//   Options,
-//   PermissionMode,
-//   CanUseTool,
-//   PermissionResult,
-//   McpServerConfig,
-// } from '../types/sdk-types';
-
-// Use official SDK types to avoid mismatch with orchestrator
+// Use official SDK types from @anthropic-ai/claude-code package
 import type {
   Options,
   PermissionMode,
