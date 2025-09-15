@@ -47,8 +47,10 @@ export interface McpServerConfig {
 
 export interface CallToolResult {
   content: Array<{
-    type: 'text';
-    text: string;
+    type: 'text' | 'image' | 'resource';
+    text?: string;
+    data?: string;
+    mimeType?: string;
   }>;
-  isError: boolean;
+  isError?: boolean;
 }

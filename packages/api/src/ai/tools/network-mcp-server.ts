@@ -38,16 +38,8 @@ import {
   type PerformanceMonitorInput,
 } from './network-mcp-tools';
 
-// Define CallToolResult type locally since it's not exported from the SDK
-interface CallToolResult {
-  content: Array<{
-    type: 'text' | 'image' | 'resource';
-    text?: string;
-    data?: string;
-    mimeType?: string;
-  }>;
-  isError?: boolean;
-}
+// Import CallToolResult from shared types instead of defining locally
+import type { CallToolResult } from '../types/sdk-types';
 
 /**
  * Create ping test tool
