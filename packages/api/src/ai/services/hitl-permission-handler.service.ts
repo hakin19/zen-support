@@ -14,7 +14,7 @@ import WebSocket from 'ws';
 
 import { getSupabase } from '@aizen/shared';
 
-import { ToolRegistry } from '../tools/network-mcp-tools';
+import { NetworkMCPTools } from '../tools/network-mcp-tools';
 
 import type {
   CanUseTool,
@@ -102,7 +102,7 @@ export class HITLPermissionHandler extends EventEmitter {
       }
 
       // Get tool risk level
-      const riskLevel = ToolRegistry.getToolRiskLevel(toolName);
+      const riskLevel = NetworkMCPTools.getToolRiskLevel(toolName);
 
       // Auto-approve low-risk read-only tools
       if (riskLevel === 'low' && this.isReadOnlyTool(toolName)) {
@@ -317,8 +317,8 @@ export class HITLPermissionHandler extends EventEmitter {
    * Load approval policies from database
    */
   async loadPolicies(customerId: string): Promise<void> {
-    const supabase = getSupabase();
-    const { data, error } = await supabase
+    const supabase = getSupabase() as any;
+    const { data, error } = await (supabase as any)
       .from('approval_policies')
       .select('*')
       .eq('customer_id', customerId)
@@ -329,7 +329,7 @@ export class HITLPermissionHandler extends EventEmitter {
       return;
     }
 
-    const policies = (data || []).map(row => ({
+    const policies = (data || []).map((row: any) => ({
       id: row.id,
       customerId: row.customer_id,
       toolPattern: row.tool_pattern,
@@ -496,16 +496,16 @@ export class HITLPermissionHandler extends EventEmitter {
     toolName: string,
     input: Record<string, unknown>
   ): Promise<void> {
-    const supabase = getSupabase();
-    await supabase.from('approval_requests').insert({
+    const supabase = getSupabase() as any;
+    await (supabase as any).from('approval_requests').insert({
       id: approvalId,
       session_id: sessionId,
       customer_id: customerId,
       tool_name: toolName,
-      tool_input: input,
+      tool_input: input as any,
       status: 'pending',
       created_at: new Date().toISOString(),
-    });
+    } as any);
   }
 
   /**
@@ -516,14 +516,14 @@ export class HITLPermissionHandler extends EventEmitter {
     decision: string,
     reason?: string
   ): Promise<void> {
-    const supabase = getSupabase();
-    await supabase
+    const supabase = getSupabase() as any;
+    await (supabase as any)
       .from('approval_requests')
       .update({
-        status: decision,
-        decision_reason: reason,
+        status: decision as any,
+        decision_reason: reason as any,
         decided_at: new Date().toISOString(),
-      })
+      } as any)
       .eq('id', approvalId);
   }
 

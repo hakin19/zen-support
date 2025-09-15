@@ -30,15 +30,10 @@ const ToolUseContentSchema = z.object({
   type: z.literal('tool_use'),
   id: z.string(),
   name: z.string(),
-  input: z.record(z.unknown()),
+  input: z.record(z.string(), z.unknown()),
 });
 
-const TextContentSchema = z.object({
-  type: z.literal('text'),
-  text: z.string(),
-});
-
-const ContentBlockSchema = z.union([ToolUseContentSchema, TextContentSchema]);
+// Note: Text content validation omitted until needed in transforms
 
 interface ProcessedMessage {
   id: string;
@@ -340,13 +335,13 @@ export class MessageProcessor extends EventEmitter {
     }
 
     try {
-      const supabase = getSupabase();
-      await supabase.from('ai_messages').insert({
+      const supabase = getSupabase() as any;
+      await (supabase as any).from('ai_messages').insert({
         id: message.id,
         session_id: message.sessionId,
         message_type: message.type,
-        content: message.content,
-        metadata: message.metadata,
+        content: message.content as any,
+        metadata: message.metadata as any,
         created_at: message.timestamp.toISOString(),
       });
     } catch (error) {
@@ -394,9 +389,9 @@ export class MessageProcessor extends EventEmitter {
     }
 
     if (filter.toolNames && message.type === 'assistant') {
-      const assistantMessage = message;
+      const assistantMessage = message as any;
       const hasMatchingTool = assistantMessage.message.content?.some(
-        content =>
+        (content: any) =>
           content.type === 'tool_use' &&
           filter.toolNames?.includes(content.name)
       );
