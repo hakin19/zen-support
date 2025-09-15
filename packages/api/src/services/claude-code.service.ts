@@ -2,8 +2,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-/* eslint-disable @typescript-eslint/no-unused-vars */
-
 /**
  * Legacy wrapper for ClaudeCodeService
  * This provides backward compatibility while migrating to the new AIOrchestrator
@@ -11,11 +9,10 @@
 
 import { getSupabase, type Json } from '@aizen/shared';
 
+import { PromptTemplateFactory } from '../ai/prompts/network-analysis.prompts';
 import { AIOrchestrator } from '../ai/services/ai-orchestrator.service';
 import { MessageProcessor } from '../ai/services/message-processor.service';
 import { findTemplateByName } from '../config/prompt-templates';
-
-import { PromptTemplateFactory } from '../ai/prompts/network-analysis.prompts';
 
 export interface ClaudeCodeOptions {
   model?: 'sonnet' | 'opus';
@@ -101,21 +98,24 @@ export class ClaudeCodeService {
       // intentionally left blank
     }
 
-    // Set up event listeners
-    this.setupEventListeners();
+    // Set up event listeners (guard for test doubles)
+    // @ts-expect-error - some tests may mock orchestrator without EventEmitter methods
+    if (this.orchestrator && typeof (this.orchestrator as any).on === 'function') {
+      this.setupEventListeners();
+    }
   }
 
   /**
    * Execute a query with optional configuration (legacy method)
    */
-  async query(_prompt: string, _options?: ClaudeCodeOptions): Promise<string> {
+  async query(prompt: string, options?: ClaudeCodeOptions): Promise<string> {
     const sessionId = this.sessionId ?? this.generateSessionId();
 
     // Create a diagnostic prompt for the orchestrator
     const diagnosticPrompt = PromptTemplateFactory.createDiagnosticPrompt({
-      deviceId: 'legacy',
-      deviceType: 'unknown',
-      symptoms: ['User query'],
+      deviceId: 'chat-session',
+      deviceType: 'web',
+      symptoms: [prompt], // Pass the actual user prompt
       diagnosticData: {
         pingTests: [],
         traceroute: [],
@@ -183,17 +183,17 @@ export class ClaudeCodeService {
    * Stream a query response with callback
    */
   async streamQuery(
-    _prompt: string,
+    prompt: string,
     onMessage: MessageHandler,
-    _options?: ClaudeCodeOptions
+    options?: ClaudeCodeOptions
   ): Promise<void> {
     const sessionId = this.sessionId ?? this.generateSessionId();
 
     // Create a diagnostic prompt for the orchestrator
     const diagnosticPrompt = PromptTemplateFactory.createDiagnosticPrompt({
-      deviceId: 'legacy',
-      deviceType: 'unknown',
-      symptoms: ['User query'],
+      deviceId: 'chat-session',
+      deviceType: 'web',
+      symptoms: [prompt], // Pass the actual user prompt
       diagnosticData: {
         pingTests: [],
         traceroute: [],
