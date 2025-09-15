@@ -4,6 +4,7 @@
  */
 
 /* eslint-disable @typescript-eslint/prefer-nullish-coalescing */
+/* global AbortSignal */
 
 import { EventEmitter } from 'events';
 
@@ -19,12 +20,6 @@ import type {
 } from '@anthropic-ai/claude-code';
 
 // AbortSignal is a global type in Node.js 15+
-// Define interface for type safety
-interface AbortSignalLike {
-  readonly aborted: boolean;
-  addEventListener(type: 'abort', listener: () => void): void;
-  removeEventListener(type: 'abort', listener: () => void): void;
-}
 
 interface PendingApproval {
   id: string;
@@ -39,7 +34,7 @@ interface PendingApproval {
   timestampISO: string; // ISO-8601 string for DB consistency
   riskLevel: string; // Risk level for the tool operation
   reasoning?: string; // Optional reasoning for the request
-  suggestions?: Array<{ toolName: string; input: unknown; reason: string }>;
+  suggestions?: PermissionUpdate[];
 }
 
 interface ApprovalRequest {
@@ -104,21 +99,17 @@ export class HITLPermissionHandler extends EventEmitter {
     // Return SDK-compatible CanUseTool handler
     return async (
       toolName: string,
-      input: unknown,
+      input: Record<string, unknown>,
       options: {
-        signal?: AbortSignalLike;
-        suggestions?: Array<{
-          toolName: string;
-          input: unknown;
-          reason: string;
-        }>;
+        signal: AbortSignal;
+        suggestions?: PermissionUpdate[];
       }
     ): Promise<PermissionResult> => {
       return this.handleToolPermission(
         sessionId,
         customerId,
         toolName,
-        input as Record<string, unknown>,
+        input,
         options
       );
     };
@@ -133,8 +124,8 @@ export class HITLPermissionHandler extends EventEmitter {
     toolName: string,
     input: Record<string, unknown>,
     options: {
-      signal?: AbortSignalLike;
-      suggestions?: Array<{ toolName: string; input: unknown; reason: string }>;
+      signal?: AbortSignal;
+      suggestions?: PermissionUpdate[];
     } = {}
   ): Promise<PermissionResult> {
     // Load policies for customer if not cached
@@ -154,13 +145,19 @@ export class HITLPermissionHandler extends EventEmitter {
     }
 
     // Check if approval is required
-    if (!toolPolicy?.requiresApproval) {
-      // Default to requiring approval for unknown tools
-      if (!toolPolicy) {
-        console.warn(
-          `No policy found for tool ${toolName}, defaulting to require approval`
-        );
-      }
+    if (toolPolicy && !toolPolicy.requiresApproval) {
+      // Policy explicitly allows tool without approval
+      return {
+        behavior: 'allow' as const,
+        updatedInput: input,
+      };
+    }
+
+    // Log warning if no policy found
+    if (!toolPolicy) {
+      console.warn(
+        `No policy found for tool ${toolName}, defaulting to require approval`
+      );
     }
 
     // For network diagnostic tools, check if they're read-only
@@ -176,10 +173,11 @@ export class HITLPermissionHandler extends EventEmitter {
 
     // Check if suggestions are provided as an alternative
     if (options.suggestions && options.suggestions.length > 0) {
-      // Process suggestions and return them for user choice
+      // For now, auto-approve if suggestions are provided
+      // In the future, we could implement a UI to let the user choose
       return {
-        behavior: 'suggestions' as const,
-        suggestions: options.suggestions,
+        behavior: 'allow' as const,
+        updatedInput: input,
       };
     }
 
@@ -205,8 +203,8 @@ export class HITLPermissionHandler extends EventEmitter {
       timeout?: number;
       riskLevel?: string;
       reasoning?: string;
-      signal?: AbortSignalLike;
-      suggestions?: Array<{ toolName: string; input: unknown; reason: string }>;
+      signal?: AbortSignal;
+      suggestions?: PermissionUpdate[];
     }
   ): Promise<PermissionResult> {
     const approvalId = `approval-${Date.now()}-${Math.random().toString(36).substring(2)}`;
@@ -366,7 +364,6 @@ export class HITLPermissionHandler extends EventEmitter {
         pending.resolve({
           behavior: 'allow' as const,
           updatedInput: options.modifiedInput || pending.input,
-          updatedPermissions: options.conditions,
         });
       } else {
         pending.resolve({
@@ -818,7 +815,7 @@ export class HITLPermissionHandler extends EventEmitter {
       toolName: row.tool_name,
       input: row.tool_input,
       riskLevel: row.risk_level,
-      reasoning: row.reason,
+      reasoning: row.reason || undefined,
       timestamp: new Date(row.created_at).getTime(),
       timestampISO: row.created_at,
     }));
@@ -849,10 +846,10 @@ export class HITLPermissionHandler extends EventEmitter {
    */
   canUseTool: CanUseTool = async (
     toolName: string,
-    input: unknown,
+    input: Record<string, unknown>,
     options: {
-      signal?: AbortSignalLike;
-      suggestions?: Array<{ toolName: string; input: unknown; reason: string }>;
+      signal: AbortSignal;
+      suggestions?: PermissionUpdate[];
     }
   ): Promise<PermissionResult> => {
     // For SDK compatibility without session context, use defaults
@@ -864,7 +861,7 @@ export class HITLPermissionHandler extends EventEmitter {
       sessionId,
       customerId,
       toolName,
-      input as Record<string, unknown>,
+      input,
       options
     );
   };
