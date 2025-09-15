@@ -1,3 +1,8 @@
+/* eslint-disable @typescript-eslint/require-await */
+/* eslint-disable @typescript-eslint/prefer-nullish-coalescing */
+/* eslint-disable @typescript-eslint/explicit-function-return-type */
+/* eslint-disable @typescript-eslint/explicit-module-boundary-types */
+
 /**
  * Network MCP Server Implementation
  * Registers network diagnostic and remediation tools with the Claude Code SDK
@@ -33,7 +38,16 @@ import {
   type PerformanceMonitorInput,
 } from './network-mcp-tools';
 
-import type { CallToolResult } from '@anthropic-ai/claude-code';
+// Define CallToolResult type locally since it's not exported from the SDK
+interface CallToolResult {
+  content: Array<{
+    type: 'text' | 'image' | 'resource';
+    text?: string;
+    data?: string;
+    mimeType?: string;
+  }>;
+  isError?: boolean;
+}
 
 /**
  * Create ping test tool
@@ -41,8 +55,9 @@ import type { CallToolResult } from '@anthropic-ai/claude-code';
 const pingTestTool = tool(
   'ping_test',
   'Execute a ping test to check network connectivity',
-  PingTestSchema,
-  (args: PingTestInput): Promise<CallToolResult> => {
+  PingTestSchema.shape,
+
+  async (args: PingTestInput): Promise<CallToolResult> => {
     try {
       // Validate input
       const validation = NetworkMCPTools.validateInput('ping_test', args);
@@ -84,17 +99,15 @@ const pingTestTool = tool(
 const tracerouteTool = tool(
   'traceroute',
   'Trace the network path to a destination',
-  TracerouteSchema,
-  (args: TracerouteInput): Promise<CallToolResult> => {
+  TracerouteSchema.shape,
+  async (args: TracerouteInput): Promise<CallToolResult> => {
     try {
       const validation = NetworkMCPTools.validateInput('traceroute', args);
       if (!validation.valid) {
-        return Promise.resolve(
-          NetworkMCPTools.createToolResult(
-            false,
-            '',
-            `Validation failed: ${validation.errors?.message}`
-          )
+        return NetworkMCPTools.createToolResult(
+          false,
+          '',
+          `Validation failed: ${validation.errors?.message}`
         );
       }
 
@@ -109,16 +122,12 @@ const tracerouteTool = tool(
         completed: true,
       };
 
-      return Promise.resolve(
-        NetworkMCPTools.createToolResult(true, mockResult)
-      );
+      return NetworkMCPTools.createToolResult(true, mockResult);
     } catch (error) {
-      return Promise.resolve(
-        NetworkMCPTools.createToolResult(
-          false,
-          '',
-          error instanceof Error ? error.message : 'Unknown error'
-        )
+      return NetworkMCPTools.createToolResult(
+        false,
+        '',
+        error instanceof Error ? error.message : 'Unknown error'
       );
     }
   }
@@ -130,17 +139,15 @@ const tracerouteTool = tool(
 const portScanTool = tool(
   'port_scan',
   'Scan network ports for connectivity and service discovery',
-  PortScanSchema,
-  (args: PortScanInput): Promise<CallToolResult> => {
+  PortScanSchema.shape,
+  async (args: PortScanInput): Promise<CallToolResult> => {
     try {
       const validation = NetworkMCPTools.validateInput('port_scan', args);
       if (!validation.valid) {
-        return Promise.resolve(
-          NetworkMCPTools.createToolResult(
-            false,
-            '',
-            `Validation failed: ${validation.errors?.message}`
-          )
+        return NetworkMCPTools.createToolResult(
+          false,
+          '',
+          `Validation failed: ${validation.errors?.message}`
         );
       }
 
@@ -152,16 +159,12 @@ const portScanTool = tool(
         scanTime: 2.5,
       };
 
-      return Promise.resolve(
-        NetworkMCPTools.createToolResult(true, mockResult)
-      );
+      return NetworkMCPTools.createToolResult(true, mockResult);
     } catch (error) {
-      return Promise.resolve(
-        NetworkMCPTools.createToolResult(
-          false,
-          '',
-          error instanceof Error ? error.message : 'Unknown error'
-        )
+      return NetworkMCPTools.createToolResult(
+        false,
+        '',
+        error instanceof Error ? error.message : 'Unknown error'
       );
     }
   }
@@ -173,17 +176,15 @@ const portScanTool = tool(
 const dnsQueryTool = tool(
   'dns_query',
   'Query DNS records for a domain',
-  DnsQuerySchema,
-  (args: DnsQueryInput): Promise<CallToolResult> => {
+  DnsQuerySchema.shape,
+  async (args: DnsQueryInput): Promise<CallToolResult> => {
     try {
       const validation = NetworkMCPTools.validateInput('dns_query', args);
       if (!validation.valid) {
-        return Promise.resolve(
-          NetworkMCPTools.createToolResult(
-            false,
-            '',
-            `Validation failed: ${validation.errors?.message}`
-          )
+        return NetworkMCPTools.createToolResult(
+          false,
+          '',
+          `Validation failed: ${validation.errors?.message}`
         );
       }
 
@@ -198,16 +199,12 @@ const dnsQueryTool = tool(
         responseTime: 25,
       };
 
-      return Promise.resolve(
-        NetworkMCPTools.createToolResult(true, mockResult)
-      );
+      return NetworkMCPTools.createToolResult(true, mockResult);
     } catch (error) {
-      return Promise.resolve(
-        NetworkMCPTools.createToolResult(
-          false,
-          '',
-          error instanceof Error ? error.message : 'Unknown error'
-        )
+      return NetworkMCPTools.createToolResult(
+        false,
+        '',
+        error instanceof Error ? error.message : 'Unknown error'
       );
     }
   }
@@ -219,20 +216,18 @@ const dnsQueryTool = tool(
 const interfaceStatusTool = tool(
   'interface_status',
   'Check network interface status and statistics',
-  InterfaceStatusSchema,
-  (args: InterfaceStatusInput): Promise<CallToolResult> => {
+  InterfaceStatusSchema.shape,
+  async (args: InterfaceStatusInput): Promise<CallToolResult> => {
     try {
       const validation = NetworkMCPTools.validateInput(
         'interface_status',
         args
       );
       if (!validation.valid) {
-        return Promise.resolve(
-          NetworkMCPTools.createToolResult(
-            false,
-            '',
-            `Validation failed: ${validation.errors?.message}`
-          )
+        return NetworkMCPTools.createToolResult(
+          false,
+          '',
+          `Validation failed: ${validation.errors?.message}`
         );
       }
 
@@ -252,16 +247,12 @@ const interfaceStatusTool = tool(
         ],
       };
 
-      return Promise.resolve(
-        NetworkMCPTools.createToolResult(true, mockResult)
-      );
+      return NetworkMCPTools.createToolResult(true, mockResult);
     } catch (error) {
-      return Promise.resolve(
-        NetworkMCPTools.createToolResult(
-          false,
-          '',
-          error instanceof Error ? error.message : 'Unknown error'
-        )
+      return NetworkMCPTools.createToolResult(
+        false,
+        '',
+        error instanceof Error ? error.message : 'Unknown error'
       );
     }
   }
@@ -273,20 +264,18 @@ const interfaceStatusTool = tool(
 const scriptGeneratorTool = tool(
   'script_generator',
   'Generate safe network remediation scripts with rollback capabilities',
-  ScriptGeneratorSchema,
-  (args: ScriptGeneratorInput): Promise<CallToolResult> => {
+  ScriptGeneratorSchema.shape,
+  async (args: ScriptGeneratorInput): Promise<CallToolResult> => {
     try {
       const validation = NetworkMCPTools.validateInput(
         'script_generator',
         args
       );
       if (!validation.valid) {
-        return Promise.resolve(
-          NetworkMCPTools.createToolResult(
-            false,
-            '',
-            `Validation failed: ${validation.errors?.message}`
-          )
+        return NetworkMCPTools.createToolResult(
+          false,
+          '',
+          `Validation failed: ${validation.errors?.message}`
         );
       }
 
@@ -306,24 +295,20 @@ ${args.actions.map(a => `# ${a.action}`).join('\n')}
 ${args.safetyChecks.postConditions.join('\n')}
 
 # Rollback procedure available
-${args.safetyChecks.rollbackScript ?? '# No rollback defined'}
+${args.safetyChecks.rollbackScript || '# No rollback defined'}
 `;
 
-      return Promise.resolve(
-        NetworkMCPTools.createToolResult(true, {
-          script: mockScript,
-          checksum: 'sha256:mock_checksum',
-          estimatedDuration: 30,
-          riskLevel: NetworkMCPTools.getToolRiskLevel('script_generator'),
-        })
-      );
+      return NetworkMCPTools.createToolResult(true, {
+        script: mockScript,
+        checksum: 'sha256:mock_checksum',
+        estimatedDuration: 30,
+        riskLevel: NetworkMCPTools.getToolRiskLevel('script_generator'),
+      });
     } catch (error) {
-      return Promise.resolve(
-        NetworkMCPTools.createToolResult(
-          false,
-          '',
-          error instanceof Error ? error.message : 'Unknown error'
-        )
+      return NetworkMCPTools.createToolResult(
+        false,
+        '',
+        error instanceof Error ? error.message : 'Unknown error'
       );
     }
   }
@@ -335,20 +320,18 @@ ${args.safetyChecks.rollbackScript ?? '# No rollback defined'}
 const scriptValidatorTool = tool(
   'script_validator',
   'Validate scripts for safety and best practices',
-  ScriptValidatorSchema,
-  (args: ScriptValidatorInput): Promise<CallToolResult> => {
+  ScriptValidatorSchema.shape,
+  async (args: ScriptValidatorInput): Promise<CallToolResult> => {
     try {
       const validation = NetworkMCPTools.validateInput(
         'script_validator',
         args
       );
       if (!validation.valid) {
-        return Promise.resolve(
-          NetworkMCPTools.createToolResult(
-            false,
-            '',
-            `Validation failed: ${validation.errors?.message}`
-          )
+        return NetworkMCPTools.createToolResult(
+          false,
+          '',
+          `Validation failed: ${validation.errors?.message}`
         );
       }
 
@@ -365,16 +348,12 @@ const scriptValidatorTool = tool(
         },
       };
 
-      return Promise.resolve(
-        NetworkMCPTools.createToolResult(true, mockResult)
-      );
+      return NetworkMCPTools.createToolResult(true, mockResult);
     } catch (error) {
-      return Promise.resolve(
-        NetworkMCPTools.createToolResult(
-          false,
-          '',
-          error instanceof Error ? error.message : 'Unknown error'
-        )
+      return NetworkMCPTools.createToolResult(
+        false,
+        '',
+        error instanceof Error ? error.message : 'Unknown error'
       );
     }
   }
@@ -386,17 +365,15 @@ const scriptValidatorTool = tool(
 const configBackupTool = tool(
   'config_backup',
   'Create secure backups of network device configurations',
-  ConfigBackupSchema,
-  (args: ConfigBackupInput): Promise<CallToolResult> => {
+  ConfigBackupSchema.shape,
+  async (args: ConfigBackupInput): Promise<CallToolResult> => {
     try {
       const validation = NetworkMCPTools.validateInput('config_backup', args);
       if (!validation.valid) {
-        return Promise.resolve(
-          NetworkMCPTools.createToolResult(
-            false,
-            '',
-            `Validation failed: ${validation.errors?.message}`
-          )
+        return NetworkMCPTools.createToolResult(
+          false,
+          '',
+          `Validation failed: ${validation.errors?.message}`
         );
       }
 
@@ -410,16 +387,12 @@ const configBackupTool = tool(
         timestamp: new Date().toISOString(),
       };
 
-      return Promise.resolve(
-        NetworkMCPTools.createToolResult(true, mockResult)
-      );
+      return NetworkMCPTools.createToolResult(true, mockResult);
     } catch (error) {
-      return Promise.resolve(
-        NetworkMCPTools.createToolResult(
-          false,
-          '',
-          error instanceof Error ? error.message : 'Unknown error'
-        )
+      return NetworkMCPTools.createToolResult(
+        false,
+        '',
+        error instanceof Error ? error.message : 'Unknown error'
       );
     }
   }
@@ -431,17 +404,15 @@ const configBackupTool = tool(
 const configCompareTool = tool(
   'config_compare',
   'Compare network configurations to identify changes',
-  ConfigCompareSchema,
-  (args: ConfigCompareInput): Promise<CallToolResult> => {
+  ConfigCompareSchema.shape,
+  async (args: ConfigCompareInput): Promise<CallToolResult> => {
     try {
       const validation = NetworkMCPTools.validateInput('config_compare', args);
       if (!validation.valid) {
-        return Promise.resolve(
-          NetworkMCPTools.createToolResult(
-            false,
-            '',
-            `Validation failed: ${validation.errors?.message}`
-          )
+        return NetworkMCPTools.createToolResult(
+          false,
+          '',
+          `Validation failed: ${validation.errors?.message}`
         );
       }
 
@@ -462,16 +433,12 @@ const configCompareTool = tool(
         },
       };
 
-      return Promise.resolve(
-        NetworkMCPTools.createToolResult(true, mockResult)
-      );
+      return NetworkMCPTools.createToolResult(true, mockResult);
     } catch (error) {
-      return Promise.resolve(
-        NetworkMCPTools.createToolResult(
-          false,
-          '',
-          error instanceof Error ? error.message : 'Unknown error'
-        )
+      return NetworkMCPTools.createToolResult(
+        false,
+        '',
+        error instanceof Error ? error.message : 'Unknown error'
       );
     }
   }
@@ -483,17 +450,15 @@ const configCompareTool = tool(
 const serviceRestartTool = tool(
   'service_restart',
   'Restart network services with health checks',
-  ServiceRestartSchema,
-  (args: ServiceRestartInput): Promise<CallToolResult> => {
+  ServiceRestartSchema.shape,
+  async (args: ServiceRestartInput): Promise<CallToolResult> => {
     try {
       const validation = NetworkMCPTools.validateInput('service_restart', args);
       if (!validation.valid) {
-        return Promise.resolve(
-          NetworkMCPTools.createToolResult(
-            false,
-            '',
-            `Validation failed: ${validation.errors?.message}`
-          )
+        return NetworkMCPTools.createToolResult(
+          false,
+          '',
+          `Validation failed: ${validation.errors?.message}`
         );
       }
 
@@ -506,16 +471,12 @@ const serviceRestartTool = tool(
         timestamp: new Date().toISOString(),
       };
 
-      return Promise.resolve(
-        NetworkMCPTools.createToolResult(true, mockResult)
-      );
+      return NetworkMCPTools.createToolResult(true, mockResult);
     } catch (error) {
-      return Promise.resolve(
-        NetworkMCPTools.createToolResult(
-          false,
-          '',
-          error instanceof Error ? error.message : 'Unknown error'
-        )
+      return NetworkMCPTools.createToolResult(
+        false,
+        '',
+        error instanceof Error ? error.message : 'Unknown error'
       );
     }
   }
@@ -527,39 +488,33 @@ const serviceRestartTool = tool(
 const firewallRuleTool = tool(
   'firewall_rule',
   'Manage firewall rules and security policies',
-  FirewallRuleSchema,
-  (args: FirewallRuleInput): Promise<CallToolResult> => {
+  FirewallRuleSchema.shape,
+  async (args: FirewallRuleInput): Promise<CallToolResult> => {
     try {
       const validation = NetworkMCPTools.validateInput('firewall_rule', args);
       if (!validation.valid) {
-        return Promise.resolve(
-          NetworkMCPTools.createToolResult(
-            false,
-            '',
-            `Validation failed: ${validation.errors?.message}`
-          )
+        return NetworkMCPTools.createToolResult(
+          false,
+          '',
+          `Validation failed: ${validation.errors?.message}`
         );
       }
 
       // Mock implementation
       const mockResult = {
         action: args.action,
-        ruleId: args.rule?.id ?? `rule_${Date.now()}`,
+        ruleId: args.rule?.id || `rule_${Date.now()}`,
         status: 'applied',
         testResult: args.testConnection?.enabled ? 'successful' : 'skipped',
         timestamp: new Date().toISOString(),
       };
 
-      return Promise.resolve(
-        NetworkMCPTools.createToolResult(true, mockResult)
-      );
+      return NetworkMCPTools.createToolResult(true, mockResult);
     } catch (error) {
-      return Promise.resolve(
-        NetworkMCPTools.createToolResult(
-          false,
-          '',
-          error instanceof Error ? error.message : 'Unknown error'
-        )
+      return NetworkMCPTools.createToolResult(
+        false,
+        '',
+        error instanceof Error ? error.message : 'Unknown error'
       );
     }
   }
@@ -571,20 +526,18 @@ const firewallRuleTool = tool(
 const performanceMonitorTool = tool(
   'performance_monitor',
   'Monitor network performance metrics and thresholds',
-  PerformanceMonitorSchema,
-  (args: PerformanceMonitorInput): Promise<CallToolResult> => {
+  PerformanceMonitorSchema.shape,
+  async (args: PerformanceMonitorInput): Promise<CallToolResult> => {
     try {
       const validation = NetworkMCPTools.validateInput(
         'performance_monitor',
         args
       );
       if (!validation.valid) {
-        return Promise.resolve(
-          NetworkMCPTools.createToolResult(
-            false,
-            '',
-            `Validation failed: ${validation.errors?.message}`
-          )
+        return NetworkMCPTools.createToolResult(
+          false,
+          '',
+          `Validation failed: ${validation.errors?.message}`
         );
       }
 
@@ -601,16 +554,12 @@ const performanceMonitorTool = tool(
         timestamp: new Date().toISOString(),
       };
 
-      return Promise.resolve(
-        NetworkMCPTools.createToolResult(true, mockResult)
-      );
+      return NetworkMCPTools.createToolResult(true, mockResult);
     } catch (error) {
-      return Promise.resolve(
-        NetworkMCPTools.createToolResult(
-          false,
-          '',
-          error instanceof Error ? error.message : 'Unknown error'
-        )
+      return NetworkMCPTools.createToolResult(
+        false,
+        '',
+        error instanceof Error ? error.message : 'Unknown error'
       );
     }
   }
@@ -619,13 +568,7 @@ const performanceMonitorTool = tool(
 /**
  * Create the Network MCP Server with all tools
  */
-export function createNetworkMcpServer(): ReturnType<
-  typeof createSdkMcpServer
-> & {
-  name: string;
-  version: string;
-  tools: Array<ReturnType<typeof tool>>;
-} {
+export function createNetworkMcpServer() {
   const server = createSdkMcpServer({
     name: 'aizen-network-tools',
     version: '1.0.0',
@@ -695,9 +638,7 @@ export const NETWORK_MCP_TOOLS = {
 /**
  * Get tool by name for testing
  */
-export function getNetworkTool(
-  name: string
-): ReturnType<typeof tool> | undefined {
+export function getNetworkTool(name: string) {
   const tools = {
     ping_test: pingTestTool,
     traceroute: tracerouteTool,
