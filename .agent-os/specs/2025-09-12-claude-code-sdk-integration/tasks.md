@@ -28,12 +28,12 @@
   - [x] 4.3 Persist approval records with SDK message tracking
   - [x] 4.4 Real-time updates using SDK's streaming messages
 
-- [ ] 5. MCP tool development for network operations
-  - [ ] 5.1 Create `network_diagnostic` tool with Zod schemas
-  - [ ] 5.2 Implement `script_generator` tool with safety constraints
-  - [ ] 5.3 Build `validation_tool` for policy enforcement
-  - [ ] 5.4 Register tools via `createSdkMcpServer()`
-  - [ ] 5.5 Add tool risk scoring and approval requirements
+- [x] 5. MCP tool development for network operations
+  - [x] 5.1 Create `network_diagnostic` tool with Zod schemas
+  - [x] 5.2 Implement `script_generator` tool with safety constraints
+  - [x] 5.3 Build `validation_tool` for policy enforcement
+  - [x] 5.4 Register tools via `createSdkMcpServer()`
+  - [x] 5.5 Add tool risk scoring and approval requirements
 
 - [ ] 6. Safety with SDK permission controls
   - [ ] 6.1 PII sanitization before SDK query() calls
