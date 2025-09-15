@@ -290,6 +290,14 @@ Never modify configuration files directly during diagnostics.`,
     return {
       ...this.createDefaultOptions('strict'),
       allowedTools: ['Read', 'Write', 'Edit'],
+      // Override disallowedTools to remove conflict with allowedTools
+      disallowedTools: [
+        'Bash',
+        'MultiEdit',
+        'NotebookEdit',
+        'WebFetch',
+        'WebSearch',
+      ],
       maxTurns: 10,
       appendSystemPrompt: `
 You are generating remediation scripts for network devices. Requirements:
