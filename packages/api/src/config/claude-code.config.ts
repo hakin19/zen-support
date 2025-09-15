@@ -1,4 +1,10 @@
-import { LogLevel } from '@instantlyeasy/claude-code-sdk-ts';
+// Local LogLevel enum to avoid undeclared dependency in tests/builds
+export enum LogLevel {
+  ERROR = 0,
+  WARN = 1,
+  INFO = 2,
+  DEBUG = 3,
+}
 
 /**
  * Claude Code SDK Configuration

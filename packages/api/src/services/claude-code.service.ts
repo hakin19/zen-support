@@ -1,21 +1,26 @@
-import {
-  claude,
-  ConsoleLogger,
-  LogLevel,
-  type Logger,
-  type QueryBuilder,
-  type ResponseParser,
-  type CLIMessage,
-  type ToolUseBlock,
-  type ToolName,
-} from '@instantlyeasy/claude-code-sdk-ts';
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
+/* eslint-disable @typescript-eslint/no-unused-vars */
+
+/**
+ * Legacy wrapper for ClaudeCodeService
+ * This provides backward compatibility while migrating to the new AIOrchestrator
+ */
 
 import { getSupabase, type Json } from '@aizen/shared';
 
+import { AIOrchestrator } from '../ai/services/ai-orchestrator.service';
+import { MessageProcessor } from '../ai/services/message-processor.service';
+import { findTemplateByName } from '../config/prompt-templates';
+
+import type { NetworkDiagnosticPrompt } from '../ai/prompts/network-analysis.prompts';
+
 export interface ClaudeCodeOptions {
   model?: 'sonnet' | 'opus';
-  allowedTools?: ToolName[];
-  deniedTools?: ToolName[];
+  allowedTools?: string[];
+  deniedTools?: string[];
   skipPermissions?: boolean;
   acceptEdits?: boolean;
   timeout?: number;
@@ -27,7 +32,7 @@ export interface ClaudeCodeConfig {
   model?: 'sonnet' | 'opus';
   timeout?: number;
   defaultRole?: string;
-  logger?: Logger;
+  logger?: any;
 }
 
 export interface PromptTemplate {
@@ -60,8 +65,14 @@ export interface DeviceAction {
 type ApprovalHandler = (action: DeviceAction) => Promise<boolean>;
 type MessageHandler = (message: unknown) => void;
 
+/**
+ * Legacy ClaudeCodeService wrapper for backward compatibility
+ * Delegates to the new AIOrchestrator service
+ */
 export class ClaudeCodeService {
   private config: ClaudeCodeConfig;
+  private orchestrator: AIOrchestrator;
+  private messageProcessor: MessageProcessor;
   private sessionId?: string;
   private lastUsage?: UsageMetrics;
   private totalUsage: UsageMetrics = {
@@ -79,21 +90,73 @@ export class ClaudeCodeService {
       model: config.model ?? 'sonnet',
       timeout: config.timeout ?? 30000,
       defaultRole: config.defaultRole,
-      logger: config.logger ?? new ConsoleLogger(LogLevel.ERROR),
+      logger: config.logger,
     };
+
+    this.orchestrator = new AIOrchestrator();
+    this.messageProcessor = new MessageProcessor();
+
+    // Set up event listeners
+    this.setupEventListeners();
   }
 
   /**
-   * Execute a query with optional configuration
+   * Execute a query with optional configuration (legacy method)
    */
-  async query(prompt: string, options?: ClaudeCodeOptions): Promise<string> {
-    const builder = this.buildQuery(options);
-    const parser = builder.query(prompt);
+  async query(prompt: string, _options?: ClaudeCodeOptions): Promise<string> {
+    const sessionId = this.sessionId ?? this.generateSessionId();
 
-    // Track usage
-    await this.trackUsage(parser);
+    // Create a diagnostic prompt for the orchestrator
+    const diagnosticPrompt: NetworkDiagnosticPrompt = {
+      type: 'network-diagnostic',
+      name: 'legacy-query',
+      template: prompt,
+      variables: [],
+      input: {
+        deviceId: 'legacy',
+        deviceType: 'unknown',
+        symptoms: ['User query'],
+        diagnosticData: {
+          pingResults: [],
+          traceroute: [],
+          dnsResolution: [],
+          networkInterfaces: [],
+          connectionStatus: {
+            internet: true,
+            localNetwork: true,
+            vpn: false,
+          },
+        },
+      },
+    };
 
-    return parser.asText();
+    let fullResponse = '';
+
+    try {
+      // Use the orchestrator's streaming capability
+      for await (const message of this.orchestrator.analyzeDiagnostics(
+        diagnosticPrompt,
+        sessionId
+      )) {
+        const processed = await this.messageProcessor.processMessage(
+          message,
+          sessionId
+        );
+
+        if (message.type === 'assistant' && processed.content?.content) {
+          for (const block of processed.content.content) {
+            if (block.type === 'text') {
+              fullResponse += block.text;
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Query execution failed:', error);
+      throw error;
+    }
+
+    return fullResponse;
   }
 
   /**
@@ -103,13 +166,12 @@ export class ClaudeCodeService {
     prompt: string,
     options?: ClaudeCodeOptions
   ): Promise<T> {
-    const builder = this.buildQuery(options);
-    const parser = builder.query(prompt);
-
-    await this.trackUsage(parser);
-
-    const result = await parser.asJSON<T>();
-    return result as T;
+    const response = await this.query(prompt, options);
+    try {
+      return JSON.parse(response) as T;
+    } catch {
+      return response as unknown as T;
+    }
   }
 
   /**
@@ -120,12 +182,7 @@ export class ClaudeCodeService {
     role: string,
     options?: ClaudeCodeOptions
   ): Promise<string> {
-    const builder = this.buildQuery({ ...options, role });
-    const parser = builder.query(prompt);
-
-    await this.trackUsage(parser);
-
-    return parser.asText();
+    return this.query(prompt, { ...options, role });
   }
 
   /**
@@ -136,39 +193,79 @@ export class ClaudeCodeService {
     onMessage: MessageHandler,
     options?: ClaudeCodeOptions
   ): Promise<void> {
-    const builder = this.buildQuery(options);
-    const parser = builder.query(prompt);
+    const sessionId = this.sessionId ?? this.generateSessionId();
 
-    await parser.stream(async (output: unknown) => {
-      // Check if it's a CLIMessage with tool_use
-      const cliMessage = output as CLIMessage;
-      if (cliMessage.type === 'message' && cliMessage.data) {
-        const messageData = cliMessage.data as {
-          content?: Array<{ type: string; name?: string; input?: unknown }>;
-        };
-        // Check for tool_use blocks in the message content
-        if (messageData.content && Array.isArray(messageData.content)) {
-          for (const block of messageData.content) {
-            if (block.type === 'tool_use' && block.name === 'device_action') {
-              const toolBlock = block as ToolUseBlock;
-              if (this.approvalHandler) {
-                const approved = await this.approvalHandler(
-                  toolBlock.input as unknown as DeviceAction
-                );
-                if (!approved) {
-                  // Handle rejection
-                  return;
-                }
+    // Create a diagnostic prompt for the orchestrator
+    const diagnosticPrompt: NetworkDiagnosticPrompt = {
+      type: 'network-diagnostic',
+      name: 'legacy-stream',
+      template: prompt,
+      variables: [],
+      input: {
+        deviceId: 'legacy',
+        deviceType: 'unknown',
+        symptoms: ['User query'],
+        diagnosticData: {
+          pingResults: [],
+          traceroute: [],
+          dnsResolution: [],
+          networkInterfaces: [],
+          connectionStatus: {
+            internet: true,
+            localNetwork: true,
+            vpn: false,
+          },
+        },
+      },
+    };
+
+    try {
+      // Use the orchestrator's streaming capability
+      for await (const message of this.orchestrator.analyzeDiagnostics(
+        diagnosticPrompt,
+        sessionId
+      )) {
+        const processed = await this.messageProcessor.processMessage(
+          message,
+          sessionId
+        );
+
+        // Convert to legacy format for backward compatibility
+        if (message.type === 'assistant' && processed.content?.content) {
+          const legacyMessage = {
+            type: 'message',
+            data: {
+              content: processed.content.content,
+            },
+          };
+
+          onMessage(legacyMessage);
+
+          // Check for tool use blocks
+          for (const block of processed.content.content) {
+            if (block.type === 'tool_use' && this.approvalHandler) {
+              const deviceAction: DeviceAction = {
+                action: block.name,
+                parameters: block.input as Record<string, unknown>,
+              };
+              const approved = await this.approvalHandler(deviceAction);
+              if (!approved) {
+                return;
               }
             }
           }
+        } else if (message.type === 'stream_event') {
+          // Pass through streaming events
+          onMessage({
+            type: 'stream',
+            data: processed.content,
+          });
         }
       }
-
-      onMessage(output);
-    });
-
-    await this.trackUsage(parser);
+    } catch (error) {
+      console.error('Stream query failed:', error);
+      throw error;
+    }
   }
 
   /**
@@ -215,7 +312,23 @@ export class ClaudeCodeService {
       .eq('is_active', true)
       .single();
 
-    if (error || !data) {
+    if (!data || error) {
+      // Fallback to built-in default templates (no DB dependency in tests)
+      const def = findTemplateByName(name);
+      if (def) {
+        const template: PromptTemplate = {
+          name: def.name,
+          template: def.template,
+          variables: def.variables,
+          category: def.category,
+          metadata: { description: def.description, examples: def.examples },
+          is_active: true,
+          customer_id: 'system',
+          created_by: 'system',
+        };
+        this.promptTemplates.set(name, template);
+        return template;
+      }
       return null;
     }
 
@@ -276,8 +389,6 @@ export class ClaudeCodeService {
    * Save a custom prompt template
    */
   async savePromptTemplate(template: PromptTemplate): Promise<void> {
-    // Note: customer_id and created_by would normally come from auth context
-    // For now, using placeholders that would be replaced in production
     const supabase = getSupabase();
     const { error } = await supabase.from('ai_prompts').upsert([
       {
@@ -369,81 +480,27 @@ export class ClaudeCodeService {
   }
 
   /**
-   * Build a query with configuration
+   * Set up event listeners for the orchestrator
    */
-  private buildQuery(options?: ClaudeCodeOptions): QueryBuilder {
-    let builder = claude()
-      .withModel(options?.model ?? (this.config.model as 'sonnet' | 'opus'))
-      .withTimeout(options?.timeout ?? (this.config.timeout as number))
-      .withLogger(this.config.logger as Logger);
-
-    // Apply role
-    if (options?.role ?? this.config.defaultRole) {
-      builder = builder.withRole(
-        options?.role ?? (this.config.defaultRole as string)
-      );
-    }
-
-    // Configure tools
-    if (this.readOnlyMode) {
-      builder = builder.allowTools(); // No tools = read-only
-    } else if (options?.allowedTools) {
-      // Note: allowedTools is expected to be string[] by the SDK
-      builder = builder.allowTools(...options.allowedTools);
-    }
-
-    if (options?.deniedTools) {
-      // Note: deniedTools is expected to be string[] by the SDK
-      builder = builder.denyTools(...options.deniedTools);
-    }
-
-    // Configure permissions
-    if (options?.skipPermissions) {
-      builder = builder.skipPermissions();
-    } else if (options?.acceptEdits) {
-      builder = builder.acceptEdits();
-    }
-
-    // Set working directory
-    if (options?.workingDirectory) {
-      builder = builder.inDirectory(options.workingDirectory);
-    }
-
-    // Set session if available
-    if (this.sessionId) {
-      builder = builder.withSessionId(this.sessionId);
-    }
-
-    return builder;
-  }
-
-  /**
-   * Track usage metrics
-   */
-  private async trackUsage(parser: ResponseParser): Promise<void> {
-    try {
-      const usage = await parser.getUsage();
-
+  private setupEventListeners(): void {
+    this.orchestrator.on('usage:update', ({ usage }) => {
       if (usage) {
         this.lastUsage = {
-          totalTokens: usage.totalTokens,
+          totalTokens: usage.inputTokens + usage.outputTokens,
           inputTokens: usage.inputTokens,
           outputTokens: usage.outputTokens,
-          totalCost: usage.totalCost,
-          cacheReadTokens: usage.cacheReadTokens,
-          cacheCreationTokens: usage.cacheCreationTokens,
+          totalCost: usage.costUSD,
+          cacheReadTokens: usage.cacheReadInputTokens,
+          cacheCreationTokens: usage.cacheCreationInputTokens,
         };
 
         // Accumulate total usage
-        this.totalUsage.totalTokens += usage.totalTokens;
-        this.totalUsage.inputTokens += usage.inputTokens;
-        this.totalUsage.outputTokens += usage.outputTokens;
-        this.totalUsage.totalCost += usage.totalCost;
+        this.totalUsage.totalTokens += this.lastUsage.totalTokens;
+        this.totalUsage.inputTokens += this.lastUsage.inputTokens;
+        this.totalUsage.outputTokens += this.lastUsage.outputTokens;
+        this.totalUsage.totalCost += this.lastUsage.totalCost;
       }
-    } catch (error) {
-      // Usage tracking is optional, don't fail the request
-      console.error('Failed to track usage:', error);
-    }
+    });
   }
 
   /**
@@ -467,5 +524,21 @@ export class ClaudeCodeService {
       default:
         return `Execute task: ${templateName}. Parameters: ${JSON.stringify(variables)}`;
     }
+  }
+
+  /**
+   * Generate a unique session ID
+   */
+  private generateSessionId(): string {
+    return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  }
+
+  /**
+   * Cleanup resources
+   */
+  async cleanup(): Promise<void> {
+    await this.orchestrator.cleanup();
+    this.messageProcessor.cleanup();
+    this.promptTemplates.clear();
   }
 }
