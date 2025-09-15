@@ -4,7 +4,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/prefer-nullish-coalescing */
-/* eslint-disable @typescript-eslint/no-floating-promises */
+
 /* eslint-disable @typescript-eslint/no-misused-promises */
 /* eslint-disable @typescript-eslint/no-base-to-string */
 
@@ -176,14 +176,32 @@ export class HITLPermissionHandler extends EventEmitter {
         timestamp: pending.timestamp,
       });
 
-      // Store in database for audit
+      // Store in database for audit (critical for compliance)
       this.storeApprovalRequest(
         approvalId,
         sessionId,
         customerId,
         toolName,
         input
-      );
+      ).catch(error => {
+        // Clean up on audit failure
+        if (pending.timeout) clearTimeout(pending.timeout);
+        this.pendingApprovals.delete(approvalId);
+
+        // Reject the approval request if we can't audit it
+        const auditError = new Error(
+          `Failed to store approval audit: ${error instanceof Error ? error.message : 'Unknown error'}`
+        );
+        reject(auditError);
+
+        // Log for monitoring
+        console.error('Failed to store approval request for audit:', {
+          approvalId,
+          sessionId,
+          toolName,
+          error,
+        });
+      });
 
       // Emit event for other systems
       this.emit('approval:requested', {
