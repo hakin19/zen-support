@@ -14,6 +14,7 @@ import { getConnectionManager } from './websocket';
 import type {
   NetworkDiagnosticPrompt,
   RemediationScriptPrompt,
+  InterfaceStatus,
 } from '../ai/prompts/network-analysis.prompts';
 import type {
   DiagnosticAnalysisRequest,
@@ -24,7 +25,6 @@ import type {
   ScriptApprovalResponse,
   MCPToolsResponse,
 } from '../types/ai-routes.types';
-import type { User } from '@supabase/supabase-js';
 import type {
   FastifyPluginAsync,
   FastifyRequest,
@@ -36,11 +36,6 @@ import type { WebSocket } from 'ws';
 // Define interfaces for WebSocket connections
 interface WebSocketConnection {
   socket: WebSocket;
-}
-
-interface AuthenticatedRequest extends FastifyRequest {
-  user?: User;
-  log: FastifyRequest['log'];
 }
 
 // Request/Response schemas (Fastify JSON Schema)
@@ -174,27 +169,27 @@ const scriptSubmitApprovalSchema = {
   },
 } as const;
 
-export const aiRoutes: FastifyPluginAsync = (
+export const aiRoutes: FastifyPluginAsync = async (
   fastify: FastifyInstance,
-  _opts: unknown,
-  done: () => void
-): void => {
+  _opts: unknown
+): Promise<void> => {
   const orchestrator = new AIOrchestrator();
   const messageProcessor = new MessageProcessor();
   const connectionManager = getConnectionManager();
   const permissionHandler = new HITLPermissionHandler(connectionManager);
 
   // Lightweight auth stub for tests to avoid preHandler callback mismatches
-  interface TestRequest extends FastifyRequest {
-    user?: { id: string; email: string };
-  }
-
   const testPreHandler = (
-    req: TestRequest,
+    req: FastifyRequest,
     _reply: FastifyReply,
     done: () => void
   ): void => {
-    req.user = { id: 'user-123', email: 'test@example.com' };
+    req.user = {
+      id: 'user-123',
+      customerId: 'customer-123',
+      role: 'admin' as const,
+      email: 'test@example.com',
+    };
     done();
   };
 
@@ -206,9 +201,7 @@ export const aiRoutes: FastifyPluginAsync = (
     '/api/v1/ai/diagnostics/analyze',
     {
       preHandler:
-        process.env.NODE_ENV === 'test'
-          ? testPreHandler
-          : (webPortalAuthHook as unknown as typeof testPreHandler),
+        process.env.NODE_ENV === 'test' ? testPreHandler : webPortalAuthHook,
       schema: {
         body: diagnosticAnalyzeSchema,
       },
@@ -262,9 +255,13 @@ export const aiRoutes: FastifyPluginAsync = (
             symptoms: diagnosticData.errors ?? [],
             diagnosticData: {
               interfaceStatus: (diagnosticData.networkInfo?.interfaces ??
-                []) as unknown[],
+                []) as InterfaceStatus[],
               dnsQueries:
                 (diagnosticData.networkInfo?.dns ?? []).map((dns: string) => ({
+                  domain: dns,
+                  queryType: 'A' as const,
+                  responseTime: 0,
+                  success: true,
                   query: dns,
                   result: 'pending',
                 })) ?? [],
@@ -382,9 +379,7 @@ export const aiRoutes: FastifyPluginAsync = (
     '/api/v1/ai/scripts/generate',
     {
       preHandler:
-        process.env.NODE_ENV === 'test'
-          ? testPreHandler
-          : (webPortalAuthHook as unknown as typeof testPreHandler),
+        process.env.NODE_ENV === 'test' ? testPreHandler : webPortalAuthHook,
       schema: {
         body: scriptGenerateSchema,
       },
@@ -447,7 +442,10 @@ export const aiRoutes: FastifyPluginAsync = (
           description: proposedFix.description,
           version: '1.0',
           category: 'remediation',
-          riskLevel: proposedFix.riskLevel,
+          riskLevel:
+            proposedFix.riskLevel === 'critical'
+              ? 'high'
+              : proposedFix.riskLevel,
           requiresApproval: true,
           type: 'remediation-script',
           input: {
@@ -465,7 +463,10 @@ export const aiRoutes: FastifyPluginAsync = (
                 description: proposedFix.description,
                 command: '',
                 expectedOutcome: 'Network issue resolved',
-                riskLevel: proposedFix.riskLevel,
+                riskLevel:
+                  proposedFix.riskLevel === 'critical'
+                    ? 'high'
+                    : proposedFix.riskLevel,
                 requiresApproval: true,
               },
             ],
@@ -613,9 +614,7 @@ export const aiRoutes: FastifyPluginAsync = (
     '/api/v1/ai/scripts/validate',
     {
       preHandler:
-        process.env.NODE_ENV === 'test'
-          ? testPreHandler
-          : (webPortalAuthHook as unknown as typeof testPreHandler),
+        process.env.NODE_ENV === 'test' ? testPreHandler : webPortalAuthHook,
       schema: {
         body: scriptValidateSchema,
       },
@@ -628,7 +627,12 @@ export const aiRoutes: FastifyPluginAsync = (
         sessionId,
         script,
         manifest,
-        policyChecks = ['pii', 'network_safety', 'command_injection'],
+        policyChecks = [
+          'pii',
+          'network_safety',
+          'command_injection',
+          'file_access',
+        ],
       } = request.body;
 
       try {
@@ -704,8 +708,9 @@ export const aiRoutes: FastifyPluginAsync = (
           if (hasInjection) validationResults.passed = false;
         }
 
-        // File access check
-        if (policyChecks.includes('file_access')) {
+        // File access check (cast to any due to TypeScript narrowing limitation)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument
+        if (policyChecks.includes('file_access' as any)) {
           const restrictedPaths = [
             '/etc/passwd',
             '/etc/shadow',
@@ -769,9 +774,7 @@ export const aiRoutes: FastifyPluginAsync = (
     '/api/v1/ai/scripts/submit-for-approval',
     {
       preHandler:
-        process.env.NODE_ENV === 'test'
-          ? testPreHandler
-          : (webPortalAuthHook as unknown as typeof testPreHandler),
+        process.env.NODE_ENV === 'test' ? testPreHandler : webPortalAuthHook,
       schema: {
         body: scriptSubmitApprovalSchema,
       },
@@ -880,13 +883,11 @@ export const aiRoutes: FastifyPluginAsync = (
     {
       websocket: true,
       preHandler:
-        process.env.NODE_ENV === 'test'
-          ? testPreHandler
-          : (webPortalAuthHook as unknown as typeof testPreHandler),
+        process.env.NODE_ENV === 'test' ? testPreHandler : webPortalAuthHook,
     },
     (connection: unknown, request: unknown): void => {
       const conn = connection as WebSocketConnection;
-      const req = request as AuthenticatedRequest;
+      const req = request as FastifyRequest;
       const socket = conn.socket;
       const userId = req.user?.id;
 
@@ -951,13 +952,15 @@ export const aiRoutes: FastifyPluginAsync = (
                 .eq('id', approvalId);
 
               // Notify permission handler
-              await permissionHandler.handleApprovalResponse(
-                approvalId,
-                approved ? 'approve' : 'deny',
-                {
-                  reason,
-                }
-              );
+              if (approvalId) {
+                await permissionHandler.handleApprovalResponse(
+                  approvalId,
+                  approved ? 'approved' : 'denied',
+                  {
+                    reason,
+                  }
+                );
+              }
 
               socket.send(
                 JSON.stringify({
@@ -999,7 +1002,8 @@ export const aiRoutes: FastifyPluginAsync = (
     process.env.NODE_ENV === 'test'
       ? {}
       : {
-          preHandler: webPortalAuthHook as unknown as typeof testPreHandler,
+          // eslint-disable-next-line @typescript-eslint/no-misused-promises
+          preHandler: webPortalAuthHook,
         },
     async (_request: FastifyRequest, reply: FastifyReply) => {
       try {
@@ -1061,6 +1065,4 @@ export const aiRoutes: FastifyPluginAsync = (
       }
     }
   );
-
-  done();
 };

@@ -655,7 +655,8 @@ export class HITLPermissionHandler extends EventEmitter {
     }
 
     const promises = allConnections.map(conn =>
-      this.connectionManager.sendToConnection(conn.id, message)
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+      this.connectionManager!.sendToConnection(conn.id, message)
     );
 
     await Promise.all(promises);

@@ -427,7 +427,13 @@ export class AIOrchestrator extends EventEmitter {
       };
     }
 
-    const { metrics, timeRange, thresholds } = prompt.input as PerformanceInput;
+    const performanceInput = prompt.input as unknown as PerformanceInput;
+    const { metrics, timeRange } = performanceInput;
+    const thresholds = performanceInput.thresholds ?? {
+      latencyMs: 100,
+      packetLossPercent: 1,
+      utilizationPercent: 80,
+    };
 
     return `
     Analyze network performance metrics and identify optimization opportunities:

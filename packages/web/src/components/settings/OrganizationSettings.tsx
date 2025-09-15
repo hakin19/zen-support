@@ -532,7 +532,7 @@ export function OrganizationSettings(): JSX.Element {
       ) {
         updatePayload.sms_alerts = notificationData.sms_alerts;
       }
-      const webhookValue = notificationData.webhook_url || null;
+      const webhookValue = notificationData.webhook_url || '';
       if (
         webhookValue !==
         organization?.settings?.notification_preferences?.webhook_url
