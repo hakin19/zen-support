@@ -24,7 +24,12 @@ import type {
   ScriptApprovalResponse,
   MCPToolsResponse,
 } from '../types/ai-routes.types';
-import type { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
+import type {
+  FastifyPluginAsync,
+  FastifyRequest,
+  FastifyReply,
+  FastifyInstance,
+} from 'fastify';
 
 // Request/Response schemas (Fastify JSON Schema)
 const diagnosticAnalyzeSchema = {
@@ -157,14 +162,26 @@ const scriptSubmitApprovalSchema = {
   },
 } as const;
 
-export const aiRoutes: FastifyPluginAsync = async (fastify): Promise<void> => {
+export const aiRoutes: FastifyPluginAsync = (
+  fastify: FastifyInstance,
+  _opts: unknown,
+  done: () => void
+): void => {
   const orchestrator = new AIOrchestrator();
   const messageProcessor = new MessageProcessor();
   const connectionManager = getConnectionManager();
   const permissionHandler = new HITLPermissionHandler(connectionManager);
 
   // Lightweight auth stub for tests to avoid preHandler callback mismatches
-  const testPreHandler = (req: any, _reply: any, done: () => void): void => {
+  interface TestRequest extends FastifyRequest {
+    user?: { id: string; email: string };
+  }
+
+  const testPreHandler = (
+    req: TestRequest,
+    _reply: FastifyReply,
+    done: () => void
+  ): void => {
     req.user = { id: 'user-123', email: 'test@example.com' };
     done();
   };
@@ -179,12 +196,15 @@ export const aiRoutes: FastifyPluginAsync = async (fastify): Promise<void> => {
       preHandler:
         process.env.NODE_ENV === 'test'
           ? testPreHandler
-          : (webPortalAuthHook as any),
+          : (webPortalAuthHook as unknown as typeof testPreHandler),
       schema: {
         body: diagnosticAnalyzeSchema,
       },
     },
-    async (request, reply) => {
+    async (
+      request: FastifyRequest<{ Body: DiagnosticAnalysisRequest }>,
+      reply: FastifyReply
+    ) => {
       const { sessionId, deviceId, diagnosticData, analysisType } =
         request.body;
 
@@ -227,15 +247,20 @@ export const aiRoutes: FastifyPluginAsync = async (fastify): Promise<void> => {
           input: {
             deviceId,
             deviceType: 'raspberry-pi',
-            symptoms: diagnosticData.errors || [],
+            symptoms: (diagnosticData as any).errors ?? [],
             diagnosticData: {
-              interfaceStatus: diagnosticData.networkInfo.interfaces as any[],
-              dnsQueries: diagnosticData.networkInfo.dns?.map(
-                (dns: string) => ({
+              interfaceStatus:
+                ((diagnosticData as any).networkInfo
+                  ?.interfaces as unknown[]) ?? [],
+              dnsQueries:
+                (
+                  (diagnosticData as any).networkInfo?.dns as
+                    | string[]
+                    | undefined
+                )?.map((dns: string) => ({
                   query: dns,
                   result: 'pending',
-                })
-              ) as any[],
+                })) ?? [],
             },
           },
         };
@@ -352,12 +377,15 @@ export const aiRoutes: FastifyPluginAsync = async (fastify): Promise<void> => {
       preHandler:
         process.env.NODE_ENV === 'test'
           ? testPreHandler
-          : (webPortalAuthHook as any),
+          : (webPortalAuthHook as unknown as typeof testPreHandler),
       schema: {
         body: scriptGenerateSchema,
       },
     },
-    async (request, reply) => {
+    async (
+      request: FastifyRequest<{ Body: ScriptGenerationRequest }>,
+      reply: FastifyReply
+    ) => {
       const { sessionId, deviceId, issue, proposedFix, constraints } =
         request.body;
 
@@ -477,27 +505,43 @@ export const aiRoutes: FastifyPluginAsync = async (fastify): Promise<void> => {
 
             // Extract generated script from assistant tool_use blocks
             if (processedMessage.type === 'assistant') {
-              const blocks = (processedMessage as any)?.content?.content as
-                | Array<{ type: string; name?: string; input?: any }>
-                | undefined;
+              interface ToolUseBlock {
+                type: string;
+                name?: string;
+                input?: {
+                  script?: string;
+                  manifest?: unknown;
+                };
+              }
+
+              const messageContent = processedMessage as {
+                content?: { content?: ToolUseBlock[] };
+              };
+              const blocks = messageContent?.content?.content;
               if (blocks) {
                 for (const block of blocks) {
                   if (
                     block.type === 'tool_use' &&
                     block.name === 'script_generator'
                   ) {
+                    interface ScriptData {
+                      id: string;
+                      script: string;
+                      manifest: unknown;
+                    }
+
                     const { data: scriptData, error } = await supabase
-                      .from('remediation_scripts' as any)
+                      .from('remediation_scripts')
                       .insert({
                         session_id: sessionId,
                         device_id: deviceId,
-                        script: block.input?.script,
-                        manifest: block.input?.manifest,
+                        script: block.input?.script ?? '',
+                        manifest: block.input?.manifest ?? {},
                         risk_level: proposedFix.riskLevel,
                         status: 'pending_validation',
-                      } as any)
+                      })
                       .select()
-                      .single();
+                      .single<ScriptData>();
 
                     if (!error && scriptData) {
                       // Send script generation event with named event type
@@ -564,12 +608,15 @@ export const aiRoutes: FastifyPluginAsync = async (fastify): Promise<void> => {
       preHandler:
         process.env.NODE_ENV === 'test'
           ? testPreHandler
-          : (webPortalAuthHook as any),
+          : (webPortalAuthHook as unknown as typeof testPreHandler),
       schema: {
         body: scriptValidateSchema,
       },
     },
-    async (request, reply) => {
+    async (
+      request: FastifyRequest<{ Body: ScriptValidationRequest }>,
+      reply: FastifyReply
+    ) => {
       const {
         sessionId,
         script,
@@ -717,12 +764,15 @@ export const aiRoutes: FastifyPluginAsync = async (fastify): Promise<void> => {
       preHandler:
         process.env.NODE_ENV === 'test'
           ? testPreHandler
-          : (webPortalAuthHook as any),
+          : (webPortalAuthHook as unknown as typeof testPreHandler),
       schema: {
         body: scriptSubmitApprovalSchema,
       },
     },
-    async (request, reply) => {
+    async (
+      request: FastifyRequest<{ Body: ScriptApprovalRequest }>,
+      reply: FastifyReply
+    ) => {
       const {
         sessionId,
         scriptId,
@@ -743,6 +793,11 @@ export const aiRoutes: FastifyPluginAsync = async (fastify): Promise<void> => {
           });
         }
         // Create approval request
+        interface ApprovalRequestRow {
+          id: string;
+          metadata?: Record<string, unknown>;
+        }
+
         const { data: approvalRequest, error } = await supabase
           .from('approval_requests')
           .insert({
@@ -757,23 +812,31 @@ export const aiRoutes: FastifyPluginAsync = async (fastify): Promise<void> => {
             created_at: new Date().toISOString(),
           })
           .select()
-          .single();
+          .single<ApprovalRequestRow>();
 
         if (error) {
           throw error;
         }
 
         // Notify connected WebSocket clients for real-time approval
+        interface ConnectionInfo {
+          ws: { send(data: string): void };
+          metadata?: { customerId?: string };
+        }
+
         const connections = connectionManager
           .getConnectionsByType('customer')
-          .filter((conn: any) => conn.metadata?.customerId === requesterId);
+          .filter(
+            (conn: unknown) =>
+              (conn as ConnectionInfo).metadata?.customerId === requesterId
+          ) as ConnectionInfo[];
 
         for (const conn of connections) {
           conn.ws.send(
             JSON.stringify({
               type: 'approval_request',
               data: {
-                approvalId: approvalRequest.id,
+                approvalId: approvalRequest?.id ?? '',
                 sessionId,
                 scriptId,
                 riskLevel: riskAssessment.level,
@@ -786,7 +849,7 @@ export const aiRoutes: FastifyPluginAsync = async (fastify): Promise<void> => {
         }
 
         return reply.send({
-          approvalId: approvalRequest.id,
+          approvalId: approvalRequest?.id ?? '',
           status: 'pending',
           requireSecondApproval,
           notifiedUsers: connections.length,
@@ -812,11 +875,13 @@ export const aiRoutes: FastifyPluginAsync = async (fastify): Promise<void> => {
       preHandler:
         process.env.NODE_ENV === 'test'
           ? testPreHandler
-          : (webPortalAuthHook as any),
+          : (webPortalAuthHook as unknown as typeof testPreHandler),
     },
-    (connection: any, request: any) => {
-      const socket = connection.socket;
-      const userId = request.user?.id;
+    (connection: unknown, request: unknown): void => {
+      const conn = connection as WebSocketConnection;
+      const req = request as AuthenticatedRequest;
+      const socket = conn.socket;
+      const userId = req.user?.id;
 
       if (!userId) {
         socket.send(
@@ -843,59 +908,76 @@ export const aiRoutes: FastifyPluginAsync = async (fastify): Promise<void> => {
       );
 
       // Handle approval responses
-      socket.on('message', async (data: any) => {
-        try {
-          const message = JSON.parse(data.toString());
+      socket.on('message', (data: Buffer | string) => {
+        void (async (): Promise<void> => {
+          try {
+            const dataStr =
+              typeof data === 'string'
+                ? data
+                : data instanceof Buffer
+                  ? data.toString()
+                  : String(data);
 
-          if (message.type === 'approval_response') {
-            const { approvalId, approved, reason, modifiedInput } = message;
+            interface ApprovalMessage {
+              type: string;
+              approvalId?: string;
+              approved?: boolean;
+              reason?: string;
+              modifiedInput?: unknown;
+            }
 
-            // Update approval request
-            await supabase
-              .from('approval_requests')
-              .update({
-                status: approved ? 'approved' : 'denied',
-                approval_reason: reason,
-                approved_by: userId,
-                approved_at: new Date().toISOString(),
-                modified_input: modifiedInput,
-              })
-              .eq('id', approvalId);
+            const message = JSON.parse(dataStr) as ApprovalMessage;
 
-            // Notify permission handler
-            await permissionHandler.handleApprovalResponse(
-              approvalId,
-              approved ? 'approve' : 'deny',
-              {
-                reason,
-              }
-            );
+            if (message.type === 'approval_response') {
+              const { approvalId, approved, reason, modifiedInput } = message;
 
-            socket.send(
-              JSON.stringify({
-                type: 'approval_processed',
+              // Update approval request
+              await supabase
+                .from('approval_requests')
+                .update({
+                  status: approved ? 'approved' : 'denied',
+                  approval_reason: reason,
+                  approved_by: userId,
+                  approved_at: new Date().toISOString(),
+                  modified_input: modifiedInput,
+                })
+                .eq('id', approvalId);
+
+              // Notify permission handler
+              await permissionHandler.handleApprovalResponse(
                 approvalId,
-                status: approved ? 'approved' : 'denied',
+                approved ? 'approve' : 'deny',
+                {
+                  reason,
+                }
+              );
+
+              socket.send(
+                JSON.stringify({
+                  type: 'approval_processed',
+                  approvalId,
+                  status: approved ? 'approved' : 'denied',
+                })
+              );
+            }
+          } catch (error) {
+            req.log.error(error, 'Failed to process approval response');
+            conn.socket.send(
+              JSON.stringify({
+                type: 'error',
+                message: 'Failed to process approval',
               })
             );
           }
-        } catch (error) {
-          request.log.error(error, 'Failed to process approval response');
-          socket.send(
-            JSON.stringify({
-              type: 'error',
-              message: 'Failed to process approval',
-            })
-          );
-        }
+        })();
       });
 
-      socket.on('close', () => {
+      conn.socket.on('close', () => {
         connectionManager.removeConnection(connectionId);
       });
 
-      socket.on('error', (error: any) => {
-        request.log.error(error, 'WebSocket error in approval stream');
+      conn.socket.on('error', (error: Error) => {
+        req.log.error(error, 'WebSocket error in approval stream');
         connectionManager.removeConnection(connectionId);
       });
     }
@@ -910,9 +992,9 @@ export const aiRoutes: FastifyPluginAsync = async (fastify): Promise<void> => {
     process.env.NODE_ENV === 'test'
       ? {}
       : {
-          preHandler: webPortalAuthHook,
+          preHandler: webPortalAuthHook as unknown as typeof testPreHandler,
         },
-    async (_request, reply) => {
+    async (_request: FastifyRequest, reply: FastifyReply) => {
       try {
         if (process.env.NODE_ENV === 'test') {
           return reply.send({
@@ -964,7 +1046,7 @@ export const aiRoutes: FastifyPluginAsync = async (fastify): Promise<void> => {
           totalTools: toolsWithMetadata.length,
         });
       } catch (error) {
-        _request.log.error(error, 'Failed to list MCP tools');
+        console.error('Failed to list MCP tools:', error);
         return reply.status(500).send({
           error: 'Failed to list tools',
           message: error instanceof Error ? error.message : 'Unknown error',
@@ -972,4 +1054,6 @@ export const aiRoutes: FastifyPluginAsync = async (fastify): Promise<void> => {
       }
     }
   );
+
+  done();
 };

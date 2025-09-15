@@ -111,7 +111,7 @@ export class ClaudeCodeService {
   /**
    * Execute a query with optional configuration (legacy method)
    */
-  async query(prompt: string, options?: ClaudeCodeOptions): Promise<string> {
+  async query(prompt: string, _options?: ClaudeCodeOptions): Promise<string> {
     const sessionId = this.sessionId ?? this.generateSessionId();
 
     // Create a diagnostic prompt for the orchestrator
@@ -188,7 +188,7 @@ export class ClaudeCodeService {
   async streamQuery(
     prompt: string,
     onMessage: MessageHandler,
-    options?: ClaudeCodeOptions
+    _options?: ClaudeCodeOptions
   ): Promise<void> {
     const sessionId = this.sessionId ?? this.generateSessionId();
 

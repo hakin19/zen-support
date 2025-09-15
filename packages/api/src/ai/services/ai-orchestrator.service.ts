@@ -1,7 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-explicit-any */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
 
 /* eslint-disable @typescript-eslint/require-await */
 /* eslint-disable @typescript-eslint/prefer-nullish-coalescing */
@@ -330,8 +329,21 @@ export class AIOrchestrator extends EventEmitter {
    * Build diagnostic prompt from template
    */
   private buildDiagnosticPrompt(prompt: NetworkDiagnosticPrompt): string {
+    interface DiagnosticInput {
+      deviceId: string;
+      deviceType: string;
+      symptoms: string[];
+      diagnosticData: {
+        pingResults: unknown;
+        traceroute: unknown;
+        dnsResolution: unknown;
+        networkInterfaces: unknown;
+        connectionStatus: unknown;
+      };
+    }
+
     const { deviceId, deviceType, symptoms, diagnosticData } =
-      prompt.input as any;
+      prompt.input as DiagnosticInput;
 
     return `
     Analyze the following network diagnostic data and provide detailed insights:
@@ -359,8 +371,19 @@ export class AIOrchestrator extends EventEmitter {
    * Build remediation prompt from template
    */
   private buildRemediationPrompt(prompt: RemediationScriptPrompt): string {
+    interface RemediationInput {
+      issue: string;
+      rootCause: string;
+      targetDevice: Record<string, unknown>;
+      constraints: {
+        maxExecutionTime: number;
+        rollbackRequired: boolean;
+      };
+      proposedActions?: Array<{ description: string }>;
+    }
+
     const { issue, rootCause, targetDevice, constraints, proposedActions } =
-      prompt.input as any;
+      prompt.input as RemediationInput;
 
     return `
     Generate remediation scripts for the following network issue:
@@ -368,7 +391,7 @@ export class AIOrchestrator extends EventEmitter {
     Issue: ${issue}
     Root Cause: ${rootCause}
     Target Device: ${JSON.stringify(targetDevice)}
-    Proposed Actions: ${Array.isArray(proposedActions) ? proposedActions.map((a: any) => a.description).join('; ') : 'None'}
+    Proposed Actions: ${Array.isArray(proposedActions) ? proposedActions.map(a => a.description).join('; ') : 'None'}
 
     Constraints:
     - Max Execution Time: ${constraints.maxExecutionTime} seconds
@@ -386,7 +409,25 @@ export class AIOrchestrator extends EventEmitter {
    * Build performance analysis prompt
    */
   private buildPerformancePrompt(prompt: PerformanceAnalysisPrompt): string {
-    const { metrics, timeRange, thresholds } = prompt.input as any;
+    interface PerformanceInput {
+      metrics: {
+        latency: unknown;
+        throughput: unknown;
+        packetLoss: unknown;
+        utilization: unknown;
+      };
+      timeRange: {
+        start: string;
+        end: string;
+      };
+      thresholds: {
+        latencyMs: number;
+        packetLossPercent: number;
+        utilizationPercent: number;
+      };
+    }
+
+    const { metrics, timeRange, thresholds } = prompt.input as PerformanceInput;
 
     return `
     Analyze network performance metrics and identify optimization opportunities:
@@ -416,7 +457,16 @@ export class AIOrchestrator extends EventEmitter {
    * Build security analysis prompt
    */
   private buildSecurityPrompt(prompt: SecurityAssessmentPrompt): string {
-    const { scanResults, complianceRequirements } = prompt.input as any;
+    interface SecurityInput {
+      scanResults: {
+        openPorts: unknown;
+        vulnerabilities?: unknown[];
+      };
+      complianceRequirements?: unknown[];
+    }
+
+    const { scanResults, complianceRequirements } =
+      prompt.input as SecurityInput;
 
     return `
     Perform security assessment for network infrastructure:

@@ -93,7 +93,7 @@ function sanitizeString(value: string): string {
 /**
  * Recursively sanitize an object for PII
  */
-export function sanitizeObject(obj: any, depth = 0): any {
+export function sanitizeObject<T>(obj: T, depth = 0): T {
   // Prevent infinite recursion
   if (depth > 10) return '<DEPTH_LIMIT>';
 
@@ -102,7 +102,7 @@ export function sanitizeObject(obj: any, depth = 0): any {
   }
 
   if (typeof obj === 'string') {
-    return sanitizeString(obj);
+    return sanitizeString(obj) as T;
   }
 
   if (typeof obj === 'number' || typeof obj === 'boolean') {
@@ -110,12 +110,16 @@ export function sanitizeObject(obj: any, depth = 0): any {
   }
 
   if (Array.isArray(obj)) {
-    return obj.map(item => sanitizeObject(item, depth + 1));
+    const sanitized = obj.map(
+      item => sanitizeObject(item, depth + 1) as unknown
+    );
+    return sanitized as T;
   }
 
-  if (typeof obj === 'object') {
-    const sanitized: any = {};
-    for (const key in obj) {
+  if (typeof obj === 'object' && obj !== null) {
+    const sanitized = {} as Record<string, unknown>;
+    const source = obj as Record<string, unknown>;
+    for (const key in source) {
       // Skip certain sensitive keys entirely
       if (
         ['password', 'secret', 'token', 'apiKey', 'privateKey'].includes(key)
@@ -125,9 +129,9 @@ export function sanitizeObject(obj: any, depth = 0): any {
       }
 
       // Recursively sanitize nested objects
-      sanitized[key] = sanitizeObject(obj[key], depth + 1);
+      sanitized[key] = sanitizeObject(source[key], depth + 1);
     }
-    return sanitized;
+    return sanitized as T;
   }
 
   return obj;
@@ -137,7 +141,34 @@ export function sanitizeObject(obj: any, depth = 0): any {
  * Create a minimal broadcast payload for SDK messages
  * Only includes necessary fields for monitoring
  */
-export function createMinimalBroadcastPayload(message: any): any {
+interface SDKMessage {
+  type: string;
+  sessionId?: string;
+  timestamp?: number;
+  content?: {
+    content?: Array<{ type: string; name?: string }>;
+  };
+  error?: string;
+  message?: string;
+  is_error?: boolean;
+}
+
+interface BroadcastPayload {
+  type: string;
+  sessionId?: string;
+  timestamp?: number;
+  metadata: {
+    messageType: string;
+    hasContent: boolean;
+    hasError: boolean;
+  };
+  error?: string;
+  toolsUsed?: string[];
+}
+
+export function createMinimalBroadcastPayload(
+  message: SDKMessage
+): BroadcastPayload {
   return {
     type: message.type,
     sessionId: message.sessionId,
@@ -146,20 +177,21 @@ export function createMinimalBroadcastPayload(message: any): any {
     metadata: {
       messageType: message.type,
       hasContent: !!message.content,
-      hasError: message.type === 'error' || message.is_error,
+      hasError: message.type === 'error' || !!message.is_error,
     },
     // Sanitized summary only if error
     ...(message.type === 'error' && {
       error: sanitizeString(
-        message.error || message.message || 'Unknown error'
+        message.error ?? message.message ?? 'Unknown error'
       ),
     }),
     // Tool usage notification (name only, no inputs)
     ...(message.type === 'assistant' &&
       message.content?.content && {
         toolsUsed: message.content.content
-          .filter((c: any) => c.type === 'tool_use')
-          .map((c: any) => c.name),
+          .filter(c => c.type === 'tool_use')
+          .map(c => c.name)
+          .filter((name): name is string => name !== undefined),
       }),
   };
 }
@@ -167,8 +199,8 @@ export function createMinimalBroadcastPayload(message: any): any {
 /**
  * Sanitize SDK message before database persistence
  */
-export function sanitizeForDatabase(message: any): any {
+export function sanitizeForDatabase<T>(message: T): T {
   // Create a deep copy to avoid mutating original
-  const copy = JSON.parse(JSON.stringify(message));
+  const copy = JSON.parse(JSON.stringify(message)) as T;
   return sanitizeObject(copy);
 }

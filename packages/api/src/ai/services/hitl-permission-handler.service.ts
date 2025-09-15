@@ -2,8 +2,7 @@
  * HITL Permission Handler Service
  * Handles human-in-the-loop approval workflows for Claude Code SDK
  */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable @typescript-eslint/no-unsafe-argument */
+
 /* eslint-disable @typescript-eslint/prefer-nullish-coalescing */
 
 import { EventEmitter } from 'events';
@@ -18,6 +17,14 @@ import type {
   PermissionResult,
   PermissionUpdate,
 } from '@anthropic-ai/claude-code';
+
+// AbortSignal is a global type in Node.js 15+
+// Define interface for type safety
+interface AbortSignalLike {
+  readonly aborted: boolean;
+  addEventListener(type: 'abort', listener: () => void): void;
+  removeEventListener(type: 'abort', listener: () => void): void;
+}
 
 interface PendingApproval {
   id: string;
@@ -99,7 +106,7 @@ export class HITLPermissionHandler extends EventEmitter {
       toolName: string,
       input: unknown,
       options: {
-        signal?: AbortSignal;
+        signal?: AbortSignalLike;
         suggestions?: Array<{
           toolName: string;
           input: unknown;
@@ -126,7 +133,7 @@ export class HITLPermissionHandler extends EventEmitter {
     toolName: string,
     input: Record<string, unknown>,
     options: {
-      signal?: AbortSignal;
+      signal?: AbortSignalLike;
       suggestions?: Array<{ toolName: string; input: unknown; reason: string }>;
     } = {}
   ): Promise<PermissionResult> {
@@ -158,7 +165,7 @@ export class HITLPermissionHandler extends EventEmitter {
 
     // For network diagnostic tools, check if they're read-only
     const networkTools = new NetworkMCPTools();
-    const isReadOnlyTool = await networkTools.isReadOnlyTool(toolName);
+    const isReadOnlyTool = networkTools.isReadOnlyTool(toolName);
 
     if (isReadOnlyTool) {
       return {
@@ -198,7 +205,7 @@ export class HITLPermissionHandler extends EventEmitter {
       timeout?: number;
       riskLevel?: string;
       reasoning?: string;
-      signal?: AbortSignal;
+      signal?: AbortSignalLike;
       suggestions?: Array<{ toolName: string; input: unknown; reason: string }>;
     }
   ): Promise<PermissionResult> {
@@ -212,39 +219,42 @@ export class HITLPermissionHandler extends EventEmitter {
         return;
       }
 
-      const timeoutHandle = setTimeout(async () => {
-        // Update database status to 'timeout' before rejecting
-        try {
-          await this.updateApprovalStatus(
+      const timeoutHandle = setTimeout(() => {
+        // Handle timeout asynchronously without returning promise
+        void (async (): Promise<void> => {
+          // Update database status to 'timeout' before rejecting
+          try {
+            await this.updateApprovalStatus(
+              approvalId,
+              'timeout',
+              `Request timed out after ${timeout / 1000} seconds`
+            );
+          } catch (error) {
+            console.error('[HITL] Failed to update timeout status:', {
+              approvalId,
+              error: error instanceof Error ? error.message : 'Unknown error',
+            });
+            // Continue with cleanup even if database update fails
+          }
+
+          // Clean up and reject
+          this.pendingApprovals.delete(approvalId);
+
+          // Emit timeout event for monitoring
+          this.emit('approval_timeout', {
             approvalId,
-            'timeout',
-            `Request timed out after ${timeout / 1000} seconds`
-          );
-        } catch (error) {
-          console.error('[HITL] Failed to update timeout status:', {
-            approvalId,
-            error: error instanceof Error ? error.message : 'Unknown error',
+            sessionId,
+            customerId,
+            toolName,
+            timeout,
           });
-          // Continue with cleanup even if database update fails
-        }
 
-        // Clean up and reject
-        this.pendingApprovals.delete(approvalId);
-
-        // Emit timeout event for monitoring
-        this.emit('approval_timeout', {
-          approvalId,
-          sessionId,
-          customerId,
-          toolName,
-          timeout,
-        });
-
-        reject(new Error('Approval request timed out'));
+          reject(new Error('Approval request timed out'));
+        })();
       }, timeout);
 
       // Handle abort signal
-      const abortHandler = () => {
+      const abortHandler = (): void => {
         clearTimeout(timeoutHandle);
         this.pendingApprovals.delete(approvalId);
         reject(new Error('Request aborted by client'));
@@ -310,7 +320,13 @@ export class HITLPermissionHandler extends EventEmitter {
         // Clean up on audit failure
         if (pending.timeout) clearTimeout(pending.timeout);
         this.pendingApprovals.delete(approvalId);
-        reject(new Error(`Failed to audit approval request: ${error.message}`));
+        reject(
+          new Error(
+            `Failed to audit approval request: ${
+              error instanceof Error ? error.message : 'Unknown error'
+            }`
+          )
+        );
       });
     });
   }
@@ -427,7 +443,19 @@ export class HITLPermissionHandler extends EventEmitter {
    * Load approval policies for a customer
    */
   async loadPolicies(customerId: string): Promise<void> {
-    const supabase = getSupabaseAdminClient() as any;
+    interface PolicyRow {
+      id: string;
+      customer_id: string;
+      tool_name: string;
+      auto_approve: boolean;
+      requires_approval: boolean;
+      risk_threshold: string;
+      conditions: Record<string, unknown>;
+      is_active: boolean;
+      created_at: string;
+      updated_at: string;
+    }
+    const supabase = getSupabaseAdminClient();
     const { data, error } = await supabase
       .from('approval_policies')
       .select('*')
@@ -439,16 +467,18 @@ export class HITLPermissionHandler extends EventEmitter {
       return;
     }
 
-    const policies: ApprovalPolicy[] = (data || []).map((row: any) => ({
-      id: row.id,
-      customerId: row.customer_id,
-      // Migration 2025091500003 ensures tool_name column exists
-      toolName: row.tool_name,
-      autoApprove: row.auto_approve || false,
-      requiresApproval: row.requires_approval ?? true,
-      riskThreshold: row.risk_threshold || 'medium',
-      conditions: row.conditions,
-    }));
+    const policies: ApprovalPolicy[] = ((data || []) as PolicyRow[]).map(
+      row => ({
+        id: row.id,
+        customerId: row.customer_id,
+        // Migration 2025091500003 ensures tool_name column exists
+        toolName: row.tool_name,
+        autoApprove: row.auto_approve || false,
+        requiresApproval: row.requires_approval ?? true,
+        riskThreshold: row.risk_threshold || 'medium',
+        conditions: row.conditions,
+      })
+    );
 
     this.approvalPolicies.set(customerId, policies);
   }
@@ -461,7 +491,7 @@ export class HITLPermissionHandler extends EventEmitter {
     toolName: string,
     policy: Partial<ApprovalPolicy>
   ): Promise<void> {
-    const supabase = getSupabaseAdminClient() as any;
+    const supabase = getSupabaseAdminClient();
 
     // Migration 2025091500003 ensures these columns exist
     const policyData = {
@@ -504,7 +534,7 @@ export class HITLPermissionHandler extends EventEmitter {
       averageResponseTime: number;
     }[]
   > {
-    const supabase = getSupabaseAdminClient() as any;
+    const supabase = getSupabaseAdminClient();
 
     const { data, error } = await supabase
       .from('approval_requests')
@@ -527,7 +557,14 @@ export class HITLPermissionHandler extends EventEmitter {
       }
     >();
 
-    for (const request of data as any[]) {
+    interface StatsRow {
+      tool_name: string;
+      status: string;
+      created_at: string;
+      updated_at: string | null;
+    }
+
+    for (const request of (data || []) as StatsRow[]) {
       const toolName = request.tool_name;
       if (!stats.has(toolName)) {
         stats.set(toolName, {
@@ -538,7 +575,10 @@ export class HITLPermissionHandler extends EventEmitter {
         });
       }
 
-      const stat = stats.get(toolName)!;
+      const stat = stats.get(toolName);
+      if (!stat) {
+        continue;
+      }
       stat.total++;
 
       if (request.status === 'approved') {
@@ -578,7 +618,9 @@ export class HITLPermissionHandler extends EventEmitter {
   /**
    * Broadcast approval request to WebSocket clients
    */
-  private async broadcastApprovalRequest(request: any): Promise<void> {
+  private async broadcastApprovalRequest(
+    request: ApprovalRequest
+  ): Promise<void> {
     if (!this.connectionManager) {
       console.warn(
         'No WebSocket connection manager available for broadcasting'
@@ -610,8 +652,13 @@ export class HITLPermissionHandler extends EventEmitter {
       ...webPortalConnections,
     ];
 
+    if (!this.connectionManager) {
+      console.warn('[HITL] No connection manager available for broadcasting');
+      return;
+    }
+
     const promises = allConnections.map(conn =>
-      this.connectionManager!.sendToConnection(conn.id, message)
+      this.connectionManager.sendToConnection(conn.id, message)
     );
 
     await Promise.all(promises);
@@ -630,17 +677,17 @@ export class HITLPermissionHandler extends EventEmitter {
     riskLevel?: string
   ): Promise<void> {
     try {
-      const supabase = getSupabaseAdminClient() as any;
+      const supabase = getSupabaseAdminClient();
       const { error } = await supabase.from('approval_requests').insert({
         id: approvalId,
         session_id: sessionId,
         customer_id: customerId,
         tool_name: toolName,
-        tool_input: input as any,
+        tool_input: input,
         status: 'pending',
         risk_level: riskLevel || 'medium',
         created_at: new Date().toISOString(), // RFC3339/ISO-8601 for TIMESTAMPTZ
-      } as any);
+      });
 
       if (error) {
         console.error('[HITL] Failed to audit approval request:', {
@@ -676,7 +723,7 @@ export class HITLPermissionHandler extends EventEmitter {
     reason?: string
   ): Promise<void> {
     try {
-      const supabase = getSupabaseAdminClient() as any;
+      const supabase = getSupabaseAdminClient();
 
       // Map status values to valid database enum values
       let dbStatus: 'approved' | 'denied' | 'timeout';
@@ -688,7 +735,14 @@ export class HITLPermissionHandler extends EventEmitter {
         dbStatus = status;
       }
 
-      const updateData: any = {
+      interface UpdateData {
+        status: 'approved' | 'denied' | 'timeout';
+        updated_at: string;
+        decision_reason?: string;
+        decided_at?: string;
+      }
+
+      const updateData: UpdateData = {
         status: dbStatus,
         updated_at: new Date().toISOString(), // RFC3339/ISO-8601 for TIMESTAMPTZ
       };
@@ -735,7 +789,7 @@ export class HITLPermissionHandler extends EventEmitter {
    * Get approval request history for a session
    */
   async getApprovalHistory(sessionId: string): Promise<ApprovalRequest[]> {
-    const supabase = getSupabaseAdminClient() as any;
+    const supabase = getSupabaseAdminClient();
     const { data, error } = await supabase
       .from('approval_requests')
       .select('*')
@@ -746,7 +800,18 @@ export class HITLPermissionHandler extends EventEmitter {
       throw new Error(`Failed to get approval history: ${error.message}`);
     }
 
-    return (data as any[]).map((row: any) => ({
+    interface HistoryRow {
+      id: string;
+      session_id: string;
+      customer_id: string;
+      tool_name: string;
+      tool_input: Record<string, unknown>;
+      risk_level: string;
+      reason: string | null;
+      created_at: string;
+    }
+
+    return (data as HistoryRow[]).map(row => ({
       id: row.id,
       sessionId: row.session_id,
       customerId: row.customer_id,
@@ -755,6 +820,7 @@ export class HITLPermissionHandler extends EventEmitter {
       riskLevel: row.risk_level,
       reasoning: row.reason,
       timestamp: new Date(row.created_at).getTime(),
+      timestampISO: row.created_at,
     }));
   }
 
@@ -785,7 +851,7 @@ export class HITLPermissionHandler extends EventEmitter {
     toolName: string,
     input: unknown,
     options: {
-      signal?: AbortSignal;
+      signal?: AbortSignalLike;
       suggestions?: Array<{ toolName: string; input: unknown; reason: string }>;
     }
   ): Promise<PermissionResult> => {

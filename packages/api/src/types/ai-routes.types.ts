@@ -150,7 +150,7 @@ export interface MCPToolsResponse {
   tools: Array<{
     name: string;
     description: string;
-    inputSchema: Record<string, any>;
+    inputSchema: Record<string, unknown>;
     riskLevel: 'low' | 'medium' | 'high' | 'critical';
     requiresApproval: boolean;
     category: string;
@@ -162,7 +162,7 @@ export interface MCPToolsResponse {
 // SSE Message Types
 export interface SSEMessage {
   type?: string;
-  data: any;
+  data: unknown;
   event?: string;
   id?: string;
   retry?: number;

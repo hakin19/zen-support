@@ -542,7 +542,7 @@ export class NetworkMCPTools {
   /**
    * Check if tool is read-only (instance method for compatibility)
    */
-  async isReadOnlyTool(toolName: string): Promise<boolean> {
+  isReadOnlyTool(toolName: string): boolean {
     const riskLevel = NetworkMCPTools.getToolRiskLevel(toolName);
     return riskLevel === 'low';
   }
