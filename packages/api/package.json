@@ -26,8 +26,8 @@
   },
   "dependencies": {
     "@aizen/shared": "^0.0.1",
+    "@anthropic-ai/claude-code": "^1.0.113",
     "@fastify/websocket": "^10.0.1",
-    "@instantlyeasy/claude-code-sdk-ts": "^0.3.0",
     "@sinclair/typebox": "^0.34.41",
     "@supabase/supabase-js": "^2.57.0",
     "fastify": "^4.28.1",

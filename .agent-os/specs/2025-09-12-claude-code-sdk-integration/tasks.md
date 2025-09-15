@@ -7,12 +7,12 @@
   - [x] 1.2 Configure SDK Options interface with safety defaults
   - [x] 1.3 Design MCP tool schemas using Zod for type safety
 
-- [ ] 2. Implement TypeScript SDK integration in `@aizen/api`
-  - [ ] 2.1 Install `@anthropic/claude-code-sdk` package and configure TypeScript types
-  - [ ] 2.2 Create `AIOrchestrator` service class with SDK query() integration
-  - [ ] 2.3 Implement streaming analysis with AsyncGenerator pattern
-  - [ ] 2.4 Build `canUseTool` permission handler for HITL workflow
-  - [ ] 2.5 Create message processing pipeline for SDK message types
+- [x] 2. Implement TypeScript SDK integration in `@aizen/api`
+  - [x] 2.1 Install `@anthropic/claude-code-sdk` package and configure TypeScript types
+  - [x] 2.2 Create `AIOrchestrator` service class with SDK query() integration
+  - [x] 2.3 Implement streaming analysis with AsyncGenerator pattern
+  - [x] 2.4 Build `canUseTool` permission handler for HITL workflow
+  - [x] 2.5 Create message processing pipeline for SDK message types
 
 - [ ] 3. Build workflow APIs with SDK streaming
   - [ ] 3.1 POST `/api/v1/ai/diagnostics/analyze` with AsyncGenerator SSE streaming
