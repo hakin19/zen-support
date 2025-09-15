@@ -1,21 +1,18 @@
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/**
+ * HITL Permission Handler Service
+ * Handles human-in-the-loop approval workflows for Claude Code SDK
+ */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable @typescript-eslint/no-explicit-any */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/prefer-nullish-coalescing */
 
-/* eslint-disable @typescript-eslint/no-misused-promises */
-/* eslint-disable @typescript-eslint/no-base-to-string */
-
 import { EventEmitter } from 'events';
 
-import WebSocket from 'ws';
-
-import { getSupabase } from '@aizen/shared';
+import { getSupabaseAdminClient } from '@aizen/shared/utils/supabase-client';
 
 import { NetworkMCPTools } from '../tools/network-mcp-tools';
 
+import type { WebSocketConnectionManager } from '../../services/websocket-connection-manager';
 import type {
   CanUseTool,
   PermissionResult,
@@ -25,210 +22,315 @@ import type {
 interface PendingApproval {
   id: string;
   sessionId: string;
+  customerId: string;
   toolName: string;
   input: Record<string, unknown>;
-  timestamp: Date;
   resolve: (result: PermissionResult) => void;
   reject: (error: Error) => void;
   timeout?: NodeJS.Timeout;
+  timestamp: number; // Unix timestamp in milliseconds
+  timestampISO: string; // ISO-8601 string for DB consistency
+  riskLevel: string; // Risk level for the tool operation
+  reasoning?: string; // Optional reasoning for the request
+  suggestions?: Array<{ toolName: string; input: unknown; reason: string }>;
+}
+
+interface ApprovalRequest {
+  id: string;
+  sessionId: string;
+  customerId: string;
+  toolName: string;
+  input: Record<string, unknown>;
+  riskLevel: string;
+  reasoning?: string;
+  timestamp: number; // Unix timestamp in milliseconds
+  timestampISO: string; // ISO-8601 string for DB consistency
 }
 
 interface ApprovalPolicy {
   id: string;
   customerId: string;
-  toolPattern: string;
-  action: 'allow' | 'deny' | 'ask';
+  toolName: string;
+  autoApprove: boolean;
+  requiresApproval: boolean;
+  riskThreshold: string;
   conditions?: Record<string, unknown>;
-  expiresAt?: Date;
 }
 
-/**
- * Human-in-the-Loop Permission Handler Service
- * Manages tool approval workflows for the Claude Code SDK
- */
 export class HITLPermissionHandler extends EventEmitter {
   private pendingApprovals: Map<string, PendingApproval> = new Map();
   private approvalPolicies: Map<string, ApprovalPolicy[]> = new Map();
-  private wsClients: Map<string, WebSocket> = new Map();
+  private connectionManager: WebSocketConnectionManager | null = null;
   private defaultTimeout = 300000; // 5 minutes
+  private sessionCustomerMap: Map<string, string> = new Map();
 
-  constructor() {
+  constructor(connectionManager?: WebSocketConnectionManager) {
     super();
+    this.connectionManager = connectionManager || null;
+  }
+
+  /**
+   * Helper to ensure consistent timestamp handling
+   * @returns Object with both timestamp formats
+   */
+  private getTimestamps(): { timestamp: number; timestampISO: string } {
+    const timestamp = Date.now();
+    const timestampISO = new Date(timestamp).toISOString();
+    return { timestamp, timestampISO };
+  }
+
+  /**
+   * Set the WebSocket connection manager
+   */
+  setConnectionManager(manager: WebSocketConnectionManager): void {
+    this.connectionManager = manager;
   }
 
   /**
    * Create a canUseTool handler for a specific session
+   * This binds the sessionId and customerId to the SDK-compatible handler
    */
-  createCanUseToolHandler(
-    sessionId: string,
-    customerId: string,
-    options?: {
-      timeout?: number;
-      autoApprove?: string[];
-      autoDeny?: string[];
-    }
-  ): CanUseTool {
+  createCanUseToolHandler(sessionId: string, customerId: string): CanUseTool {
+    // Store the mapping for later retrieval
+    this.sessionCustomerMap.set(sessionId, customerId);
+
+    // Return SDK-compatible CanUseTool handler
     return async (
       toolName: string,
-      input: Record<string, unknown>,
-      {
-        signal,
-        suggestions,
-      }: { signal: globalThis.globalThis.AbortSignal; suggestions?: any }
+      input: unknown,
+      options: {
+        signal?: AbortSignal;
+        suggestions?: Array<{
+          toolName: string;
+          input: unknown;
+          reason: string;
+        }>;
+      }
     ): Promise<PermissionResult> => {
-      // Check abort signal
-      if (signal.aborted) {
-        throw new Error('Operation aborted');
-      }
-
-      // Check auto-approve list
-      if (options?.autoApprove?.includes(toolName)) {
-        return this.createAllowResult(input, suggestions);
-      }
-
-      // Check auto-deny list
-      if (options?.autoDeny?.includes(toolName)) {
-        return this.createDenyResult(`Tool ${toolName} is not allowed`);
-      }
-
-      // Check policies
-      const policy = await this.checkPolicies(customerId, toolName, input);
-      if (policy) {
-        if (policy.action === 'allow') {
-          return this.createAllowResult(input, suggestions);
-        } else if (policy.action === 'deny') {
-          return this.createDenyResult(`Tool ${toolName} denied by policy`);
-        }
-      }
-
-      // Get tool risk level
-      const riskLevel = NetworkMCPTools.getToolRiskLevel(toolName);
-
-      // Auto-approve low-risk read-only tools
-      if (riskLevel === 'low' && this.isReadOnlyTool(toolName)) {
-        return this.createAllowResult(input, suggestions);
-      }
-
-      // Request human approval for medium/high risk tools
-      return this.requestHumanApproval(sessionId, customerId, toolName, input, {
-        signal,
-        suggestions,
-        timeout: options?.timeout || this.defaultTimeout,
-        riskLevel,
-      });
+      return this.handleToolPermission(
+        sessionId,
+        customerId,
+        toolName,
+        input as Record<string, unknown>,
+        options
+      );
     };
   }
 
   /**
-   * Request human approval through WebSocket
+   * Internal handler for tool permissions with session context
    */
-  private async requestHumanApproval(
+  private async handleToolPermission(
     sessionId: string,
     customerId: string,
     toolName: string,
     input: Record<string, unknown>,
     options: {
-      signal: globalThis.AbortSignal;
-      suggestions?: PermissionUpdate[];
-      timeout: number;
-      riskLevel: string;
+      signal?: AbortSignal;
+      suggestions?: Array<{ toolName: string; input: unknown; reason: string }>;
+    } = {}
+  ): Promise<PermissionResult> {
+    // Load policies for customer if not cached
+    if (!this.approvalPolicies.has(customerId)) {
+      await this.loadPolicies(customerId);
+    }
+
+    const policies = this.approvalPolicies.get(customerId) || [];
+    const toolPolicy = policies.find(p => p.toolName === toolName);
+
+    // Check for auto-approval
+    if (toolPolicy?.autoApprove) {
+      return {
+        behavior: 'allow' as const,
+        updatedInput: input,
+      };
+    }
+
+    // Check if approval is required
+    if (!toolPolicy?.requiresApproval) {
+      // Default to requiring approval for unknown tools
+      if (!toolPolicy) {
+        console.warn(
+          `No policy found for tool ${toolName}, defaulting to require approval`
+        );
+      }
+    }
+
+    // For network diagnostic tools, check if they're read-only
+    const networkTools = new NetworkMCPTools();
+    const isReadOnlyTool = await networkTools.isReadOnlyTool(toolName);
+
+    if (isReadOnlyTool) {
+      return {
+        behavior: 'allow' as const,
+        updatedInput: input,
+      };
+    }
+
+    // Check if suggestions are provided as an alternative
+    if (options.suggestions && options.suggestions.length > 0) {
+      // Process suggestions and return them for user choice
+      return {
+        behavior: 'suggestions' as const,
+        suggestions: options.suggestions,
+      };
+    }
+
+    // Require human approval
+    return this.requestApproval(
+      sessionId,
+      customerId,
+      toolName,
+      input,
+      options
+    );
+  }
+
+  /**
+   * Request human approval for tool usage
+   */
+  private async requestApproval(
+    sessionId: string,
+    customerId: string,
+    toolName: string,
+    input: Record<string, unknown>,
+    options: {
+      timeout?: number;
+      riskLevel?: string;
+      reasoning?: string;
+      signal?: AbortSignal;
+      suggestions?: Array<{ toolName: string; input: unknown; reason: string }>;
     }
   ): Promise<PermissionResult> {
-    const approvalId = this.generateApprovalId();
+    const approvalId = `approval-${Date.now()}-${Math.random().toString(36).substring(2)}`;
+    const timeout = options.timeout || this.defaultTimeout;
 
-    return new Promise((resolve, reject) => {
-      // Create pending approval
-      const pending: PendingApproval = {
-        id: approvalId,
-        sessionId,
-        toolName,
-        input,
-        timestamp: new Date(),
-        resolve,
-        reject,
-      };
+    return new Promise<PermissionResult>((resolve, reject) => {
+      // Check if already aborted
+      if (options.signal?.aborted) {
+        reject(new Error('Request aborted'));
+        return;
+      }
 
-      // Set timeout
-      pending.timeout = setTimeout(() => {
+      const timeoutHandle = setTimeout(async () => {
+        // Update database status to 'timeout' before rejecting
+        try {
+          await this.updateApprovalStatus(
+            approvalId,
+            'timeout',
+            `Request timed out after ${timeout / 1000} seconds`
+          );
+        } catch (error) {
+          console.error('[HITL] Failed to update timeout status:', {
+            approvalId,
+            error: error instanceof Error ? error.message : 'Unknown error',
+          });
+          // Continue with cleanup even if database update fails
+        }
+
+        // Clean up and reject
         this.pendingApprovals.delete(approvalId);
-        reject(new Error('Approval request timed out'));
-      }, options.timeout);
 
-      // Store pending approval
-      this.pendingApprovals.set(approvalId, pending);
+        // Emit timeout event for monitoring
+        this.emit('approval_timeout', {
+          approvalId,
+          sessionId,
+          customerId,
+          toolName,
+          timeout,
+        });
+
+        reject(new Error('Approval request timed out'));
+      }, timeout);
 
       // Handle abort signal
-      options.signal.addEventListener('abort', () => {
-        if (pending.timeout) clearTimeout(pending.timeout);
+      const abortHandler = () => {
+        clearTimeout(timeoutHandle);
         this.pendingApprovals.delete(approvalId);
-        reject(new Error('Operation aborted'));
-      });
+        reject(new Error('Request aborted by client'));
+      };
 
-      // Send approval request to WebSocket clients
-      this.broadcastApprovalRequest({
+      if (options.signal) {
+        options.signal.addEventListener('abort', abortHandler);
+      }
+
+      const timestamps = this.getTimestamps();
+      const pending: PendingApproval = {
         id: approvalId,
         sessionId,
         customerId,
         toolName,
         input,
-        riskLevel: options.riskLevel,
+        resolve: (result: PermissionResult) => {
+          // Clean up abort listener when resolving
+          if (options.signal) {
+            options.signal.removeEventListener('abort', abortHandler);
+          }
+          resolve(result);
+        },
+        reject: (error: Error) => {
+          // Clean up abort listener when rejecting
+          if (options.signal) {
+            options.signal.removeEventListener('abort', abortHandler);
+          }
+          reject(error);
+        },
+        timeout: timeoutHandle,
+        timestamp: timestamps.timestamp,
+        timestampISO: timestamps.timestampISO,
+        riskLevel: options.riskLevel || 'medium',
+        reasoning: options.reasoning,
         suggestions: options.suggestions,
+      };
+
+      this.pendingApprovals.set(approvalId, pending);
+
+      // Send approval request to WebSocket clients
+      void this.broadcastApprovalRequest({
+        id: approvalId,
+        sessionId,
+        customerId,
+        toolName,
+        input,
+        riskLevel: pending.riskLevel,
+        reasoning: pending.reasoning,
         timestamp: pending.timestamp,
+        timestampISO: pending.timestampISO, // Include ISO timestamp for client consistency
       });
 
-      // Store in database for audit (critical for compliance)
-      this.storeApprovalRequest(
+      // Audit the approval request
+      this.auditApprovalRequest(
         approvalId,
         sessionId,
         customerId,
         toolName,
-        input
+        input,
+        options.riskLevel
       ).catch(error => {
         // Clean up on audit failure
         if (pending.timeout) clearTimeout(pending.timeout);
         this.pendingApprovals.delete(approvalId);
-
-        // Reject the approval request if we can't audit it
-        const auditError = new Error(
-          `Failed to store approval audit: ${error instanceof Error ? error.message : 'Unknown error'}`
-        );
-        reject(auditError);
-
-        // Log for monitoring
-        console.error('Failed to store approval request for audit:', {
-          approvalId,
-          sessionId,
-          toolName,
-          error,
-        });
-      });
-
-      // Emit event for other systems
-      this.emit('approval:requested', {
-        id: approvalId,
-        sessionId,
-        toolName,
-        input,
+        reject(new Error(`Failed to audit approval request: ${error.message}`));
       });
     });
   }
 
   /**
-   * Handle approval response from user
+   * Handle approval response from human operator
    */
   async handleApprovalResponse(
     approvalId: string,
-    decision: 'approve' | 'deny' | 'modify',
-    options?: {
-      modifiedInput?: Record<string, unknown>;
+    decision: 'approved' | 'denied' | 'modify' | 'deny',
+    options: {
       reason?: string;
-      alwaysAllow?: boolean;
+      conditions?: Record<string, unknown>;
+      modifiedInput?: Record<string, unknown>;
       interrupt?: boolean;
-    }
+    } = {}
   ): Promise<void> {
     const pending = this.pendingApprovals.get(approvalId);
     if (!pending) {
-      throw new Error('Approval request not found or expired');
+      throw new Error(`Approval request ${approvalId} not found`);
     }
 
     // Clear timeout
@@ -239,86 +341,94 @@ export class HITLPermissionHandler extends EventEmitter {
     // Remove from pending
     this.pendingApprovals.delete(approvalId);
 
-    // Create result based on decision
-    let result: PermissionResult;
+    try {
+      // Update audit record
+      await this.updateApprovalStatus(approvalId, decision, options.reason);
 
-    switch (decision) {
-      case 'approve':
-        result = this.createAllowResult(
-          options?.modifiedInput || pending.input,
-          options?.alwaysAllow
-            ? this.createPermissionUpdate(pending.toolName)
-            : undefined
-        );
-        break;
-
-      case 'modify':
-        if (!options?.modifiedInput) {
-          throw new Error('Modified input required for modify decision');
-        }
-        result = this.createAllowResult(
-          options.modifiedInput,
-          options?.alwaysAllow
-            ? this.createPermissionUpdate(pending.toolName)
-            : undefined
-        );
-        break;
-
-      case 'deny':
-        result = this.createDenyResult(
-          options?.reason || 'Request denied by user',
-          options?.interrupt
-        );
-        break;
-    }
-
-    // Store decision in database
-    await this.storeApprovalDecision(approvalId, decision, options?.reason);
-
-    // Emit event
-    this.emit('approval:decided', {
-      id: approvalId,
-      sessionId: pending.sessionId,
-      toolName: pending.toolName,
-      decision,
-    });
-
-    // Resolve the promise
-    pending.resolve(result);
-  }
-
-  /**
-   * Register WebSocket client for approval notifications
-   */
-  registerWebSocketClient(sessionId: string, ws: WebSocket): void {
-    this.wsClients.set(sessionId, ws);
-
-    ws.on('close', () => {
-      this.wsClients.delete(sessionId);
-    });
-
-    ws.on('message', async data => {
-      try {
-        const message = JSON.parse(data.toString());
-        if (message.type === 'approval_response') {
-          await this.handleApprovalResponse(
-            message.approvalId,
-            message.decision,
-            message.options
-          );
-        }
-      } catch (error) {
-        console.error('Failed to handle WebSocket message:', error);
+      // Resolve with proper PermissionResult
+      if (decision === 'approved' || decision === 'modify') {
+        pending.resolve({
+          behavior: 'allow' as const,
+          updatedInput: options.modifiedInput || pending.input,
+          updatedPermissions: options.conditions,
+        });
+      } else {
+        pending.resolve({
+          behavior: 'deny' as const,
+          message: options.reason || 'Request denied by operator',
+          interrupt: options.interrupt,
+        });
       }
-    });
+
+      // Emit event for monitoring
+      this.emit('approval_response', {
+        approvalId,
+        decision,
+        toolName: pending.toolName,
+        sessionId: pending.sessionId,
+        customerId: pending.customerId,
+        ...options,
+      });
+    } catch (error) {
+      pending.reject(
+        new Error(
+          `Failed to process approval: ${error instanceof Error ? error.message : 'Unknown error'}`
+        )
+      );
+    }
   }
 
   /**
-   * Load approval policies from database
+   * Get pending approval requests for a customer
+   */
+  getPendingApprovals(customerId: string): ApprovalRequest[] {
+    return Array.from(this.pendingApprovals.values())
+      .filter(approval => approval.customerId === customerId)
+      .map(approval => ({
+        id: approval.id,
+        sessionId: approval.sessionId,
+        customerId: approval.customerId,
+        toolName: approval.toolName,
+        input: approval.input,
+        riskLevel: approval.riskLevel, // Use actual risk level from pending approval
+        reasoning: approval.reasoning,
+        timestamp: approval.timestamp,
+        timestampISO: approval.timestampISO, // Include ISO timestamp for consistency
+      }));
+  }
+
+  /**
+   * Cancel pending approval request
+   */
+  cancelApproval(approvalId: string, reason = 'Cancelled by system'): void {
+    const pending = this.pendingApprovals.get(approvalId);
+    if (pending) {
+      if (pending.timeout) clearTimeout(pending.timeout);
+      this.pendingApprovals.delete(approvalId);
+      pending.resolve({
+        behavior: 'deny' as const,
+        message: reason,
+      });
+    }
+  }
+
+  /**
+   * Register WebSocket client for approval notifications (deprecated - use connection manager)
+   */
+  registerWebSocketClient(_sessionId: string, _ws: unknown): void {
+    // This method is kept for backward compatibility but functionality
+    // is now handled through the WebSocketConnectionManager
+    console.warn(
+      'registerWebSocketClient is deprecated, use WebSocketConnectionManager'
+    );
+  }
+
+  /**
+   * Load approval policies for a customer
    */
   async loadPolicies(customerId: string): Promise<void> {
-    const supabase = getSupabase() as any;
-    const { data, error } = await (supabase as any)
+    const supabase = getSupabaseAdminClient() as any;
+    const { data, error } = await supabase
       .from('approval_policies')
       .select('*')
       .eq('customer_id', customerId)
@@ -329,254 +439,367 @@ export class HITLPermissionHandler extends EventEmitter {
       return;
     }
 
-    const policies = (data || []).map((row: any) => ({
+    const policies: ApprovalPolicy[] = (data || []).map((row: any) => ({
       id: row.id,
       customerId: row.customer_id,
-      toolPattern: row.tool_pattern,
-      action: row.action as 'allow' | 'deny' | 'ask',
-      conditions: row.conditions as Record<string, unknown> | undefined,
-      expiresAt: row.expires_at ? new Date(row.expires_at) : undefined,
+      // Migration 2025091500003 ensures tool_name column exists
+      toolName: row.tool_name,
+      autoApprove: row.auto_approve || false,
+      requiresApproval: row.requires_approval ?? true,
+      riskThreshold: row.risk_threshold || 'medium',
+      conditions: row.conditions,
     }));
 
     this.approvalPolicies.set(customerId, policies);
   }
 
   /**
-   * Check policies for tool usage
+   * Add or update approval policy
    */
-  private async checkPolicies(
+  async updatePolicy(
     customerId: string,
     toolName: string,
-    input: Record<string, unknown>
-  ): Promise<ApprovalPolicy | null> {
-    // Load policies if not cached
-    if (!this.approvalPolicies.has(customerId)) {
-      await this.loadPolicies(customerId);
-    }
+    policy: Partial<ApprovalPolicy>
+  ): Promise<void> {
+    const supabase = getSupabaseAdminClient() as any;
 
-    const policies = this.approvalPolicies.get(customerId) || [];
-
-    // Find matching policy
-    for (const policy of policies) {
-      // Check if expired
-      if (policy.expiresAt && policy.expiresAt < new Date()) {
-        continue;
-      }
-
-      // Check tool pattern match
-      if (this.matchesPattern(toolName, policy.toolPattern)) {
-        // Check conditions if any
-        if (
-          policy.conditions &&
-          !this.checkConditions(input, policy.conditions)
-        ) {
-          continue;
-        }
-
-        return policy;
-      }
-    }
-
-    return null;
-  }
-
-  /**
-   * Check if tool name matches pattern
-   */
-  private matchesPattern(toolName: string, pattern: string): boolean {
-    // Convert pattern to regex (support wildcards)
-    const regex = new RegExp(
-      `^${pattern.replace(/\*/g, '.*').replace(/\?/g, '.')}$`
-    );
-    return regex.test(toolName);
-  }
-
-  /**
-   * Check if input meets policy conditions
-   */
-  private checkConditions(
-    input: Record<string, unknown>,
-    conditions: Record<string, unknown>
-  ): boolean {
-    for (const [key, value] of Object.entries(conditions)) {
-      if (input[key] !== value) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  /**
-   * Check if tool is read-only
-   */
-  private isReadOnlyTool(toolName: string): boolean {
-    const readOnlyTools = [
-      'Read',
-      'Glob',
-      'Grep',
-      'ListMcpResourcesTool',
-      'ReadMcpResourceTool',
-      'ping_test',
-      'dns_lookup',
-      'interface_status',
-    ];
-    return readOnlyTools.includes(toolName);
-  }
-
-  /**
-   * Create allow result
-   */
-  private createAllowResult(
-    updatedInput: Record<string, unknown>,
-    updatedPermissions?: PermissionUpdate[]
-  ): PermissionResult {
-    return {
-      behavior: 'allow',
-      updatedInput,
-      updatedPermissions,
+    // Migration 2025091500003 ensures these columns exist
+    const policyData = {
+      customer_id: customerId,
+      tool_name: toolName, // Migration adds tool_name column
+      auto_approve: policy.autoApprove || false,
+      requires_approval: policy.requiresApproval ?? true,
+      risk_threshold: policy.riskThreshold || 'medium',
+      conditions: policy.conditions || {},
+      is_active: true,
+      updated_at: new Date().toISOString(),
     };
+
+    const { error } = await supabase
+      .from('approval_policies')
+      .upsert(policyData, {
+        onConflict: 'customer_id,tool_name', // Migration adds unique constraint on these columns
+      });
+
+    if (error) {
+      throw new Error(`Failed to update policy: ${error.message}`);
+    }
+
+    // Reload policies
+    await this.loadPolicies(customerId);
   }
 
   /**
-   * Create deny result
+   * Get tool usage statistics for monitoring
    */
-  private createDenyResult(
-    message: string,
-    interrupt?: boolean
-  ): PermissionResult {
-    return {
-      behavior: 'deny',
-      message,
-      interrupt,
-    };
-  }
+  async getToolUsageStats(
+    customerId: string,
+    timeRange: { start: Date; end: Date }
+  ): Promise<
+    {
+      toolName: string;
+      totalRequests: number;
+      approvedRequests: number;
+      deniedRequests: number;
+      averageResponseTime: number;
+    }[]
+  > {
+    const supabase = getSupabaseAdminClient() as any;
 
-  /**
-   * Create permission update for "always allow"
-   */
-  private createPermissionUpdate(toolName: string): PermissionUpdate[] {
-    return [
+    const { data, error } = await supabase
+      .from('approval_requests')
+      .select('tool_name, status, created_at, updated_at')
+      .eq('customer_id', customerId)
+      .gte('created_at', timeRange.start.toISOString())
+      .lte('created_at', timeRange.end.toISOString());
+
+    if (error) {
+      throw new Error(`Failed to get tool usage stats: ${error.message}`);
+    }
+
+    const stats = new Map<
+      string,
       {
-        type: 'addRules',
-        rules: [
-          {
-            toolName,
-            ruleContent: undefined,
-          },
-        ],
-        behavior: 'allow',
-        destination: 'session',
-      },
-    ];
+        total: number;
+        approved: number;
+        denied: number;
+        responseTimes: number[];
+      }
+    >();
+
+    for (const request of data as any[]) {
+      const toolName = request.tool_name;
+      if (!stats.has(toolName)) {
+        stats.set(toolName, {
+          total: 0,
+          approved: 0,
+          denied: 0,
+          responseTimes: [],
+        });
+      }
+
+      const stat = stats.get(toolName)!;
+      stat.total++;
+
+      if (request.status === 'approved') {
+        stat.approved++;
+      } else if (request.status === 'denied') {
+        stat.denied++;
+      }
+
+      if (request.updated_at && request.created_at) {
+        const responseTime =
+          new Date(request.updated_at).getTime() -
+          new Date(request.created_at).getTime();
+        stat.responseTimes.push(responseTime);
+      }
+    }
+
+    return Array.from(stats.entries()).map(([toolName, stat]) => ({
+      toolName,
+      totalRequests: stat.total,
+      approvedRequests: stat.approved,
+      deniedRequests: stat.denied,
+      averageResponseTime:
+        stat.responseTimes.length > 0
+          ? stat.responseTimes.reduce((a, b) => a + b, 0) /
+            stat.responseTimes.length
+          : 0,
+    }));
+  }
+
+  /**
+   * Handle permission update from SDK
+   */
+  onPermissionUpdate(callback: (update: PermissionUpdate) => void): void {
+    this.on('permission_update', callback);
   }
 
   /**
    * Broadcast approval request to WebSocket clients
    */
-  private broadcastApprovalRequest(request: any): void {
-    const message = JSON.stringify({
+  private async broadcastApprovalRequest(request: any): Promise<void> {
+    if (!this.connectionManager) {
+      console.warn(
+        'No WebSocket connection manager available for broadcasting'
+      );
+      return;
+    }
+
+    const message = {
       type: 'approval_request',
       ...request,
-    });
+    };
 
-    for (const ws of this.wsClients.values()) {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(message);
-      }
-    }
+    // Broadcast to all approval connections and customer connections
+    const approvalConnections =
+      this.connectionManager.getConnectionsByType('approval');
+    const customerConnections =
+      this.connectionManager.getConnectionsByType('customer');
+
+    // Also get web-portal connections for the specific customer
+    const webPortalConnections = this.connectionManager
+      .getConnectionsByType('web-portal')
+      .filter(conn => conn.metadata?.customerId === request.customerId);
+
+    const allConnections = [
+      ...approvalConnections,
+      ...customerConnections.filter(
+        conn => conn.metadata?.customerId === request.customerId
+      ),
+      ...webPortalConnections,
+    ];
+
+    const promises = allConnections.map(conn =>
+      this.connectionManager!.sendToConnection(conn.id, message)
+    );
+
+    await Promise.all(promises);
   }
 
   /**
-   * Store approval request in database
+   * Audit approval request to database
+   * @throws Error if database operation fails
    */
-  private async storeApprovalRequest(
+  private async auditApprovalRequest(
     approvalId: string,
     sessionId: string,
     customerId: string,
     toolName: string,
-    input: Record<string, unknown>
+    input: Record<string, unknown>,
+    riskLevel?: string
   ): Promise<void> {
-    const supabase = getSupabase() as any;
-    await (supabase as any).from('approval_requests').insert({
-      id: approvalId,
-      session_id: sessionId,
-      customer_id: customerId,
-      tool_name: toolName,
-      tool_input: input as any,
-      status: 'pending',
-      created_at: new Date().toISOString(),
-    } as any);
+    try {
+      const supabase = getSupabaseAdminClient() as any;
+      const { error } = await supabase.from('approval_requests').insert({
+        id: approvalId,
+        session_id: sessionId,
+        customer_id: customerId,
+        tool_name: toolName,
+        tool_input: input as any,
+        status: 'pending',
+        risk_level: riskLevel || 'medium',
+        created_at: new Date().toISOString(), // RFC3339/ISO-8601 for TIMESTAMPTZ
+      } as any);
+
+      if (error) {
+        console.error('[HITL] Failed to audit approval request:', {
+          approvalId,
+          sessionId,
+          error: error.message,
+          code: error.code,
+        });
+        throw new Error(
+          `Failed to audit approval request: ${error.message || 'Database error'}`
+        );
+      }
+    } catch (error) {
+      // Log the error with context
+      console.error('[HITL] Audit request failed:', {
+        approvalId,
+        sessionId,
+        toolName,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      // Re-throw to let caller handle
+      throw error;
+    }
   }
 
   /**
-   * Store approval decision in database
+   * Update approval status in database
+   * @throws Error if database operation fails
    */
-  private async storeApprovalDecision(
+  private async updateApprovalStatus(
     approvalId: string,
-    decision: string,
+    status: 'approved' | 'denied' | 'modify' | 'deny' | 'timeout',
     reason?: string
   ): Promise<void> {
-    const supabase = getSupabase() as any;
-    await (supabase as any)
-      .from('approval_requests')
-      .update({
-        status: decision as any,
-        decision_reason: reason as any,
-        decided_at: new Date().toISOString(),
-      } as any)
-      .eq('id', approvalId);
-  }
+    try {
+      const supabase = getSupabaseAdminClient() as any;
 
-  /**
-   * Generate unique approval ID
-   */
-  private generateApprovalId(): string {
-    return `approval_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  }
-
-  /**
-   * Get pending approvals for a session
-   */
-  getPendingApprovals(sessionId?: string): PendingApproval[] {
-    const approvals = Array.from(this.pendingApprovals.values());
-    if (sessionId) {
-      return approvals.filter(a => a.sessionId === sessionId);
-    }
-    return approvals;
-  }
-
-  /**
-   * Cancel all pending approvals for a session
-   */
-  cancelSessionApprovals(sessionId: string): void {
-    for (const [id, approval] of this.pendingApprovals) {
-      if (approval.sessionId === sessionId) {
-        if (approval.timeout) {
-          clearTimeout(approval.timeout);
-        }
-        approval.reject(new Error('Session cancelled'));
-        this.pendingApprovals.delete(id);
+      // Map status values to valid database enum values
+      let dbStatus: 'approved' | 'denied' | 'timeout';
+      if (status === 'modify') {
+        dbStatus = 'approved'; // 'modify' is treated as approved with modifications
+      } else if (status === 'deny') {
+        dbStatus = 'denied'; // Map 'deny' to 'denied' for DB constraint
+      } else {
+        dbStatus = status;
       }
+
+      const updateData: any = {
+        status: dbStatus,
+        updated_at: new Date().toISOString(), // RFC3339/ISO-8601 for TIMESTAMPTZ
+      };
+
+      // Add reason if provided
+      if (reason) {
+        updateData.decision_reason = reason;
+      }
+
+      // Set decided_at for final statuses (using mapped dbStatus)
+      if (['approved', 'denied', 'timeout'].includes(dbStatus)) {
+        updateData.decided_at = new Date().toISOString();
+      }
+
+      const { error } = await supabase
+        .from('approval_requests')
+        .update(updateData)
+        .eq('id', approvalId);
+
+      if (error) {
+        console.error('[HITL] Failed to update approval status:', {
+          approvalId,
+          status,
+          error: error.message,
+          code: error.code,
+        });
+        throw new Error(
+          `Failed to update approval status: ${error.message || 'Database error'}`
+        );
+      }
+    } catch (error) {
+      // Log the error with context
+      console.error('[HITL] Status update failed:', {
+        approvalId,
+        status,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      // Re-throw to let caller handle
+      throw error;
     }
   }
 
   /**
-   * Cleanup resources
+   * Get approval request history for a session
+   */
+  async getApprovalHistory(sessionId: string): Promise<ApprovalRequest[]> {
+    const supabase = getSupabaseAdminClient() as any;
+    const { data, error } = await supabase
+      .from('approval_requests')
+      .select('*')
+      .eq('session_id', sessionId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      throw new Error(`Failed to get approval history: ${error.message}`);
+    }
+
+    return (data as any[]).map((row: any) => ({
+      id: row.id,
+      sessionId: row.session_id,
+      customerId: row.customer_id,
+      toolName: row.tool_name,
+      input: row.tool_input,
+      riskLevel: row.risk_level,
+      reasoning: row.reason,
+      timestamp: new Date(row.created_at).getTime(),
+    }));
+  }
+
+  /**
+   * Clean up resources
    */
   cleanup(): void {
-    // Clear all timeouts
-    for (const approval of this.pendingApprovals.values()) {
-      if (approval.timeout) {
-        clearTimeout(approval.timeout);
-      }
+    // Clear pending approvals
+    for (const pending of this.pendingApprovals.values()) {
+      if (pending.timeout) clearTimeout(pending.timeout);
+      pending.reject(new Error('Service shutting down'));
     }
 
     // Clear maps
     this.pendingApprovals.clear();
     this.approvalPolicies.clear();
-    this.wsClients.clear();
+    this.sessionCustomerMap.clear();
 
     // Remove listeners
     this.removeAllListeners();
   }
+
+  /**
+   * SDK-compatible canUseTool implementation
+   * Use this directly with Claude Code SDK when you don't have session context
+   */
+  canUseTool: CanUseTool = async (
+    toolName: string,
+    input: unknown,
+    options: {
+      signal?: AbortSignal;
+      suggestions?: Array<{ toolName: string; input: unknown; reason: string }>;
+    }
+  ): Promise<PermissionResult> => {
+    // For SDK compatibility without session context, use defaults
+    // In production, you should get these from the request context
+    const sessionId = 'default-session';
+    const customerId = 'default-customer';
+
+    return this.handleToolPermission(
+      sessionId,
+      customerId,
+      toolName,
+      input as Record<string, unknown>,
+      options
+    );
+  };
 }

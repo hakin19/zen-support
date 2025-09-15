@@ -4,7 +4,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 
-/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/require-await */
 /* eslint-disable @typescript-eslint/prefer-nullish-coalescing */
 /* eslint-disable @typescript-eslint/restrict-template-expressions */
@@ -13,7 +12,9 @@ import { EventEmitter } from 'events';
 
 import { z } from 'zod';
 
-import { getSupabase } from '@aizen/shared';
+import { getSupabaseAdminClient } from '@aizen/shared/utils/supabase-client';
+
+import { sanitizeForDatabase } from '../../utils/pii-sanitizer';
 
 import type {
   SDKMessage,
@@ -335,13 +336,17 @@ export class MessageProcessor extends EventEmitter {
     }
 
     try {
-      const supabase = getSupabase() as any;
-      await (supabase as any).from('ai_messages').insert({
+      const supabase = getSupabaseAdminClient() as any;
+      // Sanitize content and metadata before persisting
+      const sanitizedContent = sanitizeForDatabase(message.content);
+      const sanitizedMetadata = sanitizeForDatabase(message.metadata);
+
+      await supabase.from('ai_messages').insert({
         id: message.id,
         session_id: message.sessionId,
         message_type: message.type,
-        content: message.content as any,
-        metadata: message.metadata as any,
+        content: sanitizedContent,
+        metadata: sanitizedMetadata,
         created_at: message.timestamp.toISOString(),
       });
     } catch (error) {

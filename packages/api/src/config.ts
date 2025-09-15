@@ -40,4 +40,15 @@ export const config = {
     ), // 90 seconds default (3 missed heartbeats)
     sessionTtl: parseInt(process.env.DEVICE_SESSION_TTL ?? '604800', 10), // 7 days default in seconds
   },
+
+  cors: {
+    // Parse comma-separated list of allowed origins from environment
+    // Example: CORS_ALLOWED_ORIGINS=http://localhost:3000,https://app.aizen.ai
+    origins: process.env.CORS_ALLOWED_ORIGINS
+      ? process.env.CORS_ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
+      : process.env.NODE_ENV === 'development'
+        ? ['http://localhost:3000', 'http://localhost:3001'] // Default for development
+        : false, // Disable CORS in production if not configured
+    credentials: process.env.CORS_ALLOW_CREDENTIALS === 'true',
+  },
 } as const;

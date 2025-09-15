@@ -314,13 +314,16 @@ You are generating remediation scripts for network devices. Requirements:
    * Create canUseTool permission handler
    */
   static createPermissionHandler(
-    approvalCallback: (tool: string, input: unknown) => Promise<boolean>
+    approvalCallback: (
+      tool: string,
+      input: unknown,
+      signal?: AbortSignal
+    ) => Promise<boolean>
   ): CanUseTool {
     return async (
       toolName: string,
       input: unknown,
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      _options: { signal: AbortSignal }
+      options: { signal: AbortSignal }
     ): Promise<PermissionResult> => {
       // Get tool configuration
       const toolConfig = TOOL_RISK_LEVELS[toolName];
@@ -352,7 +355,11 @@ You are generating remediation scripts for network devices. Requirements:
       // Require approval for medium/high risk tools
       if (toolConfig.requireApproval) {
         try {
-          const approved = await approvalCallback(toolName, input);
+          const approved = await approvalCallback(
+            toolName,
+            input,
+            options.signal
+          );
 
           if (approved) {
             // Log the approval

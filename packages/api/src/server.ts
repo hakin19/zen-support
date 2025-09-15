@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import * as fs from 'fs';
 
+import cors from '@fastify/cors';
 import fastify from 'fastify';
 
 import { getRedisClient } from '@aizen/shared/utils/redis-client';
@@ -76,6 +77,15 @@ export async function createApp(): Promise<FastifyInstance> {
 
   // Register plugins
   // TODO: Add @fastify/sensible when version compatibility is resolved
+
+  // Register CORS plugin with environment-based configuration
+  await app.register(cors, {
+    origin: config.cors.origins,
+    credentials: config.cors.credentials,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID'],
+    exposedHeaders: ['X-Request-ID'],
+  });
 
   // Register correlation ID plugin (replaces the old hook)
   await app.register(correlationIdPlugin);

@@ -538,6 +538,14 @@ export class NetworkMCPTools {
     const riskLevel = this.getToolRiskLevel(toolName);
     return riskLevel === 'high' || riskLevel === 'medium';
   }
+
+  /**
+   * Check if tool is read-only (instance method for compatibility)
+   */
+  async isReadOnlyTool(toolName: string): Promise<boolean> {
+    const riskLevel = NetworkMCPTools.getToolRiskLevel(toolName);
+    return riskLevel === 'low';
+  }
 }
 
 /**
