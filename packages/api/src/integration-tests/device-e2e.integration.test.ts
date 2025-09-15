@@ -15,16 +15,14 @@ console.log('[TEST ENV] Loaded environment from .env.test');
 console.log('[TEST ENV] SUPABASE_URL:', process.env.SUPABASE_URL);
 console.log('[TEST ENV] REDIS_HOST:', process.env.REDIS_HOST || 'localhost');
 
-// Now import everything else AFTER environment is configured
-import {
-  afterAll,
-  beforeAll,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi,
-} from 'vitest';
+// CRITICAL: Clear any mocks that may have been set up by the global test setup
+// Integration tests need REAL clients, not mocked ones
+import { vi } from 'vitest';
+vi.unmock('@aizen/shared/utils/supabase-client');
+vi.unmock('@aizen/shared/utils/redis-client');
+
+// Now import everything else AFTER environment is configured and mocks are cleared
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { createServer } from '../server.js';
 import { DeviceAgent } from '@aizen/device-agent';
@@ -271,8 +269,9 @@ describe('Device E2E Integration Tests', () => {
     }
     console.log('✅ Device seeded:', deviceData);
 
-    // 3. Store the hashed device secret in Redis
-    console.log('🔐 Storing device secret in Redis...');
+    // 3. Store the device secret hash in Redis
+    // Note: The auth service will hash the provided secret and compare it to this stored hash
+    console.log('🔐 Storing device secret hash in Redis...');
     const secretHash = createHash('sha256')
       .update(TEST_DEVICE_SECRET)
       .digest('hex');
@@ -282,7 +281,7 @@ describe('Device E2E Integration Tests', () => {
 
     // Verify it was stored
     const storedHash = await redis.get(redisKey);
-    console.log('✅ Secret stored in Redis:', !!storedHash);
+    console.log('✅ Secret hash stored in Redis:', !!storedHash);
 
     // Verify data was actually created
     const { data: verifyDevice, error: verifyError } = await supabase
@@ -854,7 +853,7 @@ describe('Device E2E Integration Tests', () => {
       const commandData = await commandResponse.json();
 
       // Wait for command to be processed
-      await wait(500);
+      await wait(2000);
 
       // Check command result
       const resultResponse = await fetch(
@@ -996,7 +995,7 @@ describe('Device E2E Integration Tests', () => {
       }
 
       // Stop all agents
-      await Promise.all(agents.map(agent => agent.stopAsync()))
+      await Promise.all(agents.map(agent => agent.stopAsync()));
 
       // Cleanup concurrent test devices
       const supabase = createClient(

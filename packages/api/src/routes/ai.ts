@@ -169,10 +169,12 @@ const scriptSubmitApprovalSchema = {
   },
 } as const;
 
+/* eslint-disable @typescript-eslint/require-await */
 export const aiRoutes: FastifyPluginAsync = async (
   fastify: FastifyInstance,
   _opts: unknown
 ): Promise<void> => {
+  /* eslint-enable @typescript-eslint/require-await */
   const orchestrator = new AIOrchestrator();
   const messageProcessor = new MessageProcessor();
   const connectionManager = getConnectionManager();
