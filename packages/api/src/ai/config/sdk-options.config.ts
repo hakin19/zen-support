@@ -492,9 +492,18 @@ Remember: You are working on production networks. Every action matters.`;
    */
   static createMcpServerConfig(): Record<string, McpServerConfig> {
     try {
-      // For testing, return empty config to avoid module loading issues
-      // In production, this would be populated with actual network tools
-      return {};
+      // Dynamically load the network MCP server to avoid circular dependencies
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { createNetworkMcpServer } = require('../tools/network-mcp-server');
+      const networkServer = createNetworkMcpServer();
+
+      return {
+        'network-tools': {
+          type: 'sdk',
+          name: 'aizen-network-tools',
+          instance: networkServer,
+        } as McpServerConfig,
+      };
     } catch (error) {
       // If network tools aren't available, return empty config
       console.warn('Network MCP tools not available:', error);
