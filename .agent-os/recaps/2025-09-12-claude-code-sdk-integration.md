@@ -242,3 +242,17 @@ Implementation leverages the SDK's built-in streaming (AsyncGenerator), permissi
 - **Production Ready**: All endpoints operational with robust error boundaries, proper HTTP status codes, and SDK error type handling
 
 The implementation establishes a complete workflow API foundation with streaming capabilities, providing the infrastructure needed for the remaining HITL integration and MCP tool development tasks.
+
+### 2025-09-15: Critical Production Fixes and Schema Alignment
+
+- **Fixed Critical Schema Mismatch**: Resolved approval_policies table schema inconsistency where code expected `tool_name`, `auto_approve`, `requires_approval`, `risk_threshold` columns but migration only had `tool_pattern` and `action`. Updated code to use migration 2025091500003 which adds the required columns
+- **Database Constraint Compliance**: Fixed status mapping bug where 'deny' status violated database CHECK constraint - now properly maps 'deny' → 'denied', 'modify' → 'approved' for valid enum values
+- **Enhanced HITL Data Consistency**: Updated `getPendingApprovals()` to return actual risk levels and ISO timestamps instead of hardcoded values, improving client-side data usefulness
+- **Timeout Status Tracking**: Implemented proper database status updates when approval requests timeout, ensuring complete audit trail with 'timeout' status and decided_at timestamps
+- **SSE Protocol Standardization**: Fixed Server-Sent Events to use named event types (`event: script_generated`, `event: complete`, `event: error`) instead of inline type fields for proper protocol compliance
+- **CORS Configuration Centralized**: Moved from per-response CORS headers to centralized Fastify CORS plugin with environment-based allowlists for better security and maintainability
+- **TypeScript Type Safety**: Added comprehensive interfaces in `/packages/api/src/types/ai-routes.types.ts` replacing all `body as any` casts with proper generic types
+- **Database Migrations Added**: Created 3 new migrations for HITL approval tables, RLS policies, and schema fixes ensuring database structure matches application expectations
+- **Deployment Documentation**: Created comprehensive `/docs/HITL-DEPLOYMENT-GUIDE.md` with pre-deployment checklist, migration requirements, and rollback procedures
+
+**Breaking Change**: This update requires migration 2025091500003 to be applied before deployment to ensure schema compatibility. The migration is backward-compatible and preserves existing data.

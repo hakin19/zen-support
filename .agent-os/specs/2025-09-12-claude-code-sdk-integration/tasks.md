@@ -22,11 +22,11 @@
   - [x] 3.5 WS `/api/v1/ai/approval-stream` for real-time HITL approvals
   - [x] 3.6 GET `/api/v1/ai/mcp-tools` to list available SDK tools
 
-- [ ] 4. HITL integration with SDK permission system
-  - [ ] 4.1 WebSocket server for real-time approval requests from `canUseTool`
-  - [ ] 4.2 Approval UI integrated with SDK permission callbacks
-  - [ ] 4.3 Persist approval records with SDK message tracking
-  - [ ] 4.4 Real-time updates using SDK's streaming messages
+- [x] 4. HITL integration with SDK permission system
+  - [x] 4.1 WebSocket server for real-time approval requests from `canUseTool`
+  - [x] 4.2 Approval UI integrated with SDK permission callbacks
+  - [x] 4.3 Persist approval records with SDK message tracking
+  - [x] 4.4 Real-time updates using SDK's streaming messages
 
 - [ ] 5. MCP tool development for network operations
   - [ ] 5.1 Create `network_diagnostic` tool with Zod schemas

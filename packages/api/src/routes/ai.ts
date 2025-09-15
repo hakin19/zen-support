@@ -15,7 +15,21 @@ import type {
   NetworkDiagnosticPrompt,
   RemediationScriptPrompt,
 } from '../ai/prompts/network-analysis.prompts';
-import type { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
+import type {
+  DiagnosticAnalysisRequest,
+  ScriptGenerationRequest,
+  ScriptValidationRequest,
+  ScriptValidationResponse,
+  ScriptApprovalRequest,
+  ScriptApprovalResponse,
+  MCPToolsResponse,
+} from '../types/ai-routes.types';
+import type {
+  FastifyPluginAsync,
+  FastifyRequest,
+  FastifyReply,
+  FastifyInstance,
+} from 'fastify';
 
 // Request/Response schemas (Fastify JSON Schema)
 const diagnosticAnalyzeSchema = {
@@ -121,7 +135,14 @@ const scriptValidateSchema = {
 
 const scriptSubmitApprovalSchema = {
   type: 'object',
-  required: ['sessionId', 'scriptId', 'script', 'manifest', 'riskAssessment', 'requesterId'],
+  required: [
+    'sessionId',
+    'scriptId',
+    'script',
+    'manifest',
+    'riskAssessment',
+    'requesterId',
+  ],
   properties: {
     sessionId: { type: 'string' },
     scriptId: { type: 'string' },
@@ -141,15 +162,24 @@ const scriptSubmitApprovalSchema = {
   },
 } as const;
 
-export const aiRoutes: FastifyPluginAsync = async (fastify): Promise<void> => {
+export const aiRoutes: FastifyPluginAsync = (
+  fastify: FastifyInstance,
+  _opts: unknown,
+  done: () => void
+): void => {
   const orchestrator = new AIOrchestrator();
   const messageProcessor = new MessageProcessor();
-  const permissionHandler = new HITLPermissionHandler();
+  const connectionManager = getConnectionManager();
+  const permissionHandler = new HITLPermissionHandler(connectionManager);
 
   // Lightweight auth stub for tests to avoid preHandler callback mismatches
+  interface TestRequest extends FastifyRequest {
+    user?: { id: string; email: string };
+  }
+
   const testPreHandler = (
-    req: any,
-    _reply: any,
+    req: TestRequest,
+    _reply: FastifyReply,
     done: () => void
   ): void => {
     req.user = { id: 'user-123', email: 'test@example.com' };
@@ -160,18 +190,23 @@ export const aiRoutes: FastifyPluginAsync = async (fastify): Promise<void> => {
    * POST /api/v1/ai/diagnostics/analyze
    * Stream diagnostic analysis using AsyncGenerator SSE
    */
-  fastify.post(
+  fastify.post<{ Body: DiagnosticAnalysisRequest }>(
     '/api/v1/ai/diagnostics/analyze',
     {
       preHandler:
-        process.env.NODE_ENV === 'test' ? testPreHandler : (webPortalAuthHook as any),
+        process.env.NODE_ENV === 'test'
+          ? testPreHandler
+          : (webPortalAuthHook as unknown as typeof testPreHandler),
       schema: {
         body: diagnosticAnalyzeSchema,
       },
     },
-    async (request: FastifyRequest, reply: FastifyReply) => {
-      const body = request.body as any;
-      const { sessionId, deviceId, diagnosticData, analysisType } = body;
+    async (
+      request: FastifyRequest<{ Body: DiagnosticAnalysisRequest }>,
+      reply: FastifyReply
+    ) => {
+      const { sessionId, deviceId, diagnosticData, analysisType } =
+        request.body;
 
       // Set up SSE headers
       reply.raw.writeHead(200, {
@@ -190,7 +225,12 @@ export const aiRoutes: FastifyPluginAsync = async (fastify): Promise<void> => {
           reply.raw.write(
             `data: ${JSON.stringify({ type: 'result', result: 'Analysis complete' })}\n\n`
           );
-          reply.raw.write(`event: complete\ndata: {"status":"completed"}\n\n`);
+          reply.raw.write(
+            `event: complete\ndata: ${JSON.stringify({
+              status: 'completed',
+              timestamp: new Date().toISOString(),
+            })}\n\n`
+          );
           reply.raw.end();
           return;
         }
@@ -207,13 +247,20 @@ export const aiRoutes: FastifyPluginAsync = async (fastify): Promise<void> => {
           input: {
             deviceId,
             deviceType: 'raspberry-pi',
-            symptoms: diagnosticData.errors || [],
+            symptoms: (diagnosticData as any).errors ?? [],
             diagnosticData: {
-              interfaceStatus: diagnosticData.networkInfo.interfaces as any[],
-              dnsQueries: diagnosticData.networkInfo.dns?.map(dns => ({
-                query: dns,
-                result: 'pending',
-              })) as any[],
+              interfaceStatus:
+                ((diagnosticData as any).networkInfo
+                  ?.interfaces as unknown[]) ?? [],
+              dnsQueries:
+                (
+                  (diagnosticData as any).networkInfo?.dns as
+                    | string[]
+                    | undefined
+                )?.map((dns: string) => ({
+                  query: dns,
+                  result: 'pending',
+                })) ?? [],
             },
           },
         };
@@ -239,35 +286,65 @@ export const aiRoutes: FastifyPluginAsync = async (fastify): Promise<void> => {
         );
 
         for await (const message of analysisStream) {
-          const processedMessage = await messageProcessor.processMessage(
-            message,
-            sessionId
-          );
+          try {
+            const processedMessage = await messageProcessor.processMessage(
+              message,
+              sessionId
+            );
 
-          // Send SSE event
-          reply.raw.write(`data: ${JSON.stringify(processedMessage)}\n\n`);
+            // Send SSE event
+            reply.raw.write(`data: ${JSON.stringify(processedMessage)}\n\n`);
 
-          // Store intermediate results
-          if (
-            processedMessage.type === 'assistant' ||
-            processedMessage.type === 'result'
-          ) {
-            await supabase
-              .from('diagnostic_sessions')
-              .update({
-                result: processedMessage,
-                status:
-                  processedMessage.type === 'result'
-                    ? 'completed'
-                    : 'in_progress',
-              })
-              .eq('device_id', deviceId)
-              .eq('session_type', 'analysis');
+            // Store intermediate results (non-blocking to avoid breaking stream)
+            if (
+              processedMessage.type === 'assistant' ||
+              processedMessage.type === 'result'
+            ) {
+              const { error: updateError } = await supabase
+                .from('diagnostic_sessions')
+                .update({
+                  result: processedMessage,
+                  status:
+                    processedMessage.type === 'result'
+                      ? 'completed'
+                      : 'in_progress',
+                })
+                .eq('device_id', deviceId)
+                .eq('session_type', 'analysis');
+
+              if (updateError) {
+                request.log.warn(
+                  updateError,
+                  'Failed to update diagnostic session'
+                );
+                // Continue processing - don't break the stream
+              }
+            }
+          } catch (error) {
+            request.log.error(
+              error,
+              'Error processing message in analysis stream'
+            );
+            // Send error event but continue the stream
+            reply.raw.write(
+              `event: error\ndata: ${JSON.stringify({
+                error: 'Processing error occurred',
+                recoverable: true,
+                timestamp: new Date().toISOString(),
+              })}\n\n`
+            );
+            // Continue to next message
+            continue;
           }
         }
 
         // Send completion event
-        reply.raw.write(`event: complete\ndata: {"status":"completed"}\n\n`);
+        reply.raw.write(
+          `event: complete\ndata: ${JSON.stringify({
+            status: 'completed',
+            timestamp: new Date().toISOString(),
+          })}\n\n`
+        );
         reply.raw.end();
       } catch (error) {
         request.log.error(error, 'Diagnostic analysis failed');
@@ -294,18 +371,23 @@ export const aiRoutes: FastifyPluginAsync = async (fastify): Promise<void> => {
    * POST /api/v1/ai/scripts/generate
    * Generate remediation scripts using MCP tools
    */
-  fastify.post(
+  fastify.post<{ Body: ScriptGenerationRequest }>(
     '/api/v1/ai/scripts/generate',
     {
       preHandler:
-        process.env.NODE_ENV === 'test' ? testPreHandler : (webPortalAuthHook as any),
+        process.env.NODE_ENV === 'test'
+          ? testPreHandler
+          : (webPortalAuthHook as unknown as typeof testPreHandler),
       schema: {
         body: scriptGenerateSchema,
       },
     },
-    async (request: FastifyRequest, reply: FastifyReply) => {
-      const body = request.body as any;
-      const { sessionId, deviceId, issue, proposedFix, constraints } = body;
+    async (
+      request: FastifyRequest<{ Body: ScriptGenerationRequest }>,
+      reply: FastifyReply
+    ) => {
+      const { sessionId, deviceId, issue, proposedFix, constraints } =
+        request.body;
 
       // Set up SSE headers
       reply.raw.writeHead(200, {
@@ -336,13 +418,18 @@ export const aiRoutes: FastifyPluginAsync = async (fastify): Promise<void> => {
           };
           reply.raw.write(`data: ${JSON.stringify(assistant)}\n\n`);
           reply.raw.write(
-            `data: ${JSON.stringify({
-              type: 'script_generated',
+            `event: script_generated\ndata: ${JSON.stringify({
               scriptId: 'script-123',
               script: '#!/bin/bash\\necho "Test script"',
+              timestamp: new Date().toISOString(),
             })}\n\n`
           );
-          reply.raw.write(`event: complete\ndata: {"status":"completed"}\n\n`);
+          reply.raw.write(
+            `event: complete\ndata: ${JSON.stringify({
+              status: 'completed',
+              timestamp: new Date().toISOString(),
+            })}\n\n`
+          );
           reply.raw.end();
           return;
         }
@@ -407,51 +494,93 @@ export const aiRoutes: FastifyPluginAsync = async (fastify): Promise<void> => {
         );
 
         for await (const message of generationStream) {
-          const processedMessage = await messageProcessor.processMessage(
-            message,
-            sessionId
-          );
+          try {
+            const processedMessage = await messageProcessor.processMessage(
+              message,
+              sessionId
+            );
 
-          // Send SSE event
-          reply.raw.write(`data: ${JSON.stringify(processedMessage)}\n\n`);
+            // Send SSE event
+            reply.raw.write(`data: ${JSON.stringify(processedMessage)}\n\n`);
 
-          // Extract generated script from assistant tool_use blocks
-          if (processedMessage.type === 'assistant') {
-            const blocks = (processedMessage as any)?.content?.content as
-              | Array<{ type: string; name?: string; input?: any }>
-              | undefined;
-            if (blocks) {
-              for (const block of blocks) {
-                if (block.type === 'tool_use' && block.name === 'script_generator') {
-                  const { data: scriptData, error } = await supabase
-                    .from('remediation_scripts' as any)
-                    .insert({
-                      session_id: sessionId,
-                      device_id: deviceId,
-                      script: block.input?.script,
-                      manifest: block.input?.manifest,
-                      risk_level: proposedFix.riskLevel,
-                      status: 'pending_validation',
-                    } as any)
-                    .select()
-                    .single();
+            // Extract generated script from assistant tool_use blocks
+            if (processedMessage.type === 'assistant') {
+              interface ToolUseBlock {
+                type: string;
+                name?: string;
+                input?: {
+                  script?: string;
+                  manifest?: unknown;
+                };
+              }
 
-                  if (!error && scriptData) {
-                    reply.raw.write(
-                      `data: ${JSON.stringify({
-                        type: 'script_generated',
-                        scriptId: (scriptData as any).id,
-                        script: (scriptData as any).script,
-                      })}\n\n`
-                    );
+              const messageContent = processedMessage as {
+                content?: { content?: ToolUseBlock[] };
+              };
+              const blocks = messageContent?.content?.content;
+              if (blocks) {
+                for (const block of blocks) {
+                  if (
+                    block.type === 'tool_use' &&
+                    block.name === 'script_generator'
+                  ) {
+                    interface ScriptData {
+                      id: string;
+                      script: string;
+                      manifest: unknown;
+                    }
+
+                    const { data: scriptData, error } = await supabase
+                      .from('remediation_scripts')
+                      .insert({
+                        session_id: sessionId,
+                        device_id: deviceId,
+                        script: block.input?.script ?? '',
+                        manifest: block.input?.manifest ?? {},
+                        risk_level: proposedFix.riskLevel,
+                        status: 'pending_validation',
+                      })
+                      .select()
+                      .single<ScriptData>();
+
+                    if (!error && scriptData) {
+                      // Send script generation event with named event type
+                      reply.raw.write(
+                        `event: script_generated\ndata: ${JSON.stringify({
+                          scriptId: scriptData.id,
+                          script: scriptData.script,
+                          timestamp: new Date().toISOString(),
+                        })}\n\n`
+                      );
+                    }
                   }
                 }
               }
             }
+          } catch (error) {
+            request.log.error(
+              error,
+              'Error processing message in generation stream'
+            );
+            // Send error event but continue the stream
+            reply.raw.write(
+              `event: error\ndata: ${JSON.stringify({
+                error: 'Processing error occurred',
+                recoverable: true,
+                timestamp: new Date().toISOString(),
+              })}\n\n`
+            );
+            // Continue to next message
+            continue;
           }
         }
 
-        reply.raw.write(`event: complete\ndata: {"status":"completed"}\n\n`);
+        reply.raw.write(
+          `event: complete\ndata: ${JSON.stringify({
+            status: 'completed',
+            timestamp: new Date().toISOString(),
+          })}\n\n`
+        );
         reply.raw.end();
       } catch (error) {
         request.log.error(error, 'Script generation failed');
@@ -470,23 +599,30 @@ export const aiRoutes: FastifyPluginAsync = async (fastify): Promise<void> => {
    * POST /api/v1/ai/scripts/validate
    * Validate scripts with SDK validation
    */
-  fastify.post(
+  fastify.post<{
+    Body: ScriptValidationRequest;
+    Reply: ScriptValidationResponse;
+  }>(
     '/api/v1/ai/scripts/validate',
     {
       preHandler:
-        process.env.NODE_ENV === 'test' ? testPreHandler : (webPortalAuthHook as any),
+        process.env.NODE_ENV === 'test'
+          ? testPreHandler
+          : (webPortalAuthHook as unknown as typeof testPreHandler),
       schema: {
         body: scriptValidateSchema,
       },
     },
-    async (request: FastifyRequest, reply: FastifyReply) => {
-      const body = request.body as any;
+    async (
+      request: FastifyRequest<{ Body: ScriptValidationRequest }>,
+      reply: FastifyReply
+    ) => {
       const {
         sessionId,
         script,
         manifest,
         policyChecks = ['pii', 'network_safety', 'command_injection'],
-      } = body;
+      } = request.body;
 
       try {
         // Perform validation checks
@@ -586,14 +722,21 @@ export const aiRoutes: FastifyPluginAsync = async (fastify): Promise<void> => {
 
         // Store validation results (skip DB write in tests)
         if (process.env.NODE_ENV !== 'test') {
-          await supabase.from('script_validations').insert({
-            session_id: sessionId,
-            script_hash: Buffer.from(script)
-              .toString('base64')
-              .substring(0, 64),
-            validation_results: validationResults,
-            manifest,
-          });
+          const { error: insertError } = await supabase
+            .from('script_validations')
+            .insert({
+              session_id: sessionId,
+              script_hash: Buffer.from(script)
+                .toString('base64')
+                .substring(0, 64),
+              validation_results: validationResults,
+              manifest,
+            });
+
+          if (insertError) {
+            request.log.warn(insertError, 'Failed to store validation results');
+            // Continue anyway - validation still succeeded
+          }
         }
 
         return reply.send({
@@ -615,17 +758,21 @@ export const aiRoutes: FastifyPluginAsync = async (fastify): Promise<void> => {
    * POST /api/v1/ai/scripts/submit-for-approval
    * Submit scripts for HITL approval integrated with canUseTool
    */
-  fastify.post(
+  fastify.post<{ Body: ScriptApprovalRequest; Reply: ScriptApprovalResponse }>(
     '/api/v1/ai/scripts/submit-for-approval',
     {
       preHandler:
-        process.env.NODE_ENV === 'test' ? testPreHandler : (webPortalAuthHook as any),
+        process.env.NODE_ENV === 'test'
+          ? testPreHandler
+          : (webPortalAuthHook as unknown as typeof testPreHandler),
       schema: {
         body: scriptSubmitApprovalSchema,
       },
     },
-    async (request: FastifyRequest, reply: FastifyReply) => {
-      const body = request.body as any;
+    async (
+      request: FastifyRequest<{ Body: ScriptApprovalRequest }>,
+      reply: FastifyReply
+    ) => {
       const {
         sessionId,
         scriptId,
@@ -634,7 +781,7 @@ export const aiRoutes: FastifyPluginAsync = async (fastify): Promise<void> => {
         riskAssessment,
         requesterId,
         requireSecondApproval,
-      } = body;
+      } = request.body;
 
       try {
         if (process.env.NODE_ENV === 'test') {
@@ -646,6 +793,11 @@ export const aiRoutes: FastifyPluginAsync = async (fastify): Promise<void> => {
           });
         }
         // Create approval request
+        interface ApprovalRequestRow {
+          id: string;
+          metadata?: Record<string, unknown>;
+        }
+
         const { data: approvalRequest, error } = await supabase
           .from('approval_requests')
           .insert({
@@ -660,24 +812,31 @@ export const aiRoutes: FastifyPluginAsync = async (fastify): Promise<void> => {
             created_at: new Date().toISOString(),
           })
           .select()
-          .single();
+          .single<ApprovalRequestRow>();
 
         if (error) {
           throw error;
         }
 
         // Notify connected WebSocket clients for real-time approval
-        const connectionManager = getConnectionManager();
+        interface ConnectionInfo {
+          ws: { send(data: string): void };
+          metadata?: { customerId?: string };
+        }
+
         const connections = connectionManager
           .getConnectionsByType('customer')
-          .filter((conn: any) => conn.metadata?.customerId === requesterId);
+          .filter(
+            (conn: unknown) =>
+              (conn as ConnectionInfo).metadata?.customerId === requesterId
+          ) as ConnectionInfo[];
 
         for (const conn of connections) {
           conn.ws.send(
             JSON.stringify({
               type: 'approval_request',
               data: {
-                approvalId: approvalRequest.id,
+                approvalId: approvalRequest?.id ?? '',
                 sessionId,
                 scriptId,
                 riskLevel: riskAssessment.level,
@@ -690,7 +849,7 @@ export const aiRoutes: FastifyPluginAsync = async (fastify): Promise<void> => {
         }
 
         return reply.send({
-          approvalId: approvalRequest.id,
+          approvalId: approvalRequest?.id ?? '',
           status: 'pending',
           requireSecondApproval,
           notifiedUsers: connections.length,
@@ -714,12 +873,15 @@ export const aiRoutes: FastifyPluginAsync = async (fastify): Promise<void> => {
     {
       websocket: true,
       preHandler:
-        process.env.NODE_ENV === 'test' ? testPreHandler : (webPortalAuthHook as any),
+        process.env.NODE_ENV === 'test'
+          ? testPreHandler
+          : (webPortalAuthHook as unknown as typeof testPreHandler),
     },
-    (connection: any, request: any) => {
-      const socket = connection.socket;
-      const connectionManager = getConnectionManager();
-      const userId = (request as any).user?.id;
+    (connection: unknown, request: unknown): void => {
+      const conn = connection as WebSocketConnection;
+      const req = request as AuthenticatedRequest;
+      const socket = conn.socket;
+      const userId = req.user?.id;
 
       if (!userId) {
         socket.send(
@@ -746,61 +908,77 @@ export const aiRoutes: FastifyPluginAsync = async (fastify): Promise<void> => {
       );
 
       // Handle approval responses
-      socket.on('message', async (data: any) => {
-        try {
-          const message = JSON.parse(data.toString());
+      socket.on('message', (data: Buffer | string) => {
+        void (async (): Promise<void> => {
+          try {
+            const dataStr =
+              typeof data === 'string'
+                ? data
+                : data instanceof Buffer
+                  ? data.toString()
+                  : String(data);
 
-          if (message.type === 'approval_response') {
-            const { approvalId, approved, reason, modifiedInput } = message;
+            interface ApprovalMessage {
+              type: string;
+              approvalId?: string;
+              approved?: boolean;
+              reason?: string;
+              modifiedInput?: unknown;
+            }
 
-            // Update approval request
-            await supabase
-              .from('approval_requests')
-              .update({
-                status: approved ? 'approved' : 'denied',
-                approval_reason: reason,
-                approved_by: userId,
-                approved_at: new Date().toISOString(),
-                modified_input: modifiedInput,
-              })
-              .eq('id', approvalId);
+            const message = JSON.parse(dataStr) as ApprovalMessage;
 
-            // Notify permission handler
-            await permissionHandler.handleApprovalResponse(
-              approvalId,
-              approved ? 'approve' : 'deny',
-              {
-                modifiedInput,
-                reason,
-              }
-            );
+            if (message.type === 'approval_response') {
+              const { approvalId, approved, reason, modifiedInput } = message;
 
-            socket.send(
-              JSON.stringify({
-                type: 'approval_processed',
+              // Update approval request
+              await supabase
+                .from('approval_requests')
+                .update({
+                  status: approved ? 'approved' : 'denied',
+                  approval_reason: reason,
+                  approved_by: userId,
+                  approved_at: new Date().toISOString(),
+                  modified_input: modifiedInput,
+                })
+                .eq('id', approvalId);
+
+              // Notify permission handler
+              await permissionHandler.handleApprovalResponse(
                 approvalId,
-                status: approved ? 'approved' : 'denied',
+                approved ? 'approve' : 'deny',
+                {
+                  reason,
+                }
+              );
+
+              socket.send(
+                JSON.stringify({
+                  type: 'approval_processed',
+                  approvalId,
+                  status: approved ? 'approved' : 'denied',
+                })
+              );
+            }
+          } catch (error) {
+            req.log.error(error, 'Failed to process approval response');
+            conn.socket.send(
+              JSON.stringify({
+                type: 'error',
+                message: 'Failed to process approval',
               })
             );
           }
-        } catch (error) {
-          request.log.error(error, 'Failed to process approval response');
-          socket.send(
-            JSON.stringify({
-              type: 'error',
-              message: 'Failed to process approval',
-            })
-          );
-        }
+        })();
       });
 
-      socket.on('close', () => {
-        connectionManager.removeConnection(connectionId as string);
+      conn.socket.on('close', () => {
+        connectionManager.removeConnection(connectionId);
       });
 
-      socket.on('error', (error: any) => {
-        request.log.error(error, 'WebSocket error in approval stream');
-        connectionManager.removeConnection(connectionId as string);
+      conn.socket.on('error', (error: Error) => {
+        req.log.error(error, 'WebSocket error in approval stream');
+        connectionManager.removeConnection(connectionId);
       });
     }
   );
@@ -809,12 +987,12 @@ export const aiRoutes: FastifyPluginAsync = async (fastify): Promise<void> => {
    * GET /api/v1/ai/mcp-tools
    * List available SDK MCP tools
    */
-  fastify.get(
+  fastify.get<{ Reply: MCPToolsResponse }>(
     '/api/v1/ai/mcp-tools',
     process.env.NODE_ENV === 'test'
       ? {}
       : {
-          preHandler: webPortalAuthHook,
+          preHandler: webPortalAuthHook as unknown as typeof testPreHandler,
         },
     async (_request: FastifyRequest, reply: FastifyReply) => {
       try {
@@ -868,7 +1046,7 @@ export const aiRoutes: FastifyPluginAsync = async (fastify): Promise<void> => {
           totalTools: toolsWithMetadata.length,
         });
       } catch (error) {
-        request.log.error(error, 'Failed to list MCP tools');
+        console.error('Failed to list MCP tools:', error);
         return reply.status(500).send({
           error: 'Failed to list tools',
           message: error instanceof Error ? error.message : 'Unknown error',
@@ -876,4 +1054,6 @@ export const aiRoutes: FastifyPluginAsync = async (fastify): Promise<void> => {
       }
     }
   );
+
+  done();
 };
