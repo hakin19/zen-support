@@ -941,27 +941,52 @@ export const aiRoutes: FastifyPluginAsync = async (
             if (message.type === 'approval_response') {
               const { approvalId, approved, reason, modifiedInput } = message;
 
-              // Update approval request
-              await supabase
-                .from('approval_requests')
-                .update({
-                  status: approved ? 'approved' : 'denied',
-                  approval_reason: reason,
-                  approved_by: userId,
-                  approved_at: new Date().toISOString(),
-                  modified_input: modifiedInput,
-                })
-                .eq('id', approvalId);
+              // Try to handle via permission handler first (for SDK approvals)
+              // If it fails, fall back to direct database update (for script approvals)
+              let handledByPermissionHandler = false;
 
-              // Notify permission handler
               if (approvalId) {
-                await permissionHandler.handleApprovalResponse(
-                  approvalId,
-                  approved ? 'approved' : 'denied',
-                  {
-                    reason,
-                  }
-                );
+                try {
+                  // This will handle SDK-originated approvals that are in memory
+                  await permissionHandler.handleApprovalResponse(
+                    approvalId,
+                    approved ? 'approved' : 'denied',
+                    {
+                      reason,
+                      modifiedInput: modifiedInput as Record<string, unknown>,
+                    }
+                  );
+                  handledByPermissionHandler = true;
+                } catch (error) {
+                  // Not in permission handler memory - likely a script approval
+                  req.log.debug(
+                    'Approval not in permission handler, updating database directly',
+                    {
+                      approvalId,
+                      error: error instanceof Error ? error.message : 'Unknown',
+                    }
+                  );
+                }
+              }
+
+              // For script approvals (or if permission handler failed), update database directly
+              if (!handledByPermissionHandler) {
+                const { error: updateError } = await supabase
+                  .from('approval_requests')
+                  .update({
+                    status: approved ? 'approved' : 'denied',
+                    approval_reason: reason,
+                    approved_by: userId,
+                    approved_at: new Date().toISOString(),
+                    modified_input: modifiedInput,
+                  })
+                  .eq('id', approvalId);
+
+                if (updateError) {
+                  throw new Error(
+                    `Failed to update approval: ${updateError.message}`
+                  );
+                }
               }
 
               socket.send(
