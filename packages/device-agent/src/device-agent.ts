@@ -76,13 +76,16 @@ export class DeviceAgent extends EventEmitter {
   private setupScriptExecutorEventHandlers(): void {
     if (!this.#scriptExecutor) return;
 
-    this.#scriptExecutor.on('execution:cancelled', data => {
-      console.log(`🚫 Script execution cancelled: ${data.packageId}`);
-      // Send cancellation acknowledgment back to server
-      this.sendCancellationAck(data.packageId).catch(error => {
-        console.error('Failed to send cancellation ack:', error);
-      });
-    });
+    this.#scriptExecutor.on(
+      'execution:cancelled',
+      (data: { packageId: string }) => {
+        console.log(`🚫 Script execution cancelled: ${data.packageId}`);
+        // Send cancellation acknowledgment back to server
+        this.sendCancellationAck(data.packageId).catch(error => {
+          console.error('Failed to send cancellation ack:', error);
+        });
+      }
+    );
   }
 
   private async sendCancellationAck(packageId: string): Promise<void> {
@@ -105,8 +108,30 @@ export class DeviceAgent extends EventEmitter {
     }
   }
 
-  private async handleScriptCommand(command: any): Promise<void> {
-    /* eslint-disable @typescript-eslint/no-unsafe-assignment */
+  private async handleScriptCommand(command: unknown): Promise<void> {
+    interface ScriptCommand {
+      type: 'EXECUTE_SCRIPT' | 'CANCEL_EXECUTION';
+      packageId: string;
+      content?: string;
+      checksum?: string;
+      timeout?: number;
+    }
+
+    const isScriptCommand = (c: unknown): c is ScriptCommand => {
+      return (
+        typeof c === 'object' &&
+        c !== null &&
+        'type' in c &&
+        'packageId' in c &&
+        typeof (c as { type: unknown }).type === 'string' &&
+        typeof (c as { packageId: unknown }).packageId === 'string'
+      );
+    };
+
+    if (!isScriptCommand(command)) {
+      return;
+    }
+
     const { type, packageId, content, checksum, timeout } = command;
 
     if (type === 'EXECUTE_SCRIPT') {
@@ -179,7 +204,6 @@ export class DeviceAgent extends EventEmitter {
         );
       }
     }
-    /* eslint-enable @typescript-eslint/no-unsafe-assignment */
   }
 
   private setupApiClientEventHandlers(): void {
@@ -232,12 +256,12 @@ export class DeviceAgent extends EventEmitter {
 
     // Command events - convert CommandMessage to DiagnosticCommand format
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    this.#apiClient.on('command', (command: any) => {
+    this.#apiClient.on('command', (command: unknown) => {
       /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
       // Check for special command types that need different handling
       if (
-        command.type === 'EXECUTE_SCRIPT' ||
-        command.type === 'CANCEL_EXECUTION'
+        (command as { type?: string })?.type === 'EXECUTE_SCRIPT' ||
+        (command as { type?: string })?.type === 'CANCEL_EXECUTION'
       ) {
         void this.handleScriptCommand(command).catch((error: unknown) => {
           console.error('Script command error:', error);
@@ -245,11 +269,11 @@ export class DeviceAgent extends EventEmitter {
         });
       } else {
         const diagnosticCommand: DiagnosticCommand = {
-          id: command.id,
-          type: command.type,
-          payload: command.parameters ?? {},
-          createdAt: command.timestamp,
-          claimToken: command.claimToken,
+          id: (command as { id: string }).id,
+          type: (command as { type: string }).type,
+          payload: (command as { parameters?: unknown }).parameters ?? {},
+          createdAt: (command as { timestamp: string }).timestamp,
+          claimToken: (command as { claimToken: string }).claimToken,
         };
         /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
         console.log(

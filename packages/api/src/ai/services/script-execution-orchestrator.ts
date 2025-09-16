@@ -1,5 +1,7 @@
-import { randomUUID } from 'crypto';
 import { EventEmitter } from 'events';
+
+import { getSupabase } from '@aizen/shared';
+import { getRedisClient } from '@aizen/shared/utils/redis-client';
 
 import { ScriptExecutionService } from './script-execution.service';
 
@@ -130,7 +132,6 @@ export class ScriptExecutionOrchestrator extends EventEmitter {
 
     // Build properly typed SDKAssistantMessage
     const assistantMessage: SDKAssistantMessage = {
-      uuid: randomUUID(),
       type: 'assistant',
       session_id: sessionId,
       message: sdkMessage.message,
@@ -173,7 +174,6 @@ export class ScriptExecutionOrchestrator extends EventEmitter {
       // Check timeout
       if (Date.now() - startTime > maxDuration) {
         const timeoutMessage: SDKAssistantMessage = {
-          uuid: randomUUID(),
           type: 'assistant',
           session_id: sessionId,
           message: {
@@ -205,7 +205,6 @@ export class ScriptExecutionOrchestrator extends EventEmitter {
 
         // Format status update as properly typed SDK message
         const statusMessage: SDKAssistantMessage = {
-          uuid: randomUUID(),
           type: 'assistant',
           session_id: sessionId,
           message: {
@@ -320,10 +319,8 @@ export class ScriptExecutionOrchestrator extends EventEmitter {
       return false;
     }
 
-    const { getRedisClient } = await import('@aizen/shared/utils/redis-client');
     const redis = getRedisClient();
     const redisClient = redis.getClient();
-    const { getSupabase } = await import('@aizen/shared');
     const supabase = getSupabase();
 
     const now = new Date().toISOString();
@@ -359,7 +356,7 @@ export class ScriptExecutionOrchestrator extends EventEmitter {
     // 2. Handle cancellation based on current state
     if (immediatelyCancelled) {
       // Queued items can be cancelled immediately
-      const { error } = await (supabase as any)
+      const { error } = await supabase
         .from('remediation_scripts')
         .update({
           status: 'cancelled',
@@ -388,7 +385,7 @@ export class ScriptExecutionOrchestrator extends EventEmitter {
     } else if (status.status === 'executing') {
       // Executing scripts need two-phase cancellation
       // Phase 1: Mark as cancellation_requested and notify device
-      const { error: updateError } = await (supabase as any)
+      const { error: updateError } = await supabase
         .from('remediation_scripts')
         .update({
           status: 'cancellation_requested',
@@ -436,55 +433,58 @@ export class ScriptExecutionOrchestrator extends EventEmitter {
   /**
    * Start a timeout to force cancellation if device doesn't acknowledge
    */
-  private startCancellationTimeout(packageId: string, deviceId: string) {
+  private startCancellationTimeout(packageId: string, deviceId: string): void {
     const CANCELLATION_TIMEOUT_MS = 30000; // 30 seconds
 
-    setTimeout(async () => {
-      const { getSupabase } = await import('@aizen/shared');
-      const supabase = getSupabase();
+    setTimeout((): void => {
+      void (async (): Promise<void> => {
+        const supabase = getSupabase();
 
-      // Check if still in cancellation_requested state
-      const { data, error } = await (supabase as any)
-        .from('remediation_scripts')
-        .select('status')
-        .eq('id', packageId)
-        .single();
-
-      if (!error && data?.status === 'cancellation_requested') {
-        // Force cancellation after timeout
-        await (supabase as any)
+        // Check if still in cancellation_requested state
+        const { data, error } = await supabase
           .from('remediation_scripts')
-          .update({
-            status: 'cancelled',
-            cancellation_confirmed_at: new Date().toISOString(),
-            cancellation_reason: 'timeout_no_device_ack',
-            execution_result: {
-              error:
-                'Execution cancelled by timeout (device did not acknowledge)',
-              completedAt: new Date().toISOString(),
-            },
-          })
-          .eq('id', packageId);
+          .select('status')
+          .eq('id', packageId)
+          .single();
 
-        this.emit('execution:cancelled', {
-          packageId,
-          deviceId,
-          reason: 'timeout',
-        });
-      }
+        if (!error && data?.status === 'cancellation_requested') {
+          // Force cancellation after timeout
+          await supabase
+            .from('remediation_scripts')
+            .update({
+              status: 'cancelled',
+              cancellation_confirmed_at: new Date().toISOString(),
+              cancellation_reason: 'timeout_no_device_ack',
+              execution_result: {
+                error:
+                  'Execution cancelled by timeout (device did not acknowledge)',
+                completedAt: new Date().toISOString(),
+              },
+            })
+            .eq('id', packageId);
+
+          this.emit('execution:cancelled', {
+            packageId,
+            deviceId,
+            reason: 'timeout',
+          });
+        }
+      })();
     }, CANCELLATION_TIMEOUT_MS);
   }
 
   /**
    * Handle cancellation acknowledgment from device
    */
-  async handleCancellationAck(packageId: string, deviceId: string) {
-    const { getSupabase } = await import('@aizen/shared');
+  async handleCancellationAck(
+    packageId: string,
+    deviceId: string
+  ): Promise<boolean> {
     const supabase = getSupabase();
     const now = new Date().toISOString();
 
     // Update to cancelled state after device acknowledgment
-    const { error } = await (supabase as any)
+    const { error } = await supabase
       .from('remediation_scripts')
       .update({
         status: 'cancelled',

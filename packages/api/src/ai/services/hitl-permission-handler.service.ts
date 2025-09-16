@@ -191,15 +191,14 @@ export class HITLPermissionHandler extends EventEmitter {
     // Check if suggestions are provided as an alternative
     if (options.suggestions && options.suggestions.length > 0) {
       // Auto-approve when suggestions are provided and surface them to the caller
-      return {
-        behavior: 'allow' as const,
+      const result: PermissionResult & {
+        updatedPermissions?: PermissionUpdate[];
+      } = {
+        behavior: 'allow',
         updatedInput: input,
-        // Non-SDK field used by tests to verify suggestions were propagated
-        ...(options.suggestions && {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          updatedPermissions: options.suggestions as any,
-        }),
-      } as PermissionResult;
+      };
+      result.updatedPermissions = options.suggestions;
+      return result;
     }
 
     // Require human approval

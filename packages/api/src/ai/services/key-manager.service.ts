@@ -39,7 +39,7 @@ export class KeyManagerService {
         if (keyBuffer.length === 32) {
           return new Uint8Array(keyBuffer);
         }
-      } catch (error) {
+      } catch {
         if (process.env.NODE_ENV === 'production') {
           throw new Error(
             'Invalid SCRIPT_SIGNING_KEY format. Expected base64-encoded 32-byte key.'

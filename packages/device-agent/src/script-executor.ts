@@ -161,7 +161,7 @@ export class ScriptExecutor extends EventEmitter {
       let stderr = '';
       const maxOutputSize = 1024 * 1024; // 1MB max per stream
 
-      child.stdout.on('data', data => {
+      child.stdout?.on('data', (data: Buffer) => {
         const chunk = data.toString();
         if (stdout.length + chunk.length <= maxOutputSize) {
           stdout += chunk;
@@ -171,7 +171,7 @@ export class ScriptExecutor extends EventEmitter {
         }
       });
 
-      child.stderr.on('data', data => {
+      child.stderr?.on('data', (data: Buffer) => {
         const chunk = data.toString();
         if (stderr.length + chunk.length <= maxOutputSize) {
           stderr += chunk;

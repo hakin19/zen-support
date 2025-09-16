@@ -130,9 +130,7 @@ export class ScriptExecutionService {
     scriptPackage: ScriptPackage,
     request: ScriptExecutionRequest
   ): Promise<void> {
-    const { error } = await (this.supabase as any)
-      .from('remediation_scripts')
-      .insert({
+    const { error } = await this.supabase.from('remediation_scripts').insert({
       id: scriptPackage.id,
       session_id: request.sessionId,
       device_id: request.deviceId,
@@ -197,7 +195,7 @@ export class ScriptExecutionService {
     // If both operations failed, update database and throw error
     if (!queueSuccess && !notifySuccess) {
       // Update database status to indicate queueing failure
-      await (this.supabase as any)
+      await this.supabase
         .from('remediation_scripts')
         .update({
           status: 'failed',
@@ -288,7 +286,7 @@ export class ScriptExecutionService {
     deviceId: string
   ): Promise<ScriptPackage | null> {
     // Get package from database
-    const { data, error } = await (this.supabase as any)
+    const { data, error } = await this.supabase
       .from('remediation_scripts')
       .select('*')
       .eq('id', packageId)
@@ -327,7 +325,7 @@ export class ScriptExecutionService {
     }
 
     // Update status to executing
-    const { error: updateError } = await (this.supabase as any)
+    const { error: updateError } = await this.supabase
       .from('remediation_scripts')
       .update({
         status: 'executing',
@@ -356,7 +354,7 @@ export class ScriptExecutionService {
     const processedResult = this.packager.processExecutionResult(result);
 
     // Update database
-    const { error: updateError } = await (this.supabase as any)
+    const { error: updateError } = await this.supabase
       .from('remediation_scripts')
       .update({
         status: result.exitCode === 0 ? 'executed' : 'failed',
@@ -393,7 +391,7 @@ export class ScriptExecutionService {
    */
   async getExecutionStatus(packageId: string): Promise<ExecutionStatus | null> {
     // Get package from database
-    const { data, error } = await (this.supabase as any)
+    const { data, error } = await this.supabase
       .from('remediation_scripts')
       .select('*')
       .eq('id', packageId)
