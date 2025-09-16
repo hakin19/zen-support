@@ -1,6 +1,16 @@
 -- Add remediation_scripts table to support script generation and validation
 -- This table stores generated remediation scripts with their manifests and validation status
 
+-- Ensure the update_updated_at_column function exists (created in earlier migrations)
+-- This is safe to call multiple times as it uses CREATE OR REPLACE
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
 CREATE TABLE IF NOT EXISTS remediation_scripts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   session_id TEXT NOT NULL,
@@ -111,7 +121,7 @@ CREATE POLICY script_validations_create_policy
 
 -- Add trigger for updated_at
 CREATE TRIGGER update_remediation_scripts_updated_at BEFORE UPDATE ON remediation_scripts
-  FOR EACH ROW EXECUTE PROCEDURE trigger_set_updated_at();
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- Add constraint to ensure manifest has required fields
 ALTER TABLE remediation_scripts ADD CONSTRAINT valid_manifest
