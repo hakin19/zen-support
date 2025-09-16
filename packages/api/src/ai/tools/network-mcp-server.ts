@@ -38,8 +38,8 @@ import {
   type PerformanceMonitorInput,
 } from './network-mcp-tools';
 
-// Import CallToolResult from shared types instead of defining locally
-import type { CallToolResult } from '../types/sdk-types';
+// Import CallToolResult from SDK message validation
+import type { CallToolResult } from '../schemas/sdk-message-validation';
 
 /**
  * Create ping test tool
