@@ -496,8 +496,7 @@ You are generating remediation scripts for network devices. Requirements:
    */
   static validateAllToolConfigs(): void {
     Object.entries(TOOL_RISK_LEVELS).forEach(([name, cfg]) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (this as any).validateToolConfig(name, cfg);
+      this.validateToolConfig(name, cfg);
     });
   }
 
@@ -506,7 +505,7 @@ You are generating remediation scripts for network devices. Requirements:
    * Intentionally kept as a simple helper for tests.
    */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private static validateToolConfig(name: string, cfg: any): boolean {
+  static validateToolConfig(name: string, cfg: any): boolean {
     const hasFlag = cfg?.alwaysAllow || cfg?.alwaysDeny || cfg?.requireApproval;
     if (!hasFlag) {
       console.error(

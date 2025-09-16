@@ -1,4 +1,4 @@
-import { getSupabase } from '@aizen/shared';
+import { getSupabaseAdminClient } from '@aizen/shared/utils/supabase-client';
 import { getRedisClient } from '@aizen/shared/utils/redis-client';
 
 import { sanitizeString } from '../../utils/pii-sanitizer';
@@ -77,7 +77,8 @@ export class ScriptExecutionService {
   private packager: ScriptPackagerService;
   private redis = getRedisClient();
   private redisClient: RedisClientType = getRedisClient().getClient();
-  private supabase = getSupabase();
+  // Use admin client to avoid tight table-name typing while RLS is enforced at API levels
+  private supabase = getSupabaseAdminClient();
 
   constructor() {
     this.packager = new ScriptPackagerService();

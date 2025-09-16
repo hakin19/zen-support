@@ -143,6 +143,10 @@ export class DeviceAgent extends EventEmitter {
       console.log(`🚀 Executing script package: ${packageId}`);
 
       try {
+        if (typeof content !== 'string' || typeof checksum !== 'string') {
+          console.error('Invalid script command payload: missing content/checksum');
+          return;
+        }
         const result = await this.#scriptExecutor.execute({
           packageId,
           deviceId: this.#config.deviceId,

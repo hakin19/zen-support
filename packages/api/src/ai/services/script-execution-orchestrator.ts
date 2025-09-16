@@ -1,6 +1,7 @@
+import { randomUUID } from 'crypto';
 import { EventEmitter } from 'events';
 
-import { getSupabase } from '@aizen/shared';
+import { getSupabaseAdminClient } from '@aizen/shared/utils/supabase-client';
 import { getRedisClient } from '@aizen/shared/utils/redis-client';
 
 import { ScriptExecutionService } from './script-execution.service';
@@ -132,6 +133,7 @@ export class ScriptExecutionOrchestrator extends EventEmitter {
 
     // Build properly typed SDKAssistantMessage
     const assistantMessage: SDKAssistantMessage = {
+      uuid: randomUUID(),
       type: 'assistant',
       session_id: sessionId,
       message: sdkMessage.message,
@@ -174,6 +176,7 @@ export class ScriptExecutionOrchestrator extends EventEmitter {
       // Check timeout
       if (Date.now() - startTime > maxDuration) {
         const timeoutMessage: SDKAssistantMessage = {
+          uuid: randomUUID(),
           type: 'assistant',
           session_id: sessionId,
           message: {
@@ -205,6 +208,7 @@ export class ScriptExecutionOrchestrator extends EventEmitter {
 
         // Format status update as properly typed SDK message
         const statusMessage: SDKAssistantMessage = {
+          uuid: randomUUID(),
           type: 'assistant',
           session_id: sessionId,
           message: {
@@ -321,7 +325,7 @@ export class ScriptExecutionOrchestrator extends EventEmitter {
 
     const redis = getRedisClient();
     const redisClient = redis.getClient();
-    const supabase = getSupabase();
+    const supabase = getSupabaseAdminClient();
 
     const now = new Date().toISOString();
     let immediatelyCancelled = false;
@@ -438,7 +442,7 @@ export class ScriptExecutionOrchestrator extends EventEmitter {
 
     setTimeout((): void => {
       void (async (): Promise<void> => {
-        const supabase = getSupabase();
+        const supabase = getSupabaseAdminClient();
 
         // Check if still in cancellation_requested state
         const { data, error } = await supabase
@@ -480,7 +484,7 @@ export class ScriptExecutionOrchestrator extends EventEmitter {
     packageId: string,
     deviceId: string
   ): Promise<boolean> {
-    const supabase = getSupabase();
+    const supabase = getSupabaseAdminClient();
     const now = new Date().toISOString();
 
     // Update to cancelled state after device acknowledgment
