@@ -144,7 +144,9 @@ export class DeviceAgent extends EventEmitter {
 
       try {
         if (typeof content !== 'string' || typeof checksum !== 'string') {
-          console.error('Invalid script command payload: missing content/checksum');
+          console.error(
+            'Invalid script command payload: missing content/checksum'
+          );
           return;
         }
         const result = await this.#scriptExecutor.execute({
@@ -259,9 +261,7 @@ export class DeviceAgent extends EventEmitter {
     });
 
     // Command events - convert CommandMessage to DiagnosticCommand format
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     this.#apiClient.on('command', (command: unknown) => {
-      /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
       // Check for special command types that need different handling
       if (
         (command as { type?: string })?.type === 'EXECUTE_SCRIPT' ||
@@ -279,7 +279,6 @@ export class DeviceAgent extends EventEmitter {
           createdAt: (command as { timestamp: string }).timestamp,
           claimToken: (command as { claimToken: string }).claimToken,
         };
-        /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
         console.log(
           `📋 Command received via WebSocket: ${diagnosticCommand.type} (${diagnosticCommand.id})`
         );

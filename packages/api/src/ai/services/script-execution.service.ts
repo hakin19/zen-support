@@ -1,5 +1,5 @@
-import { getSupabaseAdminClient } from '@aizen/shared/utils/supabase-client';
 import { getRedisClient } from '@aizen/shared/utils/redis-client';
+import { getSupabaseAdminClient } from '@aizen/shared/utils/supabase-client';
 
 import { sanitizeString } from '../../utils/pii-sanitizer';
 import { validateManifest } from '../schemas/manifest.schema';
@@ -10,6 +10,12 @@ import type { ScriptPackage, ExecutionResult } from './script-packager.service';
 import type { ScriptManifest } from '../schemas/manifest.schema';
 import type { SDKAssistantMessage } from '@anthropic-ai/claude-code';
 import type { RedisClientType } from 'redis';
+
+// Minimal shape for Supabase query results used in this service
+interface SupabaseQueryResult<T> {
+  data: T | null;
+  error: { message: string } | null;
+}
 
 /**
  * Script execution request from AI orchestrator
@@ -287,18 +293,20 @@ export class ScriptExecutionService {
     deviceId: string
   ): Promise<ScriptPackage | null> {
     // Get package from database
-    const { data, error } = await this.supabase
+    const res1 = (await this.supabase
       .from('remediation_scripts')
       .select('*')
       .eq('id', packageId)
       .eq('device_id', deviceId)
-      .single();
+      .single()) as SupabaseQueryResult<RemediationScriptRecord>;
+    const data = res1.data;
+    const error = res1.error;
 
     if (error || !data) {
       return null;
     }
 
-    const record = data as RemediationScriptRecord;
+    const record = data;
 
     // Reconstruct package
     const scriptPackage: ScriptPackage = {
@@ -326,13 +334,14 @@ export class ScriptExecutionService {
     }
 
     // Update status to executing
-    const { error: updateError } = await this.supabase
+    const res2 = (await this.supabase
       .from('remediation_scripts')
       .update({
         status: 'executing',
         executed_at: new Date().toISOString(),
       })
-      .eq('id', packageId);
+      .eq('id', packageId)) as { error: { message: string } | null };
+    const updateError = res2.error;
 
     if (updateError) {
       throw new Error(
@@ -355,7 +364,7 @@ export class ScriptExecutionService {
     const processedResult = this.packager.processExecutionResult(result);
 
     // Update database
-    const { error: updateError } = await this.supabase
+    const res3 = (await this.supabase
       .from('remediation_scripts')
       .update({
         status: result.exitCode === 0 ? 'executed' : 'failed',
@@ -368,7 +377,8 @@ export class ScriptExecutionService {
           error: processedResult.error,
         },
       })
-      .eq('id', result.packageId);
+      .eq('id', result.packageId)) as { error: { message: string } | null };
+    const updateError = res3.error;
 
     if (updateError) {
       throw new Error(
@@ -392,17 +402,19 @@ export class ScriptExecutionService {
    */
   async getExecutionStatus(packageId: string): Promise<ExecutionStatus | null> {
     // Get package from database
-    const { data, error } = await this.supabase
+    const res4 = (await this.supabase
       .from('remediation_scripts')
       .select('*')
       .eq('id', packageId)
-      .single();
+      .single()) as SupabaseQueryResult<RemediationScriptRecord>;
+    const data = res4.data;
+    const error = res4.error;
 
     if (error || !data) {
       return null;
     }
 
-    const record = data as RemediationScriptRecord;
+    const record = data;
 
     // Map database status to execution status
     const statusMap: Record<string, ExecutionStatus['status']> = {

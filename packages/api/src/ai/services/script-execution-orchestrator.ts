@@ -1,8 +1,8 @@
 import { randomUUID } from 'crypto';
 import { EventEmitter } from 'events';
 
-import { getSupabaseAdminClient } from '@aizen/shared/utils/supabase-client';
 import { getRedisClient } from '@aizen/shared/utils/redis-client';
+import { getSupabaseAdminClient } from '@aizen/shared/utils/supabase-client';
 
 import { ScriptExecutionService } from './script-execution.service';
 
