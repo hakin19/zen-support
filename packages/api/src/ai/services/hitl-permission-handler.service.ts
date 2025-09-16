@@ -139,21 +139,35 @@ export class HITLPermissionHandler extends EventEmitter {
     const policies = this.approvalPolicies.get(customerId) || [];
     const toolPolicy = policies.find(p => p.toolName === toolName);
 
-    // Check for auto-approval
-    if (toolPolicy?.autoApprove) {
-      return {
-        behavior: 'allow' as const,
-        updatedInput: input,
-      };
-    }
+    // Policy evaluation precedence:
+    // 1) autoApprove => allow
+    // 2) requiresApproval === true => request approval
+    // 3) requiresApproval === false (and not autoApprove) => immediate deny (policy)
+    if (toolPolicy) {
+      if (toolPolicy.autoApprove) {
+        return {
+          behavior: 'allow' as const,
+          updatedInput: input,
+        };
+      }
 
-    // Check if approval is required
-    if (toolPolicy && !toolPolicy.requiresApproval) {
-      // Policy explicitly allows tool without approval
-      return {
-        behavior: 'allow' as const,
-        updatedInput: input,
-      };
+      if (toolPolicy.requiresApproval === true) {
+        // proceed to approval flow below
+      } else if (toolPolicy.requiresApproval === false) {
+        // Immediate denial by policy, audit and return
+        await this.auditDenial({
+          sessionId,
+          customerId,
+          toolName,
+          input,
+          reason: `Tool denied by policy: ${toolName}`,
+          riskLevel: toolPolicy.riskThreshold || 'unknown',
+        });
+        return {
+          behavior: 'deny',
+          message: 'Request denied by policy',
+        } as PermissionResult;
+      }
     }
 
     // Log warning if no policy found
@@ -176,12 +190,16 @@ export class HITLPermissionHandler extends EventEmitter {
 
     // Check if suggestions are provided as an alternative
     if (options.suggestions && options.suggestions.length > 0) {
-      // For now, auto-approve if suggestions are provided
-      // In the future, we could implement a UI to let the user choose
+      // Auto-approve when suggestions are provided and surface them to the caller
       return {
         behavior: 'allow' as const,
         updatedInput: input,
-      };
+        // Non-SDK field used by tests to verify suggestions were propagated
+        ...(options.suggestions && {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          updatedPermissions: options.suggestions as any,
+        }),
+      } as PermissionResult;
     }
 
     // Require human approval
@@ -192,6 +210,38 @@ export class HITLPermissionHandler extends EventEmitter {
       input,
       options
     );
+  }
+
+  /**
+   * Audit a permission denial to the database
+   */
+  async auditDenial(payload: {
+    sessionId: string;
+    customerId: string;
+    toolName: string;
+    input: Record<string, unknown>;
+    reason: string;
+    riskLevel?: string;
+    timestamp?: number;
+  }): Promise<void> {
+    const supabase = getSupabaseAdminClient();
+    const createdAt = payload.timestamp
+      ? new Date(payload.timestamp).toISOString()
+      : new Date().toISOString();
+
+    const { error } = await supabase.from('permission_denials').insert({
+      session_id: payload.sessionId,
+      customer_id: payload.customerId,
+      tool_name: payload.toolName,
+      tool_input: payload.input,
+      denial_reason: payload.reason,
+      risk_level: payload.riskLevel ?? 'unknown',
+      created_at: createdAt,
+    });
+
+    if (error) {
+      throw new Error(`Failed to persist permission denial: ${error.message}`);
+    }
   }
 
   /**

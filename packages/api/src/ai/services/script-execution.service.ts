@@ -1,13 +1,14 @@
 import { getSupabase } from '@aizen/shared';
 import { getRedisClient } from '@aizen/shared/utils/redis-client';
 
+import { sanitizeString } from '../../utils/pii-sanitizer';
 import { validateManifest } from '../schemas/manifest.schema';
 
 import { ScriptPackagerService } from './script-packager.service';
 
 import type { ScriptPackage, ExecutionResult } from './script-packager.service';
 import type { ScriptManifest } from '../schemas/manifest.schema';
-import type { SDKMessage } from '@anthropic-ai/claude-code';
+import type { SDKAssistantMessage } from '@anthropic-ai/claude-code';
 import type { RedisClientType } from 'redis';
 
 /**
@@ -28,7 +29,13 @@ export interface ScriptExecutionRequest {
 export interface ExecutionStatus {
   packageId: string;
   deviceId: string;
-  status: 'queued' | 'executing' | 'completed' | 'failed';
+  status:
+    | 'queued'
+    | 'executing'
+    | 'completed'
+    | 'failed'
+    | 'cancelled'
+    | 'cancellation_requested';
   queuePosition?: number;
   startedAt?: Date;
   completedAt?: Date;
@@ -123,7 +130,9 @@ export class ScriptExecutionService {
     scriptPackage: ScriptPackage,
     request: ScriptExecutionRequest
   ): Promise<void> {
-    const { error } = await this.supabase.from('remediation_scripts').insert({
+    const { error } = await (this.supabase as any)
+      .from('remediation_scripts')
+      .insert({
       id: scriptPackage.id,
       session_id: request.sessionId,
       device_id: request.deviceId,
@@ -156,6 +165,9 @@ export class ScriptExecutionService {
       enqueuedAt: new Date().toISOString(),
     });
 
+    let queueSuccess = false;
+    let notifySuccess = false;
+
     // Add to device-specific queue
     try {
       if (priority === 'high') {
@@ -163,6 +175,7 @@ export class ScriptExecutionService {
       } else {
         await this.redisClient.rPush(queueKey, packageData);
       }
+      queueSuccess = true;
     } catch (error) {
       console.error('Failed to queue script for device:', error);
     }
@@ -176,13 +189,43 @@ export class ScriptExecutionService {
           packageId: scriptPackage.id,
         })
       );
+      notifySuccess = true;
     } catch (error) {
       console.error('Failed to notify device:', error);
+    }
+
+    // If both operations failed, update database and throw error
+    if (!queueSuccess && !notifySuccess) {
+      // Update database status to indicate queueing failure
+      await (this.supabase as any)
+        .from('remediation_scripts')
+        .update({
+          status: 'failed',
+          execution_result: {
+            error: 'Failed to queue script for device execution',
+          },
+        })
+        .eq('id', scriptPackage.id);
+
+      throw new Error(
+        `Failed to queue script ${scriptPackage.id} for device ${deviceId}: Redis operations failed`
+      );
     }
   }
 
   /**
    * Get queue position for a package
+   *
+   * NOTE: Performance consideration - This method has O(n) complexity as it:
+   * 1. Fetches the entire queue from Redis (LRANGE 0 -1)
+   * 2. Iterates through all items to find the package
+   * 3. Parses JSON for each queue entry
+   *
+   * This is acceptable for small queues (<100 items) but should be optimized
+   * for larger scale deployments. Potential optimizations:
+   * - Use Redis LPOS command (Redis 6.0.6+) with consistent element format
+   * - Maintain a separate position index in Redis hash
+   * - Migrate to Redis Streams or sorted sets for built-in position tracking
    */
   private async getQueuePosition(
     deviceId: string,
@@ -245,7 +288,7 @@ export class ScriptExecutionService {
     deviceId: string
   ): Promise<ScriptPackage | null> {
     // Get package from database
-    const { data, error } = await this.supabase
+    const { data, error } = await (this.supabase as any)
       .from('remediation_scripts')
       .select('*')
       .eq('id', packageId)
@@ -284,13 +327,19 @@ export class ScriptExecutionService {
     }
 
     // Update status to executing
-    await this.supabase
+    const { error: updateError } = await (this.supabase as any)
       .from('remediation_scripts')
       .update({
         status: 'executing',
         executed_at: new Date().toISOString(),
       })
       .eq('id', packageId);
+
+    if (updateError) {
+      throw new Error(
+        `Failed to update script status to executing: ${updateError.message}`
+      );
+    }
 
     return scriptPackage;
   }
@@ -307,7 +356,7 @@ export class ScriptExecutionService {
     const processedResult = this.packager.processExecutionResult(result);
 
     // Update database
-    await this.supabase
+    const { error: updateError } = await (this.supabase as any)
       .from('remediation_scripts')
       .update({
         status: result.exitCode === 0 ? 'executed' : 'failed',
@@ -321,6 +370,12 @@ export class ScriptExecutionService {
         },
       })
       .eq('id', result.packageId);
+
+    if (updateError) {
+      throw new Error(
+        `Failed to update execution result: ${updateError.message}`
+      );
+    }
 
     // Notify AI orchestrator via Redis
     await this.redis.publish(
@@ -338,7 +393,7 @@ export class ScriptExecutionService {
    */
   async getExecutionStatus(packageId: string): Promise<ExecutionStatus | null> {
     // Get package from database
-    const { data, error } = await this.supabase
+    const { data, error } = await (this.supabase as any)
       .from('remediation_scripts')
       .select('*')
       .eq('id', packageId)
@@ -352,10 +407,16 @@ export class ScriptExecutionService {
 
     // Map database status to execution status
     const statusMap: Record<string, ExecutionStatus['status']> = {
+      pending_validation: 'queued',
+      validated: 'queued',
+      approved: 'queued',
+      rejected: 'failed',
       pending_execution: 'queued',
       executing: 'executing',
       executed: 'completed',
       failed: 'failed',
+      cancelled: 'cancelled',
+      cancellation_requested: 'cancellation_requested',
     };
 
     const status: ExecutionStatus = {
@@ -401,21 +462,43 @@ export class ScriptExecutionService {
   /**
    * Convert execution result to SDK message for AI orchestrator
    * @param result - Execution result
-   * @param sessionId - Session ID for context
-   * @returns SDK message for reporting back
+   * @returns Partial SDK message for reporting back
    */
   formatResultAsSDKMessage(
-    result: ExecutionResult,
-    sessionId: string
-  ): Partial<SDKMessage> {
+    result: ExecutionResult
+  ): Pick<SDKAssistantMessage, 'message'> {
+    // Maximum output size (100KB per output stream)
+    const MAX_OUTPUT_SIZE = 100 * 1024;
+
+    // Sanitize and truncate outputs
+    const sanitizeAndTruncate = (output: string, maxSize: number): string => {
+      // First sanitize for PII
+      const sanitized = sanitizeString(output);
+
+      // Then truncate if too large
+      if (sanitized.length > maxSize) {
+        const truncated = sanitized.substring(0, maxSize);
+        return `${truncated}\n\n[Output truncated - exceeded ${maxSize} characters]`;
+      }
+
+      return sanitized;
+    };
+
+    const sanitizedStdout = sanitizeAndTruncate(
+      result.stdout || '',
+      MAX_OUTPUT_SIZE
+    );
+    const sanitizedStderr = sanitizeAndTruncate(
+      result.stderr || '',
+      MAX_OUTPUT_SIZE
+    );
+
     const content =
       result.exitCode === 0
-        ? `Script execution completed successfully on device ${result.deviceId}.\n\nOutput:\n${result.stdout}`
-        : `Script execution failed on device ${result.deviceId}.\n\nExit code: ${result.exitCode}\nError output:\n${result.stderr}`;
+        ? `Script execution completed successfully on device ${result.deviceId}.\n\nOutput:\n${sanitizedStdout}`
+        : `Script execution failed on device ${result.deviceId}.\n\nExit code: ${result.exitCode}\nError output:\n${sanitizedStderr}`;
 
     return {
-      type: 'assistant' as const,
-      session_id: sessionId,
       message: {
         role: 'assistant',
         content: [
@@ -425,6 +508,6 @@ export class ScriptExecutionService {
           },
         ],
       },
-    } as Partial<SDKMessage>;
+    };
   }
 }

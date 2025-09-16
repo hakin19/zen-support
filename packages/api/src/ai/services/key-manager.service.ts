@@ -40,10 +40,15 @@ export class KeyManagerService {
           return new Uint8Array(keyBuffer);
         }
       } catch (error) {
-        console.error(
-          'Invalid SCRIPT_SIGNING_KEY format, generating new key:',
-          error
-        );
+        if (process.env.NODE_ENV === 'production') {
+          throw new Error(
+            'Invalid SCRIPT_SIGNING_KEY format. Expected base64-encoded 32-byte key.'
+          );
+        } else {
+          console.warn(
+            'Invalid SCRIPT_SIGNING_KEY format. Falling back to development seed (NOT FOR PRODUCTION).'
+          );
+        }
       }
     }
 
@@ -63,14 +68,23 @@ export class KeyManagerService {
       return new Uint8Array(seed);
     }
 
-    // In production, if no key is provided, generate one and log it
-    // This should be stored securely and reused
+    // In production, fail fast if no key is provided
+    // NEVER log private keys to console or logs
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error(
+        'CRITICAL: No SCRIPT_SIGNING_KEY environment variable found. ' +
+          'Production requires a pre-configured signing key. ' +
+          'Generate a key securely offline and store it in your secrets manager:\n' +
+          '  openssl rand -base64 32\n' +
+          'Then set SCRIPT_SIGNING_KEY environment variable with the value.'
+      );
+    }
+
+    // Only for local development if somehow neither test nor development env is set
     const newKey = randomBytes(32);
-    const base64Key = Buffer.from(newKey).toString('base64');
-    console.error(
-      'CRITICAL: No signing key found. Generated new key (store this securely):\n' +
-        `SCRIPT_SIGNING_KEY="${base64Key}"\n` +
-        'Add this to your environment variables to persist signing capabilities'
+    console.warn(
+      'WARNING: Generated ephemeral signing key for non-production use. ' +
+        'Set SCRIPT_SIGNING_KEY environment variable to persist signing capabilities.'
     );
     return new Uint8Array(newKey);
   }

@@ -253,8 +253,10 @@ describe('ScriptPackagerService', () => {
         packageId: 'pkg_123',
         deviceId: 'device_456',
         exitCode: 0,
-        stdout: 'API_KEY=secret123 password=hunter2',
-        stderr: 'token=abc123def',
+        stdout:
+          'API_KEY=sk-proj-abcd1234567890ABCDEFGHIJ1234567890 email@example.com 192.168.1.1 10.0.0.1',
+        stderr:
+          'token=ghp_1234567890abcdefghij1234567890abcdef AKIA1234567890ABCDEF',
         executionTime: 1500,
         completedAt: new Date(),
       };
@@ -263,8 +265,13 @@ describe('ScriptPackagerService', () => {
       const processed = service.processExecutionResult(result);
 
       // Assert
-      expect(processed.stdout).toBe('api_key=*** password=***');
-      expect(processed.stderr).toBe('token=***');
+      // Comprehensive sanitizer replaces various PII patterns
+      expect(processed.stdout).toContain('<API_KEY_REDACTED>');
+      expect(processed.stdout).toContain('<EMAIL_REDACTED>');
+      expect(processed.stdout).toContain('192.168.*.*'); // Private IP partially visible
+      expect(processed.stdout).toContain('10.0.*.*'); // Private IP partially visible
+      expect(processed.stderr).toContain('<API_KEY_REDACTED>');
+      expect(processed.stderr).toContain('<AWS_KEY_REDACTED>');
     });
 
     it('should handle empty output gracefully', async () => {
