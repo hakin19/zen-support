@@ -5,10 +5,12 @@
 
 /* eslint-disable @typescript-eslint/prefer-nullish-coalescing */
 
+import { randomUUID } from 'crypto';
 import { EventEmitter } from 'events';
 
 import { getSupabaseAdminClient } from '@aizen/shared/utils/supabase-client';
 
+import { sanitizeObject } from '../../utils/pii-sanitizer';
 import { NetworkMCPTools } from '../tools/network-mcp-tools';
 
 import type { WebSocketConnectionManager } from '../../services/websocket-connection-manager';
@@ -39,7 +41,7 @@ interface PendingApproval {
   timestampISO: string; // ISO-8601 string for DB consistency
   riskLevel: string; // Risk level for the tool operation
   reasoning?: string; // Optional reasoning for the request
-  suggestions?: Array<{ toolName: string; input: unknown; reason: string }>;
+  suggestions?: PermissionUpdate[];
 }
 
 interface ApprovalRequest {
@@ -104,21 +106,17 @@ export class HITLPermissionHandler extends EventEmitter {
     // Return SDK-compatible CanUseTool handler
     return async (
       toolName: string,
-      input: unknown,
+      input: Record<string, unknown>,
       options: {
-        signal?: AbortSignalLike;
-        suggestions?: Array<{
-          toolName: string;
-          input: unknown;
-          reason: string;
-        }>;
+        signal: AbortSignalLike;
+        suggestions?: PermissionUpdate[];
       }
     ): Promise<PermissionResult> => {
       return this.handleToolPermission(
         sessionId,
         customerId,
         toolName,
-        input as Record<string, unknown>,
+        input,
         options
       );
     };
@@ -134,7 +132,7 @@ export class HITLPermissionHandler extends EventEmitter {
     input: Record<string, unknown>,
     options: {
       signal?: AbortSignalLike;
-      suggestions?: Array<{ toolName: string; input: unknown; reason: string }>;
+      suggestions?: PermissionUpdate[];
     } = {}
   ): Promise<PermissionResult> {
     // Load policies for customer if not cached
@@ -150,6 +148,23 @@ export class HITLPermissionHandler extends EventEmitter {
       return {
         behavior: 'allow' as const,
         updatedInput: input,
+      };
+    }
+
+    // Check if immediate denial (requiresApproval = false means deny)
+    if (toolPolicy && toolPolicy.requiresApproval === false) {
+      const reason = `Tool ${toolName} denied by policy`;
+      await this.auditDenial({
+        sessionId,
+        customerId,
+        toolName,
+        input,
+        reason,
+        riskLevel: toolPolicy.riskThreshold,
+      });
+      return {
+        behavior: 'deny' as const,
+        message: reason,
       };
     }
 
@@ -175,11 +190,12 @@ export class HITLPermissionHandler extends EventEmitter {
     }
 
     // Check if suggestions are provided as an alternative
+    // For now, we'll auto-allow when suggestions are provided and pass them through
     if (options.suggestions && options.suggestions.length > 0) {
-      // Process suggestions and return them for user choice
       return {
-        behavior: 'suggestions' as const,
-        suggestions: options.suggestions,
+        behavior: 'allow' as const,
+        updatedInput: input,
+        updatedPermissions: options.suggestions,
       };
     }
 
@@ -206,10 +222,10 @@ export class HITLPermissionHandler extends EventEmitter {
       riskLevel?: string;
       reasoning?: string;
       signal?: AbortSignalLike;
-      suggestions?: Array<{ toolName: string; input: unknown; reason: string }>;
+      suggestions?: PermissionUpdate[];
     }
   ): Promise<PermissionResult> {
-    const approvalId = `approval-${Date.now()}-${Math.random().toString(36).substring(2)}`;
+    const approvalId = randomUUID();
     const timeout = options.timeout || this.defaultTimeout;
 
     return new Promise<PermissionResult>((resolve, reject) => {
@@ -339,9 +355,10 @@ export class HITLPermissionHandler extends EventEmitter {
     decision: 'approved' | 'denied' | 'modify' | 'deny',
     options: {
       reason?: string;
-      conditions?: Record<string, unknown>;
+      conditions?: PermissionUpdate[];
       modifiedInput?: Record<string, unknown>;
       interrupt?: boolean;
+      approvedBy?: string;
     } = {}
   ): Promise<void> {
     const pending = this.pendingApprovals.get(approvalId);
@@ -358,8 +375,14 @@ export class HITLPermissionHandler extends EventEmitter {
     this.pendingApprovals.delete(approvalId);
 
     try {
-      // Update audit record
-      await this.updateApprovalStatus(approvalId, decision, options.reason);
+      // Update audit record with all relevant fields
+      await this.updateApprovalStatus(
+        approvalId,
+        decision,
+        options.reason,
+        options.approvedBy,
+        options.modifiedInput
+      );
 
       // Resolve with proper PermissionResult
       if (decision === 'approved' || decision === 'modify') {
@@ -372,7 +395,6 @@ export class HITLPermissionHandler extends EventEmitter {
         pending.resolve({
           behavior: 'deny' as const,
           message: options.reason || 'Request denied by operator',
-          interrupt: options.interrupt,
         });
       }
 
@@ -628,9 +650,15 @@ export class HITLPermissionHandler extends EventEmitter {
       return;
     }
 
+    // Sanitize the request to remove any PII or sensitive data
+    const sanitizedRequest = {
+      ...request,
+      input: sanitizeObject(request.input),
+    };
+
     const message = {
       type: 'approval_request',
-      ...request,
+      ...sanitizedRequest,
     };
 
     // Broadcast to all approval connections and customer connections
@@ -657,9 +685,9 @@ export class HITLPermissionHandler extends EventEmitter {
       return;
     }
 
-    const promises = allConnections.map(conn =>
-      this.connectionManager.sendToConnection(conn.id, message)
-    );
+    const promises = allConnections
+      .map(conn => this.connectionManager?.sendToConnection(conn.id, message))
+      .filter(Boolean) as Promise<boolean>[];
 
     await Promise.all(promises);
   }
@@ -714,13 +742,58 @@ export class HITLPermissionHandler extends EventEmitter {
   }
 
   /**
+   * Audit a permission denial
+   * @throws Error if database operation fails
+   */
+  async auditDenial(denial: {
+    sessionId: string;
+    customerId: string;
+    toolName: string;
+    input: Record<string, unknown>;
+    reason: string;
+    riskLevel?: string;
+  }): Promise<void> {
+    try {
+      const supabase = getSupabaseAdminClient();
+      const { error } = await supabase.from('permission_denials').insert({
+        session_id: denial.sessionId,
+        customer_id: denial.customerId,
+        tool_name: denial.toolName,
+        tool_input: denial.input,
+        denial_reason: denial.reason,
+        risk_level: denial.riskLevel || 'unknown',
+        created_at: new Date().toISOString(),
+      });
+
+      if (error) {
+        console.error('[HITL] Failed to audit denial:', {
+          sessionId: denial.sessionId,
+          toolName: denial.toolName,
+          error: error.message,
+        });
+        throw new Error(
+          `Failed to audit denial: ${error.message || 'Database error'}`
+        );
+      }
+    } catch (error) {
+      console.error('[HITL] Audit denial failed:', {
+        toolName: denial.toolName,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      throw error;
+    }
+  }
+
+  /**
    * Update approval status in database
    * @throws Error if database operation fails
    */
   private async updateApprovalStatus(
     approvalId: string,
     status: 'approved' | 'denied' | 'modify' | 'deny' | 'timeout',
-    reason?: string
+    reason?: string,
+    approvedBy?: string,
+    modifiedInput?: Record<string, unknown>
   ): Promise<void> {
     try {
       const supabase = getSupabaseAdminClient();
@@ -740,6 +813,8 @@ export class HITLPermissionHandler extends EventEmitter {
         updated_at: string;
         decision_reason?: string;
         decided_at?: string;
+        approved_by?: string;
+        modified_input?: Record<string, unknown>;
       }
 
       const updateData: UpdateData = {
@@ -750,6 +825,16 @@ export class HITLPermissionHandler extends EventEmitter {
       // Add reason if provided
       if (reason) {
         updateData.decision_reason = reason;
+      }
+
+      // Add approved_by if provided
+      if (approvedBy) {
+        updateData.approved_by = approvedBy;
+      }
+
+      // Add modified_input if provided
+      if (modifiedInput) {
+        updateData.modified_input = modifiedInput;
       }
 
       // Set decided_at for final statuses (using mapped dbStatus)
@@ -818,7 +903,7 @@ export class HITLPermissionHandler extends EventEmitter {
       toolName: row.tool_name,
       input: row.tool_input,
       riskLevel: row.risk_level,
-      reasoning: row.reason,
+      reasoning: row.reason ?? undefined,
       timestamp: new Date(row.created_at).getTime(),
       timestampISO: row.created_at,
     }));
@@ -845,26 +930,45 @@ export class HITLPermissionHandler extends EventEmitter {
 
   /**
    * SDK-compatible canUseTool implementation
-   * Use this directly with Claude Code SDK when you don't have session context
+   * IMPORTANT: This method should ONLY be used in tests.
+   * In production, use createCanUseToolHandler() with proper session/customer context.
    */
   canUseTool: CanUseTool = async (
     toolName: string,
-    input: unknown,
+    input: Record<string, unknown>,
     options: {
-      signal?: AbortSignalLike;
-      suggestions?: Array<{ toolName: string; input: unknown; reason: string }>;
+      signal: AbortSignalLike;
+      suggestions?: PermissionUpdate[];
     }
   ): Promise<PermissionResult> => {
-    // For SDK compatibility without session context, use defaults
-    // In production, you should get these from the request context
-    const sessionId = 'default-session';
-    const customerId = 'default-customer';
+    // Safety check: prevent usage in production
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error(
+        'Direct canUseTool usage is not allowed in production. ' +
+          'Use createCanUseToolHandler() with proper session and customer context.'
+      );
+    }
+
+    // Only allow in test/development environments
+    if (
+      process.env.NODE_ENV !== 'test' &&
+      process.env.NODE_ENV !== 'development'
+    ) {
+      console.error(
+        '[SECURITY] canUseTool called with default values in non-test environment',
+        { environment: process.env.NODE_ENV, toolName }
+      );
+    }
+
+    // For SDK compatibility in tests, use defaults with clear warning
+    const sessionId = 'default-test-session';
+    const customerId = 'default-test-customer';
 
     return this.handleToolPermission(
       sessionId,
       customerId,
       toolName,
-      input as Record<string, unknown>,
+      input,
       options
     );
   };

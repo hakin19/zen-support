@@ -1,0 +1,1 @@
+Read @docs/prd.md , @docs/architecture.md , @docs/Claude-Code-SDK-TypeScript-SDK-reference and understand our codebase in full.

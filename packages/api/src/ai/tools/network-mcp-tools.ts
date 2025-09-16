@@ -5,8 +5,7 @@
 
 import { z } from 'zod';
 
-// TODO: Install @anthropic/claude-code-sdk in Task 2
-import type { CallToolResult } from '../types/sdk-types';
+import type { CallToolResult } from '../schemas/sdk-message-validation';
 
 /**
  * Base schema for all network MCP tools

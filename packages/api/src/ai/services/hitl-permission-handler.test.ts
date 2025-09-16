@@ -6,7 +6,7 @@ import type { CanUseTool, PermissionResult } from '@anthropic-ai/claude-code';
 vi.mock('@aizen/shared/utils/supabase-client', () => ({
   getSupabaseAdminClient: vi.fn(() => ({
     from: vi.fn(() => ({
-      insert: vi.fn(),
+      insert: vi.fn().mockResolvedValue({ data: null, error: null }),
       update: vi.fn(() => ({
         eq: vi.fn(() => ({
           data: null,
@@ -82,11 +82,10 @@ describe('HITLPermissionHandler Error Handling', () => {
 
       // Second mock for insert (audit request)
       mockSupabase.from.mockReturnValueOnce({
-        insert: vi
-          .fn()
-          .mockImplementation(data =>
-            Promise.resolve({ error: dbError, data: null })
-          ),
+        insert: vi.fn().mockResolvedValue({
+          error: dbError,
+          data: null,
+        }),
       });
 
       // Create canUseTool handler
@@ -129,11 +128,10 @@ describe('HITLPermissionHandler Error Handling', () => {
 
       // Second mock for insert (audit request)
       mockSupabase.from.mockReturnValueOnce({
-        insert: vi
-          .fn()
-          .mockImplementation(data =>
-            Promise.resolve({ error: dbError, data: null })
-          ),
+        insert: vi.fn().mockResolvedValue({
+          error: dbError,
+          data: null,
+        }),
       });
 
       // Create canUseTool handler
@@ -184,7 +182,7 @@ describe('HITLPermissionHandler Error Handling', () => {
 
       // Mock successful insert for audit
       mockSupabase.from.mockReturnValueOnce({
-        insert: vi.fn(data => Promise.resolve({ error: null, data: null })),
+        insert: vi.fn().mockResolvedValue({ error: null, data: null }),
       });
 
       // Create approval request
@@ -246,9 +244,10 @@ describe('HITLPermissionHandler Error Handling', () => {
 
   describe('timestamp consistency', () => {
     it('should use ISO-8601 format for database timestamps', async () => {
-      const insertSpy = vi.fn(data =>
-        Promise.resolve({ error: null, data: null })
-      );
+      const insertSpy = vi.fn().mockResolvedValue({
+        error: null,
+        data: null,
+      });
 
       // Mock for loadPolicies (select query)
       mockSupabase.from.mockReturnValueOnce({
@@ -335,12 +334,10 @@ describe('HITLPermissionHandler Error Handling', () => {
 
       // Mock database error for insert
       mockSupabase.from.mockReturnValueOnce({
-        insert: vi.fn(data =>
-          Promise.resolve({
-            error: { message: 'Network error', code: 'NETWORK_ERROR' },
-            data: null,
-          })
-        ),
+        insert: vi.fn().mockResolvedValue({
+          error: { message: 'Network error', code: 'NETWORK_ERROR' },
+          data: null,
+        }),
       });
 
       // Create canUseTool handler
@@ -376,12 +373,10 @@ describe('HITLPermissionHandler Error Handling', () => {
 
       // Mock database error for insert
       mockSupabase.from.mockReturnValueOnce({
-        insert: vi.fn(data =>
-          Promise.resolve({
-            error: { message: 'Timeout', code: 'TIMEOUT' },
-            data: null,
-          })
-        ),
+        insert: vi.fn().mockResolvedValue({
+          error: { message: 'Timeout', code: 'TIMEOUT' },
+          data: null,
+        }),
       });
 
       // Create canUseTool handler
@@ -424,9 +419,10 @@ describe('HITLPermissionHandler Error Handling', () => {
       });
 
       // Mock successful insert for audit
-      const insertSpy = vi.fn(data =>
-        Promise.resolve({ error: null, data: null })
-      );
+      const insertSpy = vi.fn().mockResolvedValue({
+        error: null,
+        data: null,
+      });
       mockSupabase.from.mockReturnValueOnce({
         insert: insertSpy,
       });
@@ -498,7 +494,7 @@ describe('HITLPermissionHandler Error Handling', () => {
 
       // Mock successful insert
       mockSupabase.from.mockReturnValueOnce({
-        insert: vi.fn(data => Promise.resolve({ error: null, data: null })),
+        insert: vi.fn().mockResolvedValue({ error: null, data: null }),
       });
 
       // Mock successful update
@@ -531,7 +527,9 @@ describe('HITLPermissionHandler Error Handling', () => {
       // Verify timeout event was emitted
       expect(eventSpy).toHaveBeenCalledWith(
         expect.objectContaining({
-          approvalId: expect.stringMatching(/^approval-/),
+          approvalId: expect.stringMatching(
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+          ),
           sessionId: 'session-123',
           customerId: 'customer-456',
           toolName: 'critical_tool',
@@ -566,7 +564,7 @@ describe('HITLPermissionHandler Error Handling', () => {
 
       // Mock successful insert
       mockSupabase.from.mockReturnValueOnce({
-        insert: vi.fn(data => Promise.resolve({ error: null, data: null })),
+        insert: vi.fn().mockResolvedValue({ error: null, data: null }),
       });
 
       // Mock failed update for timeout status
@@ -603,7 +601,9 @@ describe('HITLPermissionHandler Error Handling', () => {
       expect(consoleSpy).toHaveBeenCalledWith(
         '[HITL] Failed to update timeout status:',
         expect.objectContaining({
-          approvalId: expect.stringMatching(/^approval-/),
+          approvalId: expect.stringMatching(
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+          ),
           error: expect.stringContaining('Failed to update approval status'),
         })
       );

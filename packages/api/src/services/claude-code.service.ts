@@ -99,7 +99,6 @@ export class ClaudeCodeService {
     }
 
     // Set up event listeners (guard for test doubles)
-    // @ts-expect-error - some tests may mock orchestrator without EventEmitter methods
     if (
       this.orchestrator &&
       typeof (this.orchestrator as any).on === 'function'

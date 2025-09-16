@@ -19,21 +19,9 @@ import {
   FirewallRuleSchema,
   PerformanceMonitorSchema,
   NetworkMCPTools,
-  type PingTestInput,
-  type TracerouteInput,
-  type PortScanInput,
-  type DnsQueryInput,
-  type InterfaceStatusInput,
-  type ScriptGeneratorInput,
-  type ScriptValidatorInput,
-  type ConfigBackupInput,
-  type ConfigCompareInput,
-  type ServiceRestartInput,
-  type FirewallRuleInput,
-  type PerformanceMonitorInput,
 } from './network-mcp-tools';
 
-import type { CallToolResult } from '@anthropic-ai/claude-code';
+import type { CallToolResult } from '../schemas/sdk-message-validation';
 
 /**
  * Create ping test tool
@@ -41,16 +29,18 @@ import type { CallToolResult } from '@anthropic-ai/claude-code';
 const pingTestTool = tool(
   'ping_test',
   'Execute a ping test to check network connectivity',
-  PingTestSchema,
-  (args: PingTestInput): Promise<CallToolResult> => {
+  PingTestSchema.shape,
+  (args: Record<string, unknown>): Promise<CallToolResult> => {
     try {
       // Validate input
       const validation = NetworkMCPTools.validateInput('ping_test', args);
       if (!validation.valid) {
-        return NetworkMCPTools.createToolResult(
-          false,
-          '',
-          `Validation failed: ${validation.errors?.message}`
+        return Promise.resolve(
+          NetworkMCPTools.createToolResult(
+            false,
+            '',
+            `Validation failed: ${validation.errors?.message}`
+          )
         );
       }
 
@@ -67,12 +57,16 @@ const pingTestTool = tool(
         mdev: 3.2,
       };
 
-      return NetworkMCPTools.createToolResult(true, mockResult);
+      return Promise.resolve(
+        NetworkMCPTools.createToolResult(true, mockResult)
+      );
     } catch (error) {
-      return NetworkMCPTools.createToolResult(
-        false,
-        '',
-        error instanceof Error ? error.message : 'Unknown error'
+      return Promise.resolve(
+        NetworkMCPTools.createToolResult(
+          false,
+          '',
+          error instanceof Error ? error.message : 'Unknown error'
+        )
       );
     }
   }
@@ -84,8 +78,8 @@ const pingTestTool = tool(
 const tracerouteTool = tool(
   'traceroute',
   'Trace the network path to a destination',
-  TracerouteSchema,
-  (args: TracerouteInput): Promise<CallToolResult> => {
+  TracerouteSchema.shape,
+  (args: Record<string, unknown>): Promise<CallToolResult> => {
     try {
       const validation = NetworkMCPTools.validateInput('traceroute', args);
       if (!validation.valid) {
@@ -130,8 +124,8 @@ const tracerouteTool = tool(
 const portScanTool = tool(
   'port_scan',
   'Scan network ports for connectivity and service discovery',
-  PortScanSchema,
-  (args: PortScanInput): Promise<CallToolResult> => {
+  PortScanSchema.shape,
+  (args: Record<string, unknown>): Promise<CallToolResult> => {
     try {
       const validation = NetworkMCPTools.validateInput('port_scan', args);
       if (!validation.valid) {
@@ -173,8 +167,8 @@ const portScanTool = tool(
 const dnsQueryTool = tool(
   'dns_query',
   'Query DNS records for a domain',
-  DnsQuerySchema,
-  (args: DnsQueryInput): Promise<CallToolResult> => {
+  DnsQuerySchema.shape,
+  (args: Record<string, unknown>): Promise<CallToolResult> => {
     try {
       const validation = NetworkMCPTools.validateInput('dns_query', args);
       if (!validation.valid) {
@@ -219,8 +213,8 @@ const dnsQueryTool = tool(
 const interfaceStatusTool = tool(
   'interface_status',
   'Check network interface status and statistics',
-  InterfaceStatusSchema,
-  (args: InterfaceStatusInput): Promise<CallToolResult> => {
+  InterfaceStatusSchema.shape,
+  (args: Record<string, unknown>): Promise<CallToolResult> => {
     try {
       const validation = NetworkMCPTools.validateInput(
         'interface_status',
@@ -273,8 +267,8 @@ const interfaceStatusTool = tool(
 const scriptGeneratorTool = tool(
   'script_generator',
   'Generate safe network remediation scripts with rollback capabilities',
-  ScriptGeneratorSchema,
-  (args: ScriptGeneratorInput): Promise<CallToolResult> => {
+  ScriptGeneratorSchema.shape,
+  (args: Record<string, unknown>): Promise<CallToolResult> => {
     try {
       const validation = NetworkMCPTools.validateInput(
         'script_generator',
@@ -290,23 +284,35 @@ const scriptGeneratorTool = tool(
         );
       }
 
+      // Cast validated data to proper type
+      const validatedArgs = validation.data as {
+        scriptType: string;
+        targetPlatform: string;
+        safetyChecks: {
+          preConditions: string[];
+          postConditions: string[];
+          rollbackScript?: string;
+        };
+        actions: Array<{ action: string }>;
+      };
+
       // Mock implementation - in production, this would generate actual scripts
       const mockScript = `#!/bin/bash
 # Generated remediation script
-# Type: ${args.scriptType}
-# Platform: ${args.targetPlatform}
+# Type: ${validatedArgs.scriptType}
+# Platform: ${validatedArgs.targetPlatform}
 
 # Pre-flight checks
-${args.safetyChecks.preConditions.join('\n')}
+${validatedArgs.safetyChecks.preConditions.join('\n')}
 
 # Main actions
-${args.actions.map(a => `# ${a.action}`).join('\n')}
+${validatedArgs.actions.map(a => `# ${a.action}`).join('\n')}
 
 # Post-flight validation
-${args.safetyChecks.postConditions.join('\n')}
+${validatedArgs.safetyChecks.postConditions.join('\n')}
 
 # Rollback procedure available
-${args.safetyChecks.rollbackScript ?? '# No rollback defined'}
+${validatedArgs.safetyChecks.rollbackScript ?? '# No rollback defined'}
 `;
 
       return Promise.resolve(
@@ -335,8 +341,8 @@ ${args.safetyChecks.rollbackScript ?? '# No rollback defined'}
 const scriptValidatorTool = tool(
   'script_validator',
   'Validate scripts for safety and best practices',
-  ScriptValidatorSchema,
-  (args: ScriptValidatorInput): Promise<CallToolResult> => {
+  ScriptValidatorSchema.shape,
+  (args: Record<string, unknown>): Promise<CallToolResult> => {
     try {
       const validation = NetworkMCPTools.validateInput(
         'script_validator',
@@ -386,8 +392,8 @@ const scriptValidatorTool = tool(
 const configBackupTool = tool(
   'config_backup',
   'Create secure backups of network device configurations',
-  ConfigBackupSchema,
-  (args: ConfigBackupInput): Promise<CallToolResult> => {
+  ConfigBackupSchema.shape,
+  (args: Record<string, unknown>): Promise<CallToolResult> => {
     try {
       const validation = NetworkMCPTools.validateInput('config_backup', args);
       if (!validation.valid) {
@@ -400,12 +406,18 @@ const configBackupTool = tool(
         );
       }
 
+      // Cast validated data to proper type
+      const validatedArgs = validation.data as {
+        encryption: { enabled: boolean };
+        compression: boolean;
+      };
+
       // Mock implementation
       const mockResult = {
         backupId: `backup_${Date.now()}`,
         size: 45678,
-        encrypted: args.encryption.enabled,
-        compressed: args.compression,
+        encrypted: validatedArgs.encryption.enabled,
+        compressed: validatedArgs.compression,
         location: '/backups/config_backup.tar.gz',
         timestamp: new Date().toISOString(),
       };
@@ -431,8 +443,8 @@ const configBackupTool = tool(
 const configCompareTool = tool(
   'config_compare',
   'Compare network configurations to identify changes',
-  ConfigCompareSchema,
-  (args: ConfigCompareInput): Promise<CallToolResult> => {
+  ConfigCompareSchema.shape,
+  (args: Record<string, unknown>): Promise<CallToolResult> => {
     try {
       const validation = NetworkMCPTools.validateInput('config_compare', args);
       if (!validation.valid) {
@@ -483,8 +495,8 @@ const configCompareTool = tool(
 const serviceRestartTool = tool(
   'service_restart',
   'Restart network services with health checks',
-  ServiceRestartSchema,
-  (args: ServiceRestartInput): Promise<CallToolResult> => {
+  ServiceRestartSchema.shape,
+  (args: Record<string, unknown>): Promise<CallToolResult> => {
     try {
       const validation = NetworkMCPTools.validateInput('service_restart', args);
       if (!validation.valid) {
@@ -497,12 +509,18 @@ const serviceRestartTool = tool(
         );
       }
 
+      // Cast validated data to proper type
+      const validatedArgs = validation.data as {
+        serviceName: string;
+        healthCheck?: { enabled: boolean };
+      };
+
       // Mock implementation
       const mockResult = {
-        service: args.serviceName,
+        service: validatedArgs.serviceName,
         status: 'restarted',
         downtime: 2.5,
-        healthCheck: args.healthCheck?.enabled ? 'passed' : 'skipped',
+        healthCheck: validatedArgs.healthCheck?.enabled ? 'passed' : 'skipped',
         timestamp: new Date().toISOString(),
       };
 
@@ -527,8 +545,8 @@ const serviceRestartTool = tool(
 const firewallRuleTool = tool(
   'firewall_rule',
   'Manage firewall rules and security policies',
-  FirewallRuleSchema,
-  (args: FirewallRuleInput): Promise<CallToolResult> => {
+  FirewallRuleSchema.shape,
+  (args: Record<string, unknown>): Promise<CallToolResult> => {
     try {
       const validation = NetworkMCPTools.validateInput('firewall_rule', args);
       if (!validation.valid) {
@@ -541,12 +559,21 @@ const firewallRuleTool = tool(
         );
       }
 
+      // Cast validated data to proper type
+      const validatedArgs = validation.data as {
+        action: string;
+        rule?: { id?: string };
+        testConnection?: { enabled: boolean };
+      };
+
       // Mock implementation
       const mockResult = {
-        action: args.action,
-        ruleId: args.rule?.id ?? `rule_${Date.now()}`,
+        action: validatedArgs.action,
+        ruleId: validatedArgs.rule?.id ?? `rule_${Date.now()}`,
         status: 'applied',
-        testResult: args.testConnection?.enabled ? 'successful' : 'skipped',
+        testResult: validatedArgs.testConnection?.enabled
+          ? 'successful'
+          : 'skipped',
         timestamp: new Date().toISOString(),
       };
 
@@ -571,8 +598,8 @@ const firewallRuleTool = tool(
 const performanceMonitorTool = tool(
   'performance_monitor',
   'Monitor network performance metrics and thresholds',
-  PerformanceMonitorSchema,
-  (args: PerformanceMonitorInput): Promise<CallToolResult> => {
+  PerformanceMonitorSchema.shape,
+  (args: Record<string, unknown>): Promise<CallToolResult> => {
     try {
       const validation = NetworkMCPTools.validateInput(
         'performance_monitor',
@@ -588,16 +615,23 @@ const performanceMonitorTool = tool(
         );
       }
 
+      // Cast validated data to proper type
+      const validatedArgs = validation.data as {
+        metrics: string[];
+        duration: number;
+        interval: number;
+      };
+
       // Mock implementation
       const mockResult = {
-        metrics: args.metrics.map(metric => ({
+        metrics: validatedArgs.metrics.map((metric: string) => ({
           name: metric,
           value: Math.random() * 100,
           unit: metric === 'bandwidth' ? 'Mbps' : '%',
           status: 'normal',
         })),
-        duration: args.duration,
-        interval: args.interval,
+        duration: validatedArgs.duration,
+        interval: validatedArgs.interval,
         timestamp: new Date().toISOString(),
       };
 
@@ -655,6 +689,7 @@ export function createNetworkMcpServer(): ReturnType<
     ...server,
     name: 'aizen-network-tools',
     version: '1.0.0',
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     tools: [
       pingTestTool,
       tracerouteTool,
@@ -668,7 +703,8 @@ export function createNetworkMcpServer(): ReturnType<
       configBackupTool,
       serviceRestartTool,
       firewallRuleTool,
-    ],
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ] as any[], // Type mismatch between Zod schema types and SDK expectations
   };
 }
 
@@ -695,9 +731,8 @@ export const NETWORK_MCP_TOOLS = {
 /**
  * Get tool by name for testing
  */
-export function getNetworkTool(
-  name: string
-): ReturnType<typeof tool> | undefined {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function getNetworkTool(name: string): any {
   const tools = {
     ping_test: pingTestTool,
     traceroute: tracerouteTool,

@@ -45,8 +45,8 @@ function isPrivateIP(ip: string): boolean {
   const parts = ip.split('.');
   if (parts.length !== 4) return false;
 
-  const first = parseInt(parts[0]);
-  const second = parseInt(parts[1]);
+  const first = parseInt(parts[0] ?? '0');
+  const second = parseInt(parts[1] ?? '0');
 
   // 10.0.0.0/8
   if (first === 10) return true;
@@ -95,7 +95,7 @@ function sanitizeString(value: string): string {
  */
 export function sanitizeObject<T>(obj: T, depth = 0): T {
   // Prevent infinite recursion
-  if (depth > 10) return '<DEPTH_LIMIT>';
+  if (depth > 10) return '<DEPTH_LIMIT>' as T;
 
   if (obj === null || obj === undefined) {
     return obj;
