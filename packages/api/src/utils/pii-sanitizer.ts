@@ -61,7 +61,7 @@ function isPrivateIP(ip: string): boolean {
 /**
  * Sanitize a string value for PII
  */
-function sanitizeString(value: string): string {
+export function sanitizeString(value: string): string {
   let sanitized = value;
 
   // Replace IPs (but keep private ones partially visible)

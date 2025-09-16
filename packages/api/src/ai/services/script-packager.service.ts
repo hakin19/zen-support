@@ -1,5 +1,7 @@
 import { createHash, randomBytes } from 'crypto';
 
+import { sanitizeString } from '../../utils/pii-sanitizer';
+
 import { KeyManagerService } from './key-manager.service';
 
 import type { ScriptManifest } from '../schemas/manifest.schema';
@@ -177,25 +179,19 @@ export class ScriptPackagerService {
 
   /**
    * Sanitize output to remove sensitive information
+   * Uses comprehensive PII sanitization that removes:
+   * - IP addresses, MAC addresses, email addresses
+   * - Phone numbers, SSNs, credit cards
+   * - API keys, AWS keys, private keys
+   * - Passwords, tokens, and other secrets
    * @param output - Raw output string
    * @returns Sanitized output
    */
   private sanitizeOutput(output: string): string {
     if (!output) return '';
 
-    // Remove common sensitive patterns
-    let sanitized = output;
-
-    // Remove API keys
-    sanitized = sanitized.replace(/api[_-]?key[=:]\S+/gi, 'api_key=***');
-
-    // Remove passwords
-    sanitized = sanitized.replace(/password[=:]\S+/gi, 'password=***');
-
-    // Remove tokens
-    sanitized = sanitized.replace(/token[=:]\S+/gi, 'token=***');
-
-    return sanitized;
+    // Use comprehensive PII sanitizer
+    return sanitizeString(output);
   }
 
   /**

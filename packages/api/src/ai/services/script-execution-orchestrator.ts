@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { EventEmitter } from 'events';
 
 import { ScriptExecutionService } from './script-execution.service';
@@ -7,7 +8,10 @@ import type {
   ExecutionStatus,
 } from './script-execution.service';
 import type { ExecutionResult } from './script-packager.service';
-import type { SDKMessage } from '@anthropic-ai/claude-code';
+import type {
+  SDKMessage,
+  SDKAssistantMessage,
+} from '@anthropic-ai/claude-code';
 
 /**
  * Orchestrates script execution flow between AI, device agents, and SDK pipeline
@@ -97,7 +101,7 @@ export class ScriptExecutionOrchestrator extends EventEmitter {
   async processDeviceExecutionResult(
     result: ExecutionResult,
     sessionId: string
-  ): Promise<SDKMessage> {
+  ): Promise<SDKAssistantMessage> {
     // Process result through execution service
     const processedResult =
       await this.executionService.reportExecutionResult(result);
@@ -113,10 +117,8 @@ export class ScriptExecutionOrchestrator extends EventEmitter {
     }
 
     // Format as SDK message for AI pipeline
-    const sdkMessage = this.executionService.formatResultAsSDKMessage(
-      processedResult,
-      sessionId
-    );
+    const sdkMessage =
+      this.executionService.formatResultAsSDKMessage(processedResult);
 
     // Emit events for monitoring
     this.emit('execution:completed', {
@@ -126,22 +128,69 @@ export class ScriptExecutionOrchestrator extends EventEmitter {
       result: processedResult,
     });
 
-    // Return SDK message for AI orchestrator to process
-    return sdkMessage as SDKMessage;
+    // Build properly typed SDKAssistantMessage
+    const assistantMessage: SDKAssistantMessage = {
+      uuid: randomUUID(),
+      type: 'assistant',
+      session_id: sessionId,
+      message: sdkMessage.message,
+      parent_tool_use_id: null,
+    };
+
+    return assistantMessage;
   }
 
   /**
    * Stream execution status updates through SDK pipeline
    * @param packageId - Package ID to monitor
    * @param sessionId - Session ID for context
+   * @param options - Streaming options including abort signal and timeout
    */
   async *streamExecutionStatus(
     packageId: string,
-    sessionId: string
+    sessionId: string,
+    options?: {
+      // eslint-disable-next-line no-undef
+      abortSignal?: AbortSignal;
+      maxDuration?: number; // milliseconds
+      pollInterval?: number; // milliseconds
+    }
   ): AsyncGenerator<SDKMessage, void> {
+    const startTime = Date.now();
+    const maxDuration = options?.maxDuration ?? 600000; // Default 10 minutes
+    const pollInterval = options?.pollInterval ?? 2000; // Default 2 seconds
+    const abortSignal = options?.abortSignal;
+
     let previousStatus: ExecutionStatus['status'] | null = null;
+    let backoffMultiplier = 1;
 
     while (true) {
+      // Check abort signal
+      if (abortSignal?.aborted) {
+        break;
+      }
+
+      // Check timeout
+      if (Date.now() - startTime > maxDuration) {
+        const timeoutMessage: SDKAssistantMessage = {
+          uuid: randomUUID(),
+          type: 'assistant',
+          session_id: sessionId,
+          message: {
+            role: 'assistant',
+            content: [
+              {
+                type: 'text',
+                text: `Execution monitoring timed out after ${maxDuration / 1000} seconds. The script may still be running on the device.`,
+              },
+            ],
+          },
+          parent_tool_use_id: null,
+        };
+        yield timeoutMessage;
+        break;
+      }
+
       // Get current status
       const status = await this.executionService.getExecutionStatus(packageId);
 
@@ -152,10 +201,12 @@ export class ScriptExecutionOrchestrator extends EventEmitter {
       // Emit update if status changed
       if (status.status !== previousStatus) {
         previousStatus = status.status;
+        backoffMultiplier = 1; // Reset backoff on status change
 
-        // Format status update as SDK message
-        const statusMessage: Partial<SDKMessage> = {
-          type: 'assistant' as const,
+        // Format status update as properly typed SDK message
+        const statusMessage: SDKAssistantMessage = {
+          uuid: randomUUID(),
+          type: 'assistant',
           session_id: sessionId,
           message: {
             role: 'assistant',
@@ -166,13 +217,21 @@ export class ScriptExecutionOrchestrator extends EventEmitter {
               },
             ],
           },
+          parent_tool_use_id: null,
         };
 
-        yield statusMessage as SDKMessage;
+        yield statusMessage;
+      } else {
+        // Implement exponential backoff if no status change
+        backoffMultiplier = Math.min(backoffMultiplier * 1.5, 10);
       }
 
       // Exit if execution completed
-      if (status.status === 'completed' || status.status === 'failed') {
+      if (
+        status.status === 'completed' ||
+        status.status === 'failed' ||
+        status.status === 'cancelled'
+      ) {
         // Yield final result if available
         if (status.result) {
           yield await this.processDeviceExecutionResult(
@@ -183,8 +242,9 @@ export class ScriptExecutionOrchestrator extends EventEmitter {
         break;
       }
 
-      // Wait before next check
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Wait before next check with backoff
+      const waitTime = pollInterval * backoffMultiplier;
+      await new Promise(resolve => setTimeout(resolve, waitTime));
     }
   }
 
@@ -260,17 +320,191 @@ export class ScriptExecutionOrchestrator extends EventEmitter {
       return false;
     }
 
-    // TODO: Implement cancellation logic
-    // This would need to:
-    // 1. Remove from Redis queue if still queued
-    // 2. Send cancellation signal to device if executing
-    // 3. Update database status
+    const { getRedisClient } = await import('@aizen/shared/utils/redis-client');
+    const redis = getRedisClient();
+    const redisClient = redis.getClient();
+    const { getSupabase } = await import('@aizen/shared');
+    const supabase = getSupabase();
 
-    this.emit('execution:cancelled', {
-      packageId,
-      status,
-    });
+    const now = new Date().toISOString();
+    let immediatelyCancelled = false;
 
-    return true;
+    // 1. Remove from Redis queue if still queued - can cancel immediately
+    if (status.status === 'queued') {
+      const queueKey = `device:${status.deviceId}:script_queue`;
+      try {
+        const queue = await redisClient.lRange(queueKey, 0, -1);
+
+        // Find and remove the package from queue
+        for (let i = 0; i < queue.length; i++) {
+          try {
+            const item = queue[i];
+            if (!item) continue;
+            const data = JSON.parse(item) as { packageId: string };
+            if (data.packageId === packageId) {
+              // Remove the item at position i
+              await redisClient.lRem(queueKey, 1, item);
+              immediatelyCancelled = true;
+              break;
+            }
+          } catch {
+            // Skip invalid queue items
+          }
+        }
+      } catch (error) {
+        console.error('Failed to remove from queue:', error);
+      }
+    }
+
+    // 2. Handle cancellation based on current state
+    if (immediatelyCancelled) {
+      // Queued items can be cancelled immediately
+      const { error } = await (supabase as any)
+        .from('remediation_scripts')
+        .update({
+          status: 'cancelled',
+          cancellation_requested_at: now,
+          cancellation_confirmed_at: now,
+          cancellation_reason: 'user_requested_queue_removal',
+          execution_result: {
+            error: 'Execution cancelled by user (removed from queue)',
+            completedAt: now,
+          },
+        })
+        .eq('id', packageId);
+
+      if (error) {
+        console.error('Failed to update cancellation status:', error);
+        return false;
+      }
+
+      this.emit('execution:cancelled', {
+        packageId,
+        status,
+        immediate: true,
+      });
+
+      return true;
+    } else if (status.status === 'executing') {
+      // Executing scripts need two-phase cancellation
+      // Phase 1: Mark as cancellation_requested and notify device
+      const { error: updateError } = await (supabase as any)
+        .from('remediation_scripts')
+        .update({
+          status: 'cancellation_requested',
+          cancellation_requested_at: now,
+          cancellation_reason: 'user_requested',
+        })
+        .eq('id', packageId);
+
+      if (updateError) {
+        console.error('Failed to mark cancellation requested:', updateError);
+        return false;
+      }
+
+      // Send cancellation signal to device
+      try {
+        await redis.publish(
+          `device:${status.deviceId}:commands`,
+          JSON.stringify({
+            type: 'CANCEL_EXECUTION',
+            packageId,
+            requestedAt: now,
+          })
+        );
+
+        this.emit('execution:cancellation_requested', {
+          packageId,
+          status,
+          requestedAt: now,
+        });
+
+        // Start timeout for forced cancellation if no ACK
+        this.startCancellationTimeout(packageId, status.deviceId);
+
+        return true;
+      } catch (error) {
+        console.error('Failed to send cancellation signal:', error);
+        // Even if publish fails, we've marked it as requested
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Start a timeout to force cancellation if device doesn't acknowledge
+   */
+  private startCancellationTimeout(packageId: string, deviceId: string) {
+    const CANCELLATION_TIMEOUT_MS = 30000; // 30 seconds
+
+    setTimeout(async () => {
+      const { getSupabase } = await import('@aizen/shared');
+      const supabase = getSupabase();
+
+      // Check if still in cancellation_requested state
+      const { data, error } = await (supabase as any)
+        .from('remediation_scripts')
+        .select('status')
+        .eq('id', packageId)
+        .single();
+
+      if (!error && data?.status === 'cancellation_requested') {
+        // Force cancellation after timeout
+        await (supabase as any)
+          .from('remediation_scripts')
+          .update({
+            status: 'cancelled',
+            cancellation_confirmed_at: new Date().toISOString(),
+            cancellation_reason: 'timeout_no_device_ack',
+            execution_result: {
+              error:
+                'Execution cancelled by timeout (device did not acknowledge)',
+              completedAt: new Date().toISOString(),
+            },
+          })
+          .eq('id', packageId);
+
+        this.emit('execution:cancelled', {
+          packageId,
+          deviceId,
+          reason: 'timeout',
+        });
+      }
+    }, CANCELLATION_TIMEOUT_MS);
+  }
+
+  /**
+   * Handle cancellation acknowledgment from device
+   */
+  async handleCancellationAck(packageId: string, deviceId: string) {
+    const { getSupabase } = await import('@aizen/shared');
+    const supabase = getSupabase();
+    const now = new Date().toISOString();
+
+    // Update to cancelled state after device acknowledgment
+    const { error } = await (supabase as any)
+      .from('remediation_scripts')
+      .update({
+        status: 'cancelled',
+        cancellation_confirmed_at: now,
+        execution_result: {
+          error: 'Execution cancelled by user (confirmed by device)',
+          completedAt: now,
+        },
+      })
+      .eq('id', packageId)
+      .eq('status', 'cancellation_requested');
+
+    if (!error) {
+      this.emit('execution:cancelled', {
+        packageId,
+        deviceId,
+        confirmedByDevice: true,
+      });
+    }
+
+    return !error;
   }
 }

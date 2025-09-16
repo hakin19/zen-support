@@ -960,11 +960,11 @@ export const aiRoutes: FastifyPluginAsync = async (
                 } catch (error) {
                   // Not in permission handler memory - likely a script approval
                   req.log.debug(
-                    'Approval not in permission handler, updating database directly',
                     {
                       approvalId,
                       error: error instanceof Error ? error.message : 'Unknown',
-                    }
+                    },
+                    'Approval not in permission handler, updating database directly'
                   );
                 }
               }

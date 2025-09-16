@@ -1,6 +1,7 @@
 import { EventEmitter } from 'events';
 
 import { ApiClient } from './api/api-client.js';
+import { ScriptExecutor } from './script-executor.js';
 import { getDeviceId } from './utils/device-id-generator.js';
 
 import type {
@@ -35,6 +36,7 @@ export class DeviceAgent extends EventEmitter {
   // reliably trigger re-auth logic even if the ApiClient updates
   // its lastError during internal retries.
   #lastHeartbeatWas401 = false;
+  #scriptExecutor: ScriptExecutor | null = null;
 
   constructor(config: DeviceConfig) {
     super();
@@ -65,6 +67,119 @@ export class DeviceAgent extends EventEmitter {
         console.error('Failed to initialize mock simulator:', error);
       });
     }
+
+    // Initialize script executor
+    this.#scriptExecutor = new ScriptExecutor();
+    this.setupScriptExecutorEventHandlers();
+  }
+
+  private setupScriptExecutorEventHandlers(): void {
+    if (!this.#scriptExecutor) return;
+
+    this.#scriptExecutor.on('execution:cancelled', data => {
+      console.log(`🚫 Script execution cancelled: ${data.packageId}`);
+      // Send cancellation acknowledgment back to server
+      this.sendCancellationAck(data.packageId).catch(error => {
+        console.error('Failed to send cancellation ack:', error);
+      });
+    });
+  }
+
+  private async sendCancellationAck(packageId: string): Promise<void> {
+    if (!this.#apiClient) return;
+
+    try {
+      // Send cancellation acknowledgment via API
+      await this.#apiClient.sendCommandResult({
+        commandId: packageId,
+        status: 'cancelled',
+        result: {
+          message: 'Execution cancelled by device',
+          cancelledAt: new Date().toISOString(),
+        },
+        executedAt: new Date().toISOString(),
+      });
+    } catch (error) {
+      console.error('Failed to send cancellation ack to server:', error);
+      throw error;
+    }
+  }
+
+  private async handleScriptCommand(command: any): Promise<void> {
+    /* eslint-disable @typescript-eslint/no-unsafe-assignment */
+    const { type, packageId, content, checksum, timeout } = command;
+
+    if (type === 'EXECUTE_SCRIPT') {
+      if (!this.#scriptExecutor) {
+        console.error('Script executor not initialized');
+        return;
+      }
+
+      console.log(`🚀 Executing script package: ${packageId}`);
+
+      try {
+        const result = await this.#scriptExecutor.execute({
+          packageId,
+          deviceId: this.#config.deviceId,
+          content,
+          checksum,
+          timeout,
+        });
+
+        // Report execution result back to server
+        if (this.#apiClient) {
+          await this.#apiClient.sendCommandResult({
+            commandId: packageId,
+            status: result.exitCode === 0 ? 'success' : 'failed',
+            result: {
+              exitCode: result.exitCode,
+              stdout: result.stdout,
+              stderr: result.stderr,
+              executionTime: result.executionTime,
+              completedAt: result.completedAt.toISOString(),
+            },
+            executedAt: result.completedAt.toISOString(),
+          });
+        }
+
+        this.emit('script:executed', result);
+      } catch (error) {
+        console.error(`Failed to execute script ${packageId}:`, error);
+
+        // Report error back to server
+        if (this.#apiClient) {
+          await this.#apiClient.sendCommandResult({
+            commandId: packageId,
+            status: 'failed',
+            result: {
+              error: error instanceof Error ? error.message : 'Unknown error',
+            },
+            executedAt: new Date().toISOString(),
+          });
+        }
+
+        this.emit('script:error', { packageId, error });
+      }
+    } else if (type === 'CANCEL_EXECUTION') {
+      if (!this.#scriptExecutor) {
+        console.error('Script executor not initialized');
+        return;
+      }
+
+      console.log(`🛑 Cancelling script execution: ${packageId}`);
+
+      const cancelled = await this.#scriptExecutor.cancelExecution(packageId);
+
+      if (cancelled) {
+        console.log(`✅ Successfully cancelled execution: ${packageId}`);
+        // The cancellation ack is sent by the event handler
+      } else {
+        console.log(
+          `⚠️ Could not cancel execution (may have already completed): ${packageId}`
+        );
+      }
+    }
+    /* eslint-enable @typescript-eslint/no-unsafe-assignment */
   }
 
   private setupApiClientEventHandlers(): void {
@@ -119,22 +234,33 @@ export class DeviceAgent extends EventEmitter {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     this.#apiClient.on('command', (command: any) => {
       /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
-      const diagnosticCommand: DiagnosticCommand = {
-        id: command.id,
-        type: command.type,
-        payload: command.parameters ?? {},
-        createdAt: command.timestamp,
-        claimToken: command.claimToken,
-      };
-      /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
-      console.log(
-        `📋 Command received via WebSocket: ${diagnosticCommand.type} (${diagnosticCommand.id})`
-      );
-      this.emit('command:received', diagnosticCommand);
-      // Process the command
-      void this.processCommand(diagnosticCommand).catch((error: unknown) => {
-        this.emit('command:error', { command: diagnosticCommand, error });
-      });
+      // Check for special command types that need different handling
+      if (
+        command.type === 'EXECUTE_SCRIPT' ||
+        command.type === 'CANCEL_EXECUTION'
+      ) {
+        void this.handleScriptCommand(command).catch((error: unknown) => {
+          console.error('Script command error:', error);
+          this.emit('script:error', { command, error });
+        });
+      } else {
+        const diagnosticCommand: DiagnosticCommand = {
+          id: command.id,
+          type: command.type,
+          payload: command.parameters ?? {},
+          createdAt: command.timestamp,
+          claimToken: command.claimToken,
+        };
+        /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
+        console.log(
+          `📋 Command received via WebSocket: ${diagnosticCommand.type} (${diagnosticCommand.id})`
+        );
+        this.emit('command:received', diagnosticCommand);
+        // Process the command
+        void this.processCommand(diagnosticCommand).catch((error: unknown) => {
+          this.emit('command:error', { command: diagnosticCommand, error });
+        });
+      }
     });
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

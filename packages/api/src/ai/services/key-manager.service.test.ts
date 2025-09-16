@@ -70,6 +70,26 @@ describe('KeyManagerService', () => {
         delete process.env.SCRIPT_SIGNING_KEY;
       }
     });
+
+    it('should throw error in production when no signing key is provided', () => {
+      const originalEnv = process.env.NODE_ENV;
+      const originalKey = process.env.SCRIPT_SIGNING_KEY;
+
+      process.env.NODE_ENV = 'production';
+      delete process.env.SCRIPT_SIGNING_KEY;
+
+      expect(() => {
+        KeyManagerService.getInstance();
+      }).toThrowError(
+        /CRITICAL: No SCRIPT_SIGNING_KEY environment variable found/
+      );
+
+      // Cleanup
+      process.env.NODE_ENV = originalEnv;
+      if (originalKey !== undefined) {
+        process.env.SCRIPT_SIGNING_KEY = originalKey;
+      }
+    });
   });
 
   describe('Signing and Verification', () => {

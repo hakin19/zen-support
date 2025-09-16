@@ -311,22 +311,38 @@ You are generating remediation scripts for network devices. Requirements:
       tool: string,
       input: unknown,
       signal?: AbortSignal
-    ) => Promise<boolean>
+    ) => Promise<boolean>,
+    auditCallback?: (denial: {
+      toolName: string;
+      input: unknown;
+      reason: string;
+      timestamp: number;
+    }) => void
   ): CanUseTool {
     return async (
       toolName: string,
       input: unknown,
       options: { signal: AbortSignal }
     ): Promise<PermissionResult> => {
+      const audit = (reason: string) =>
+        auditCallback?.({
+          toolName,
+          input,
+          reason,
+          timestamp: Date.now(),
+        });
+
       // Get tool configuration
       const toolConfig = TOOL_RISK_LEVELS[toolName];
 
       if (!toolConfig) {
         // Unknown tool - deny by default
-        return {
+        const denial: PermissionResult = {
           behavior: 'deny',
           message: `Unknown tool: ${toolName}. Access denied for safety.`,
         } as unknown as PermissionResult;
+        audit('Unknown tool');
+        return denial;
       }
 
       // Check if always allowed
@@ -339,20 +355,99 @@ You are generating remediation scripts for network devices. Requirements:
 
       // Check if always denied
       if (toolConfig.alwaysDeny) {
-        return {
+        const denial: PermissionResult = {
           behavior: 'deny',
           message: `Tool ${toolName} is not allowed in the current safety mode.`,
         } as unknown as PermissionResult;
+        audit('Tool not allowed in the current safety mode');
+        return denial;
+      }
+
+      // Validate configuration flags (at least one must be true)
+      const hasAnyFlag =
+        !!toolConfig.alwaysAllow ||
+        !!toolConfig.alwaysDeny ||
+        !!toolConfig.requireApproval;
+
+      if (!hasAnyFlag) {
+        console.warn(
+          `Tool ${toolName} configuration is incomplete - defaulting to safety approval flow`,
+          toolConfig
+        );
+
+        // Fallback to approval
+        if (options?.signal?.aborted) {
+          const denial: PermissionResult = {
+            behavior: 'deny',
+            message: `Request aborted before approval for ${toolName}`,
+          } as unknown as PermissionResult;
+          audit('Request aborted before approval');
+          return denial;
+        }
+
+        try {
+          const abortPromise = new Promise<boolean>((_, reject) => {
+            options?.signal?.addEventListener('abort', () =>
+              reject(new Error('ABORT'))
+            );
+          });
+
+          const approved = await Promise.race([
+            approvalCallback(toolName, input, options.signal),
+            abortPromise,
+          ]);
+
+          if (approved) {
+            return {
+              behavior: 'allow',
+              updatedInput: input,
+            } as unknown as PermissionResult;
+          }
+
+          const denial: PermissionResult = {
+            behavior: 'deny',
+            message: `User denied permission for ${toolName} (default safety check)`,
+          } as unknown as PermissionResult;
+          audit('User denied permission (default safety check)');
+          return denial;
+        } catch (error) {
+          const isAbort = (error as Error)?.message === 'ABORT';
+          const reason = isAbort
+            ? `Request aborted during approval for ${toolName}`
+            : `Approval timeout or error for ${toolName}`;
+          const denial: PermissionResult = {
+            behavior: 'deny',
+            message: reason,
+          } as unknown as PermissionResult;
+          audit(isAbort ? 'Request aborted during approval' : reason);
+          return denial;
+        }
       }
 
       // Require approval for medium/high risk tools
       if (toolConfig.requireApproval) {
+        // Respect abort signal prior to starting approval
+        if (options?.signal?.aborted) {
+          const denial: PermissionResult = {
+            behavior: 'deny',
+            message: `Request aborted before approval for ${toolName}`,
+          } as unknown as PermissionResult;
+          audit('Request aborted before approval');
+          return denial;
+        }
+
         try {
-          const approved = await approvalCallback(
-            toolName,
-            input,
-            options.signal
-          );
+          // Race approval with abort
+          const abortPromise = new Promise<boolean>((_, reject) => {
+            options?.signal?.addEventListener('abort', () =>
+              reject(new Error('ABORT'))
+            );
+          });
+
+          const approved = await Promise.race([
+            approvalCallback(toolName, input, options.signal),
+            abortPromise,
+          ]);
 
           if (approved) {
             // Log the approval
@@ -367,16 +462,24 @@ You are generating remediation scripts for network devices. Requirements:
               updatedInput: input,
             } as unknown as PermissionResult;
           } else {
-            return {
+            const denial: PermissionResult = {
               behavior: 'deny',
               message: `User denied permission for ${toolName}`,
             } as unknown as PermissionResult;
+            audit('User denied permission');
+            return denial;
           }
         } catch (error) {
-          return {
+          const isAbort = (error as Error)?.message === 'ABORT';
+          const reason = isAbort
+            ? `Request aborted during approval for ${toolName}`
+            : `Approval timeout or error for ${toolName}`;
+          const denial: PermissionResult = {
             behavior: 'deny',
-            message: `Approval timeout or error for ${toolName}`,
+            message: reason,
           } as unknown as PermissionResult;
+          audit(isAbort ? 'Request aborted during approval' : reason);
+          return denial;
         }
       }
 
@@ -386,6 +489,33 @@ You are generating remediation scripts for network devices. Requirements:
         updatedInput: input,
       } as unknown as PermissionResult;
     };
+  }
+
+  /**
+   * Validate all tool configurations and log errors for invalid entries.
+   */
+  static validateAllToolConfigs(): void {
+    Object.entries(TOOL_RISK_LEVELS).forEach(([name, cfg]) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (this as any).validateToolConfig(name, cfg);
+    });
+  }
+
+  /**
+   * Validate a single tool configuration. Returns true if valid.
+   * Intentionally kept as a simple helper for tests.
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private static validateToolConfig(name: string, cfg: any): boolean {
+    const hasFlag = cfg?.alwaysAllow || cfg?.alwaysDeny || cfg?.requireApproval;
+    if (!hasFlag) {
+      console.error(
+        `[SECURITY] Tool ${name} has invalid configuration - no permission flags set`,
+        cfg
+      );
+      return false;
+    }
+    return true;
   }
 
   /**
