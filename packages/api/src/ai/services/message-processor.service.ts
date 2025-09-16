@@ -298,6 +298,9 @@ export class MessageProcessor extends EventEmitter {
 
   /**
    * Validate message structure
+   * NOTE: This validates SDK streaming messages (with 'type' field)
+   * NOT conversation messages (with 'role' field).
+   * Once SDK is installed, ensure correct validator is used.
    */
   private async validateMessage(message: SDKMessage): Promise<void> {
     const validator = this.validators.get(message.type);

@@ -19,6 +19,7 @@ import {
   type ModelUsage,
 } from '@anthropic-ai/claude-code';
 
+import { sanitizeObject } from '../../utils/pii-sanitizer';
 import { SDKOptionsFactory } from '../config/sdk-options.config';
 
 import type {
@@ -342,22 +343,24 @@ export class AIOrchestrator extends EventEmitter {
       };
     }
 
-    const { deviceId, deviceType, symptoms, diagnosticData } =
-      prompt.input as DiagnosticInput;
+    const input = prompt.input as DiagnosticInput;
+
+    // Sanitize entire input to handle all potential PII
+    const sanitizedInput = sanitizeObject(input);
 
     return `
     Analyze the following network diagnostic data and provide detailed insights:
 
-    Device ID: ${deviceId}
-    Device Type: ${deviceType}
-    Reported Symptoms: ${symptoms.join(', ')}
+    Device ID: ${sanitizedInput.deviceId}
+    Device Type: ${sanitizedInput.deviceType}
+    Reported Symptoms: ${Array.isArray(sanitizedInput.symptoms) ? sanitizedInput.symptoms.join(', ') : ''}
 
     Diagnostic Data:
-    - Ping Results: ${JSON.stringify(diagnosticData.pingResults)}
-    - Traceroute: ${JSON.stringify(diagnosticData.traceroute)}
-    - DNS Resolution: ${JSON.stringify(diagnosticData.dnsResolution)}
-    - Network Interfaces: ${JSON.stringify(diagnosticData.networkInterfaces)}
-    - Connection Status: ${JSON.stringify(diagnosticData.connectionStatus)}
+    - Ping Results: ${JSON.stringify(sanitizedInput.diagnosticData?.pingResults)}
+    - Traceroute: ${JSON.stringify(sanitizedInput.diagnosticData?.traceroute)}
+    - DNS Resolution: ${JSON.stringify(sanitizedInput.diagnosticData?.dnsResolution)}
+    - Network Interfaces: ${JSON.stringify(sanitizedInput.diagnosticData?.networkInterfaces)}
+    - Connection Status: ${JSON.stringify(sanitizedInput.diagnosticData?.connectionStatus)}
 
     Provide:
     1. Root cause analysis
@@ -382,20 +385,22 @@ export class AIOrchestrator extends EventEmitter {
       proposedActions?: Array<{ description: string }>;
     }
 
-    const { issue, rootCause, targetDevice, constraints, proposedActions } =
-      prompt.input as RemediationInput;
+    const input = prompt.input as RemediationInput;
+
+    // Sanitize entire input to handle all potential PII
+    const sanitizedInput = sanitizeObject(input);
 
     return `
     Generate remediation scripts for the following network issue:
 
-    Issue: ${issue}
-    Root Cause: ${rootCause}
-    Target Device: ${JSON.stringify(targetDevice)}
-    Proposed Actions: ${Array.isArray(proposedActions) ? proposedActions.map(a => a.description).join('; ') : 'None'}
+    Issue: ${sanitizedInput.issue}
+    Root Cause: ${sanitizedInput.rootCause}
+    Target Device: ${JSON.stringify(sanitizedInput.targetDevice)}
+    Proposed Actions: ${Array.isArray(sanitizedInput.proposedActions) ? sanitizedInput.proposedActions.map((a: unknown) => (a as { description?: string }).description || '').join('; ') : 'None'}
 
     Constraints:
-    - Max Execution Time: ${constraints.maxExecutionTime} seconds
-    - Rollback Required: ${constraints.rollbackRequired}
+    - Max Execution Time: ${sanitizedInput.constraints.maxExecutionTime} seconds
+    - Rollback Required: ${sanitizedInput.constraints.rollbackRequired}
 
     Generate safe, idempotent scripts that:
     1. Validate prerequisites before execution
@@ -411,20 +416,23 @@ export class AIOrchestrator extends EventEmitter {
   private buildPerformancePrompt(prompt: PerformanceAnalysisPrompt): string {
     interface PerformanceInput {
       metrics: {
-        latency: unknown;
-        throughput: unknown;
-        packetLoss: unknown;
-        utilization: unknown;
+        bandwidth?: unknown;
+        latency?: unknown;
+        throughput?: unknown;
+        packetLoss?: unknown;
+        utilization?: unknown;
+        jitter?: unknown;
       };
       timeRange: {
         start: string;
         end: string;
       };
-      thresholds: {
+      thresholds?: {
         latencyMs: number;
         packetLossPercent: number;
         utilizationPercent: number;
       };
+      baseline?: unknown;
     }
 
     const performanceInput = prompt.input as unknown as PerformanceInput;
@@ -435,21 +443,24 @@ export class AIOrchestrator extends EventEmitter {
       utilizationPercent: 80,
     };
 
+    // Sanitize metrics data for PII
+    const sanitizedMetrics = sanitizeObject(metrics);
+
     return `
     Analyze network performance metrics and identify optimization opportunities:
 
     Time Range: ${timeRange.start} to ${timeRange.end}
 
     Metrics:
-    - Latency: ${JSON.stringify(metrics.latency)}
-    - Throughput: ${JSON.stringify(metrics.throughput)}
-    - Packet Loss: ${JSON.stringify(metrics.packetLoss)}
-    - Utilization: ${JSON.stringify(metrics.utilization)}
+    - Latency: ${JSON.stringify(sanitizedMetrics.latency)}
+    - Throughput: ${JSON.stringify(sanitizedMetrics.throughput)}
+    - Packet Loss: ${JSON.stringify(sanitizedMetrics.packetLoss)}
+    - Utilization: ${JSON.stringify(sanitizedMetrics.utilization)}
 
     Performance Thresholds:
-    - Latency Warning: ${thresholds.latencyMs}ms
-    - Packet Loss Critical: ${thresholds.packetLossPercent}%
-    - Utilization High: ${thresholds.utilizationPercent}%
+    - Latency Warning: ${thresholds?.latencyMs ?? 100}ms
+    - Packet Loss Critical: ${thresholds?.packetLossPercent ?? 5}%
+    - Utilization High: ${thresholds?.utilizationPercent ?? 80}%
 
     Provide:
     1. Performance bottleneck identification
@@ -474,12 +485,16 @@ export class AIOrchestrator extends EventEmitter {
     const { scanResults, complianceRequirements } =
       prompt.input as SecurityInput;
 
+    // Sanitize scan results which may contain IPs and other PII
+    const sanitizedScanResults = sanitizeObject(scanResults);
+    const sanitizedCompliance = sanitizeObject(complianceRequirements || []);
+
     return `
     Perform security assessment for network infrastructure:
 
-    Open Ports: ${JSON.stringify(scanResults.openPorts)}
-    Vulnerabilities: ${JSON.stringify(scanResults.vulnerabilities || [])}
-    Compliance Requirements: ${JSON.stringify(complianceRequirements || [])}
+    Open Ports: ${JSON.stringify(sanitizedScanResults.openPorts)}
+    Vulnerabilities: ${JSON.stringify(sanitizedScanResults.vulnerabilities || [])}
+    Compliance Requirements: ${JSON.stringify(sanitizedCompliance)}
 
     Provide:
     1. Vulnerability assessment with severity and impact

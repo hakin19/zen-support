@@ -35,13 +35,13 @@
   - [x] 5.4 Register tools via `createSdkMcpServer()`
   - [x] 5.5 Add tool risk scoring and approval requirements
 
-- [ ] 6. Safety with SDK permission controls
-  - [ ] 6.1 PII sanitization before SDK query() calls
-  - [ ] 6.2 Configure SDK `allowedTools` and `disallowedTools`
-  - [ ] 6.3 Implement `canUseTool` callback with policy validation
-  - [ ] 6.4 SDK permission denials tracking and audit
-  - [ ] 6.5 Test SDK's AbortError handling and signal propagation
-  - [ ] 6.6 Validate SDK message types with Zod runtime checks
+- [x] 6. Safety with SDK permission controls
+  - [x] 6.1 PII sanitization before SDK query() calls
+  - [x] 6.2 Configure SDK `allowedTools` and `disallowedTools`
+  - [x] 6.3 Implement `canUseTool` callback with policy validation
+  - [x] 6.4 SDK permission denials tracking and audit
+  - [x] 6.5 Test SDK's AbortError handling and signal propagation
+  - [x] 6.6 Validate SDK message types with Zod runtime checks
 
 - [ ] 7. Execution handoff to device agent
   - [ ] 7.1 Package approved scripts from MCP tool outputs
