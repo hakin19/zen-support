@@ -711,6 +711,50 @@ export class ApiClient extends EventEmitter {
     }
   }
 
+  async sendCommandResult(result: {
+    commandId: string;
+    status: 'success' | 'failed' | 'cancelled' | 'timeout';
+    result: Record<string, unknown>;
+    executedAt: string;
+  }): Promise<unknown> {
+    if (!this.#authToken) {
+      throw new ApiClientError(
+        'Not authenticated',
+        'NOT_AUTHENTICATED',
+        undefined,
+        false
+      );
+    }
+
+    const submit = async (): Promise<unknown> => {
+      const response = await this.makeApiCall<unknown>(
+        `/api/v1/device/commands/${result.commandId}/result`,
+        'POST',
+        {
+          status: result.status,
+          result: result.result,
+          executedAt: result.executedAt,
+        },
+        this.#authToken as string
+      );
+      return response;
+    };
+
+    try {
+      return await this.retryWithBackoff(submit);
+    } catch (error) {
+      if (error instanceof ApiClientError && error.code?.startsWith('HTTP_4')) {
+        throw new ApiClientError(
+          'Failed to send command result',
+          'RESULT_SUBMISSION_FAILED',
+          error,
+          false
+        );
+      }
+      throw error;
+    }
+  }
+
   async submitDiagnosticResult(result: DiagnosticResult): Promise<unknown> {
     if (!this.#authToken) {
       throw new ApiClientError(

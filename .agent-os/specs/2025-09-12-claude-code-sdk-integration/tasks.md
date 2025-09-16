@@ -43,12 +43,12 @@
   - [x] 6.5 Test SDK's AbortError handling and signal propagation
   - [x] 6.6 Validate SDK message types with Zod runtime checks
 
-- [ ] 7. Execution handoff to device agent
-  - [ ] 7.1 Package approved scripts from MCP tool outputs
-  - [ ] 7.2 Create execution manifest with security constraints
-  - [ ] 7.3 Sign packages with ed25519 for device verification
-  - [ ] 7.4 Device agent integration with SDK-generated scripts
-  - [ ] 7.5 Result reporting back through SDK message pipeline
+- [x] 7. Execution handoff to device agent
+  - [x] 7.1 Package approved scripts from MCP tool outputs
+  - [x] 7.2 Create execution manifest with security constraints
+  - [x] 7.3 Sign packages with ed25519 for device verification
+  - [x] 7.4 Device agent integration with SDK-generated scripts
+  - [x] 7.5 Result reporting back through SDK message pipeline
 
 - [ ] 8. Observability and documentation
   - [ ] 8.1 SDK message tracking with correlation IDs
