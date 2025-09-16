@@ -34,7 +34,7 @@ export interface ToolCallMetrics {
   }>;
 }
 
-export interface SessionMetrics {
+export interface AggregatedSessionMetrics {
   activeSessions: number;
   totalSessions: number;
   averageSessionDurationMs: number;
@@ -44,7 +44,7 @@ export interface SessionMetrics {
 export interface ErrorMetrics {
   totalErrors: number;
   errorRate: number;
-  errorsByType: Map<string, number>;
+  errorsByType: Record<string, number>;
   recentErrors: Array<{
     type: string;
     timestamp: Date;
@@ -57,7 +57,7 @@ export interface CurrentMetrics {
   tokens: TokenMetrics;
   latency: LatencyMetrics;
   tools: ToolCallMetrics;
-  sessions: SessionMetrics;
+  sessions: AggregatedSessionMetrics;
   errors: ErrorMetrics;
 }
 
@@ -80,31 +80,64 @@ export class SDKMetricsService extends EventEmitter {
     inputTokens: number;
     outputTokens: number;
   }> = [];
+  private metricsIntervalId: NodeJS.Timeout | null = null;
+  private cleanupIntervalId: NodeJS.Timeout | null = null;
+  private isRunning = false;
 
   constructor() {
     super();
-    this.startMetricsCollection();
+    // Do not auto-start timers to avoid side effects on module import
   }
 
   /**
    * Start collecting metrics periodically
+   * Must be called explicitly to begin metric collection
    */
-  private startMetricsCollection(): void {
+  startMetricsCollection(): void {
+    if (this.isRunning) {
+      return; // Already running
+    }
+
+    this.isRunning = true;
+
     // Collect metrics every minute
-    setInterval(() => {
+    this.metricsIntervalId = setInterval(() => {
       this.collectAndEmitMetrics();
     }, 60000);
 
     // Clean up old data every hour
-    setInterval(() => {
+    this.cleanupIntervalId = setInterval(() => {
       this.cleanupOldData();
     }, 3600000);
   }
 
   /**
+   * Stop collecting metrics and clear timers
+   */
+  stopMetricsCollection(): void {
+    if (!this.isRunning) {
+      return;
+    }
+
+    this.isRunning = false;
+
+    if (this.metricsIntervalId) {
+      clearInterval(this.metricsIntervalId);
+      this.metricsIntervalId = null;
+    }
+
+    if (this.cleanupIntervalId) {
+      clearInterval(this.cleanupIntervalId);
+      this.cleanupIntervalId = null;
+    }
+  }
+
+  /**
    * Collect current metrics snapshot
    */
-  collectCurrentMetrics(period: 'minute' | 'hour' | 'day' = 'minute'): CurrentMetrics {
+  collectCurrentMetrics(
+    period: 'minute' | 'hour' | 'day' = 'minute'
+  ): CurrentMetrics {
     const timestamp = new Date();
     const periodMs = this.getPeriodMs(period);
     const cutoff = new Date(timestamp.getTime() - periodMs);
@@ -206,15 +239,33 @@ export class SDKMetricsService extends EventEmitter {
     // Token metrics
     lines.push(`# HELP claude_sdk_tokens_total Total tokens processed`);
     lines.push(`# TYPE claude_sdk_tokens_total counter`);
-    lines.push(`claude_sdk_tokens_total{type="input"} ${metrics.tokens.totalInputTokens}`);
-    lines.push(`claude_sdk_tokens_total{type="output"} ${metrics.tokens.totalOutputTokens}`);
+    lines.push(
+      `claude_sdk_tokens_total{type="input"} ${metrics.tokens.totalInputTokens}`
+    );
+    lines.push(
+      `claude_sdk_tokens_total{type="output"} ${metrics.tokens.totalOutputTokens}`
+    );
 
     // Response time metrics
-    lines.push(`# HELP claude_sdk_response_time_ms Response time in milliseconds`);
-    lines.push(`# TYPE claude_sdk_response_time_ms histogram`);
-    lines.push(`claude_sdk_response_time_ms_avg ${metrics.latency.averageResponseTimeMs}`);
-    lines.push(`claude_sdk_response_time_ms_p50 ${metrics.latency.p50ResponseTimeMs}`);
-    lines.push(`claude_sdk_response_time_ms_p95 ${metrics.latency.p95ResponseTimeMs}`);
+    lines.push(
+      `# HELP claude_sdk_response_time_ms Response time in milliseconds`
+    );
+    lines.push(`# TYPE claude_sdk_response_time_ms summary`);
+    lines.push(
+      `claude_sdk_response_time_ms{quantile="0.5"} ${metrics.latency.p50ResponseTimeMs}`
+    );
+    lines.push(
+      `claude_sdk_response_time_ms{quantile="0.95"} ${metrics.latency.p95ResponseTimeMs}`
+    );
+    lines.push(
+      `claude_sdk_response_time_ms{quantile="0.99"} ${metrics.latency.p99ResponseTimeMs}`
+    );
+    lines.push(
+      `claude_sdk_response_time_ms_sum ${metrics.latency.averageResponseTimeMs * metrics.sessions.totalSessions}`
+    );
+    lines.push(
+      `claude_sdk_response_time_ms_count ${metrics.sessions.totalSessions}`
+    );
 
     // Tool metrics
     lines.push(`# HELP claude_sdk_tools_total Total tool calls`);
@@ -231,7 +282,7 @@ export class SDKMetricsService extends EventEmitter {
     lines.push(`# TYPE claude_sdk_errors_total counter`);
     lines.push(`claude_sdk_errors_total ${metrics.errors.totalErrors}`);
 
-    return lines.join('\n') + '\n';
+    return `${lines.join('\n')}\n`;
   }
 
   /**
@@ -241,35 +292,43 @@ export class SDKMetricsService extends EventEmitter {
     MetricName: string;
     Value: number;
     Unit: string;
+    Timestamp: Date;
     Dimensions?: Array<{ Name: string; Value: string }>;
   }> {
     const metrics = this.collectCurrentMetrics();
-    
+    const timestamp = new Date();
+
     return [
       {
         MetricName: 'TokensProcessed',
-        Value: metrics.tokens.totalInputTokens + metrics.tokens.totalOutputTokens,
+        Value:
+          metrics.tokens.totalInputTokens + metrics.tokens.totalOutputTokens,
         Unit: 'Count',
+        Timestamp: timestamp,
       },
       {
         MetricName: 'ResponseTime',
         Value: metrics.latency.averageResponseTimeMs,
         Unit: 'Milliseconds',
+        Timestamp: timestamp,
       },
       {
         MetricName: 'ToolCalls',
         Value: metrics.tools.totalCalls,
         Unit: 'Count',
+        Timestamp: timestamp,
       },
       {
         MetricName: 'ActiveSessions',
         Value: metrics.sessions.activeSessions,
         Unit: 'Count',
+        Timestamp: timestamp,
       },
       {
         MetricName: 'ErrorRate',
         Value: metrics.errors.errorRate,
         Unit: 'Percent',
+        Timestamp: timestamp,
       },
     ];
   }
@@ -326,11 +385,11 @@ export class SDKMetricsService extends EventEmitter {
 
     return {
       averageResponseTimeMs: sorted.reduce((a, b) => a + b, 0) / length,
-      p50ResponseTimeMs: sorted[Math.floor(length * 0.5)],
-      p95ResponseTimeMs: sorted[Math.floor(length * 0.95)],
-      p99ResponseTimeMs: sorted[Math.floor(length * 0.99)],
-      minResponseTimeMs: sorted[0],
-      maxResponseTimeMs: sorted[length - 1],
+      p50ResponseTimeMs: sorted[Math.floor(length * 0.5)] ?? 0,
+      p95ResponseTimeMs: sorted[Math.floor(length * 0.95)] ?? 0,
+      p99ResponseTimeMs: sorted[Math.floor(length * 0.99)] ?? 0,
+      minResponseTimeMs: sorted[0] ?? 0,
+      maxResponseTimeMs: sorted[length - 1] ?? 0,
     };
   }
 
@@ -339,11 +398,23 @@ export class SDKMetricsService extends EventEmitter {
    */
   private calculateToolMetrics(): ToolCallMetrics {
     const toolMetrics = messageTracker.getAllToolMetrics();
-    
-    const totalCalls = toolMetrics.reduce((sum, tool) => sum + tool.callCount, 0);
-    const totalSuccess = toolMetrics.reduce((sum, tool) => sum + tool.successCount, 0);
-    const totalDenials = toolMetrics.reduce((sum, tool) => sum + tool.denialCount, 0);
-    const totalDuration = toolMetrics.reduce((sum, tool) => sum + tool.totalDurationMs, 0);
+
+    const totalCalls = toolMetrics.reduce(
+      (sum, tool) => sum + tool.callCount,
+      0
+    );
+    const totalSuccess = toolMetrics.reduce(
+      (sum, tool) => sum + tool.successCount,
+      0
+    );
+    const totalDenials = toolMetrics.reduce(
+      (sum, tool) => sum + tool.denialCount,
+      0
+    );
+    const totalDuration = toolMetrics.reduce(
+      (sum, tool) => sum + tool.totalDurationMs,
+      0
+    );
 
     const successRate = totalCalls > 0 ? (totalSuccess / totalCalls) * 100 : 0;
     const denialRate = totalCalls > 0 ? (totalDenials / totalCalls) * 100 : 0;
@@ -355,7 +426,8 @@ export class SDKMetricsService extends EventEmitter {
       .map(tool => ({
         name: tool.toolName,
         calls: tool.callCount,
-        successRate: tool.callCount > 0 ? (tool.successCount / tool.callCount) * 100 : 0,
+        successRate:
+          tool.callCount > 0 ? (tool.successCount / tool.callCount) * 100 : 0,
       }));
 
     return {
@@ -370,21 +442,19 @@ export class SDKMetricsService extends EventEmitter {
   /**
    * Calculate session metrics for period
    */
-  private calculateSessionMetrics(cutoff: Date): SessionMetrics {
+  private calculateSessionMetrics(cutoff: Date): AggregatedSessionMetrics {
     const recentStarts = Array.from(this.sessionStartTimes.values()).filter(
       time => time > cutoff
     );
-    const _recentEnds = Array.from(this.sessionEndTimes.values()).filter(
-      time => time > cutoff
-    );
 
-    const activeSessions = this.sessionStartTimes.size - this.sessionEndTimes.size;
+    const activeSessions =
+      this.sessionStartTimes.size - this.sessionEndTimes.size;
     const totalSessions = recentStarts.length;
 
     // Calculate average session duration
     let totalDuration = 0;
     let completedSessions = 0;
-    
+
     for (const [sessionId, startTime] of this.sessionStartTimes.entries()) {
       const endTime = this.sessionEndTimes.get(sessionId);
       if (endTime && startTime > cutoff) {
@@ -393,15 +463,17 @@ export class SDKMetricsService extends EventEmitter {
       }
     }
 
-    const averageSessionDurationMs = completedSessions > 0 ? 
-      totalDuration / completedSessions : 0;
+    const averageSessionDurationMs =
+      completedSessions > 0 ? totalDuration / completedSessions : 0;
 
     // Calculate success rate (sessions without errors)
     const failedSessions = this.recentErrors.filter(
       error => error.type === 'session_failure' && error.timestamp > cutoff
     ).length;
-    const sessionSuccessRate = totalSessions > 0 ? 
-      ((totalSessions - failedSessions) / totalSessions) * 100 : 100;
+    const sessionSuccessRate =
+      totalSessions > 0
+        ? ((totalSessions - failedSessions) / totalSessions) * 100
+        : 100;
 
     return {
       activeSessions,
@@ -423,9 +495,9 @@ export class SDKMetricsService extends EventEmitter {
     const periodMinutes = (Date.now() - cutoff.getTime()) / 60000;
     const errorRate = totalErrors / Math.max(periodMinutes, 1);
 
-    const errorsByType = new Map<string, number>();
+    const errorsByType: Record<string, number> = {};
     for (const error of recentErrors) {
-      errorsByType.set(error.type, (errorsByType.get(error.type) ?? 0) + 1);
+      errorsByType[error.type] = (errorsByType[error.type] ?? 0) + 1;
     }
 
     return {
@@ -473,27 +545,27 @@ export class SDKMetricsService extends EventEmitter {
    */
   private cleanupOldData(): void {
     const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    
+
     // Clean up old response times
     this.responseTimes = this.responseTimes.slice(-1000);
-    
+
     // Clean up old token usage
     this.tokenUsageHistory = this.tokenUsageHistory.filter(
       entry => entry.timestamp > oneDayAgo
     );
-    
+
     // Clean up old errors
     this.recentErrors = this.recentErrors.filter(
       error => error.timestamp > oneDayAgo
     );
-    
+
     // Clean up old session data (keep only last 24 hours)
     for (const [sessionId, startTime] of this.sessionStartTimes.entries()) {
       if (startTime < oneDayAgo) {
         this.sessionStartTimes.delete(sessionId);
       }
     }
-    
+
     for (const [sessionId, endTime] of this.sessionEndTimes.entries()) {
       if (endTime < oneDayAgo) {
         this.sessionEndTimes.delete(sessionId);
@@ -503,4 +575,6 @@ export class SDKMetricsService extends EventEmitter {
 }
 
 // Export singleton instance
+// Note: Timers are not started automatically to avoid side effects
+// Call metricsService.startMetricsCollection() to begin metric collection
 export const metricsService = new SDKMetricsService();

@@ -182,6 +182,7 @@ export class AIOrchestrator extends EventEmitter {
       // Cleanup
       this.activeQueries.delete(sessionId);
       this.abortControllers.delete(sessionId);
+      messageTracker.clearSession(sessionId);
     }
   }
 

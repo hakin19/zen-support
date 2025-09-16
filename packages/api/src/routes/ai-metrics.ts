@@ -1,13 +1,24 @@
+import { messageTracker } from '../ai/services/sdk-message-tracker.service';
 import { metricsService } from '../ai/services/sdk-metrics.service';
+import { internalAuthHook } from '../middleware/internal-auth.middleware';
 import { extractCorrelationId } from '../utils/correlation-id';
 
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 
 /**
  * AI Metrics Routes
  * Exposes SDK usage metrics and observability data
  */
-export function aiMetricsRoutes(fastify: FastifyInstance): Promise<void> {
+/* eslint-disable @typescript-eslint/no-misused-promises */
+export const aiMetricsRoutes: FastifyPluginAsync = async (
+  fastify: FastifyInstance
+): Promise<void> => {
+  // Start metrics collection when routes are registered (production only)
+  if (process.env.NODE_ENV !== 'test') {
+    metricsService.startMetricsCollection();
+    messageTracker.startCleanupInterval();
+  }
+
   /**
    * Get current metrics snapshot
    */
@@ -16,11 +27,10 @@ export function aiMetricsRoutes(fastify: FastifyInstance): Promise<void> {
       period?: 'minute' | 'hour' | 'day';
     };
   }>(
-    '/metrics',
+    '/api/v1/ai/metrics/current',
     {
+      preHandler: internalAuthHook,
       schema: {
-        description: 'Get current SDK metrics snapshot',
-        tags: ['AI Metrics'],
         querystring: {
           type: 'object',
           properties: {
@@ -133,11 +143,10 @@ export function aiMetricsRoutes(fastify: FastifyInstance): Promise<void> {
       limit?: number;
     };
   }>(
-    '/metrics/history',
+    '/api/v1/ai/metrics/history',
     {
+      preHandler: internalAuthHook,
       schema: {
-        description: 'Get SDK metrics history',
-        tags: ['AI Metrics'],
         querystring: {
           type: 'object',
           properties: {
@@ -202,11 +211,10 @@ export function aiMetricsRoutes(fastify: FastifyInstance): Promise<void> {
    * Get Prometheus metrics
    */
   fastify.get(
-    '/metrics/prometheus',
+    '/api/v1/ai/metrics/prometheus',
     {
+      preHandler: internalAuthHook,
       schema: {
-        description: 'Get metrics in Prometheus format',
-        tags: ['AI Metrics'],
         response: {
           200: {
             type: 'string',
@@ -240,11 +248,10 @@ export function aiMetricsRoutes(fastify: FastifyInstance): Promise<void> {
    * Get CloudWatch metrics
    */
   fastify.get(
-    '/metrics/cloudwatch',
+    '/api/v1/ai/metrics/cloudwatch',
     {
+      preHandler: internalAuthHook,
       schema: {
-        description: 'Get metrics in CloudWatch format',
-        tags: ['AI Metrics'],
         response: {
           200: {
             type: 'array',
@@ -254,6 +261,7 @@ export function aiMetricsRoutes(fastify: FastifyInstance): Promise<void> {
                 MetricName: { type: 'string' },
                 Value: { type: 'number' },
                 Unit: { type: 'string' },
+                Timestamp: { type: 'string', format: 'date-time' },
                 Dimensions: {
                   type: 'array',
                   items: {
@@ -290,5 +298,52 @@ export function aiMetricsRoutes(fastify: FastifyInstance): Promise<void> {
     }
   );
 
+  /**
+   * Get health status of metrics service
+   */
+  fastify.get(
+    '/api/v1/ai/metrics/health',
+    {
+      preHandler: internalAuthHook,
+      schema: {
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              status: { type: 'string', enum: ['healthy'] },
+              timestamp: { type: 'string', format: 'date-time' },
+              activeSessions: { type: 'number' },
+            },
+          },
+        },
+      },
+    },
+    (request, reply) => {
+      try {
+        const metrics = metricsService.collectCurrentMetrics('minute');
+
+        const healthStatus = {
+          status: 'healthy' as const,
+          timestamp: new Date().toISOString(),
+          activeSessions: metrics.sessions.activeSessions,
+        };
+
+        request.log.info(
+          {
+            correlationId: extractCorrelationId(request),
+            activeSessions: healthStatus.activeSessions,
+          },
+          'Health check performed'
+        );
+
+        return reply.send(healthStatus);
+      } catch (error) {
+        request.log.error({ error }, 'Failed to check health status');
+        return reply.code(500).send({ error: 'Internal server error' });
+      }
+    }
+  );
+
   return Promise.resolve();
-}
+};
+/* eslint-enable @typescript-eslint/no-misused-promises */

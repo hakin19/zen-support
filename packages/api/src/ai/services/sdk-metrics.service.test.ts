@@ -69,7 +69,7 @@ describe('SDKMetricsService', () => {
 
       const metrics = service.collectCurrentMetrics('minute');
       expect(metrics.errors.totalErrors).toBe(1);
-      expect(metrics.errors.errorsByType.get('session_failure')).toBe(1);
+      expect(metrics.errors.errorsByType['session_failure']).toBe(1);
     });
   });
 
@@ -136,8 +136,8 @@ describe('SDKMetricsService', () => {
       const metrics = service.collectCurrentMetrics('minute');
 
       expect(metrics.errors.totalErrors).toBe(3);
-      expect(metrics.errors.errorsByType.get('timeout')).toBe(2);
-      expect(metrics.errors.errorsByType.get('network_error')).toBe(1);
+      expect(metrics.errors.errorsByType['timeout']).toBe(2);
+      expect(metrics.errors.errorsByType['network_error']).toBe(1);
     });
   });
 
@@ -218,7 +218,20 @@ describe('SDKMetricsService', () => {
         'claude_sdk_tokens_total{type="output"}'
       );
       expect(prometheusFormat).toContain('# HELP claude_sdk_response_time_ms');
-      expect(prometheusFormat).toContain('claude_sdk_response_time_ms_p50');
+      expect(prometheusFormat).toContain(
+        '# TYPE claude_sdk_response_time_ms summary'
+      );
+      expect(prometheusFormat).toContain(
+        'claude_sdk_response_time_ms{quantile="0.5"}'
+      );
+      expect(prometheusFormat).toContain(
+        'claude_sdk_response_time_ms{quantile="0.95"}'
+      );
+      expect(prometheusFormat).toContain(
+        'claude_sdk_response_time_ms{quantile="0.99"}'
+      );
+      expect(prometheusFormat).toContain('claude_sdk_response_time_ms_sum');
+      expect(prometheusFormat).toContain('claude_sdk_response_time_ms_count');
       expect(prometheusFormat).toContain('# HELP claude_sdk_tools_total');
       expect(prometheusFormat).toContain('# HELP claude_sdk_errors_total');
     });
@@ -262,12 +275,14 @@ describe('SDKMetricsService', () => {
       const activeSessions = cwMetrics.find(
         m => m.MetricName === 'ActiveSessions'
       );
+      expect(activeSessions).toBeDefined();
       expect(activeSessions).toMatchObject({
         MetricName: 'ActiveSessions',
         Value: 1,
         Unit: 'Count',
-        // CloudWatch metrics from service don't include Timestamp
       });
+      // Verify Timestamp is included and is a Date
+      expect(activeSessions?.Timestamp).toBeInstanceOf(Date);
     });
   });
 

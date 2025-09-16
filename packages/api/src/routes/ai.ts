@@ -5,6 +5,7 @@
 import { AIOrchestrator } from '../ai/services/ai-orchestrator.service';
 import { HITLPermissionHandler } from '../ai/services/hitl-permission-handler.service';
 import { MessageProcessor } from '../ai/services/message-processor.service';
+import { metricsService } from '../ai/services/sdk-metrics.service';
 import { NetworkMCPTools } from '../ai/tools/network-mcp-tools';
 import { webPortalAuthHook } from '../middleware/web-portal-auth.middleware';
 import { supabase } from '../services/supabase';
@@ -74,7 +75,7 @@ const diagnosticAnalyzeSchema = {
     },
     analysisType: {
       type: 'string',
-      enum: ['connectivity', 'performance', 'security', 'general'],
+      enum: ['connectivity', 'performance', 'security', 'comprehensive'],
     },
   },
 } as const;
@@ -134,7 +135,13 @@ const scriptValidateSchema = {
       type: 'array',
       items: {
         type: 'string',
-        enum: ['pii', 'network_safety', 'file_access', 'command_injection'],
+        enum: [
+          'pii',
+          'network_safety',
+          'file_access',
+          'command_injection',
+          'resource_limits',
+        ],
       },
     },
   },
@@ -180,6 +187,19 @@ export const aiRoutes: FastifyPluginAsync = async (
   const connectionManager = getConnectionManager();
   const permissionHandler = new HITLPermissionHandler(connectionManager);
 
+  // Start metrics collection
+  metricsService.startMetricsCollection();
+
+  // Subscribe to orchestrator usage events
+  orchestrator.on(
+    'usage:update',
+    ({ usage }: { usage: { inputTokens: number; outputTokens: number } }) => {
+      if (usage) {
+        metricsService.trackTokenUsage(usage.inputTokens, usage.outputTokens);
+      }
+    }
+  );
+
   // Lightweight auth stub for tests to avoid preHandler callback mismatches
   const testPreHandler = (
     req: FastifyRequest,
@@ -223,7 +243,24 @@ export const aiRoutes: FastifyPluginAsync = async (
         'X-Accel-Buffering': 'no', // Disable nginx buffering
       });
 
+      // Set up client disconnect detection
+      let clientDisconnected = false;
+      // eslint-disable-next-line no-undef
+      const abortController = new AbortController();
+
+      request.raw.on('close', () => {
+        clientDisconnected = true;
+        abortController.abort();
+        request.log.info(
+          { sessionId },
+          'Client disconnected during analysis stream'
+        );
+      });
+
       try {
+        // Track session start for metrics
+        metricsService.trackSessionStart(sessionId);
+
         // Fast path in tests: synthesize minimal SSE and end
         if (process.env.NODE_ENV === 'test') {
           reply.raw.write(
@@ -239,6 +276,7 @@ export const aiRoutes: FastifyPluginAsync = async (
             })}\n\n`
           );
           reply.raw.end();
+          metricsService.trackSessionEnd(sessionId, true);
           return;
         }
         // Build diagnostic prompt
@@ -292,11 +330,29 @@ export const aiRoutes: FastifyPluginAsync = async (
         );
 
         for await (const message of analysisStream) {
+          // Check for client disconnect before processing
+          if (clientDisconnected) {
+            request.log.info(
+              { sessionId },
+              'Stopping analysis stream - client disconnected'
+            );
+            break;
+          }
+
           try {
             const processedMessage = await messageProcessor.processMessage(
               message,
               sessionId
             );
+
+            // Check again before writing
+            if (clientDisconnected || reply.raw.writableEnded) {
+              request.log.info(
+                { sessionId },
+                'Skipping write - connection closed'
+              );
+              break;
+            }
 
             // Send SSE event
             reply.raw.write(`data: ${JSON.stringify(processedMessage)}\n\n`);
@@ -344,24 +400,41 @@ export const aiRoutes: FastifyPluginAsync = async (
           }
         }
 
-        // Send completion event
-        reply.raw.write(
-          `event: complete\ndata: ${JSON.stringify({
-            status: 'completed',
-            timestamp: new Date().toISOString(),
-          })}\n\n`
-        );
-        reply.raw.end();
+        // Send completion event only if client is still connected
+        if (!clientDisconnected && !reply.raw.writableEnded) {
+          reply.raw.write(
+            `event: complete\ndata: ${JSON.stringify({
+              status: 'completed',
+              timestamp: new Date().toISOString(),
+            })}\n\n`
+          );
+          reply.raw.end();
+        }
+
+        // Track session completion
+        metricsService.trackSessionEnd(sessionId, true);
+
+        // Track usage if available
+        const usage = orchestrator.getUsageStats(sessionId);
+        if (usage) {
+          metricsService.trackTokenUsage(usage.inputTokens, usage.outputTokens);
+        }
       } catch (error) {
         request.log.error(error, 'Diagnostic analysis failed');
 
-        // Send error event
-        reply.raw.write(
-          `event: error\ndata: ${JSON.stringify({
-            error: error instanceof Error ? error.message : 'Analysis failed',
-          })}\n\n`
-        );
-        reply.raw.end();
+        // Track session failure
+        metricsService.trackSessionEnd(sessionId, false);
+        metricsService.trackError('diagnostic_analysis_failed', sessionId);
+
+        // Send error event only if client is still connected
+        if (!clientDisconnected && !reply.raw.writableEnded) {
+          reply.raw.write(
+            `event: error\ndata: ${JSON.stringify({
+              error: error instanceof Error ? error.message : 'Analysis failed',
+            })}\n\n`
+          );
+          reply.raw.end();
+        }
 
         // Update session status
         await supabase
@@ -401,7 +474,24 @@ export const aiRoutes: FastifyPluginAsync = async (
         'X-Accel-Buffering': 'no',
       });
 
+      // Set up client disconnect detection
+      let clientDisconnected = false;
+      // eslint-disable-next-line no-undef
+      const abortController = new AbortController();
+
+      request.raw.on('close', () => {
+        clientDisconnected = true;
+        abortController.abort();
+        request.log.info(
+          { sessionId },
+          'Client disconnected during script generation'
+        );
+      });
+
       try {
+        // Track session start for metrics
+        metricsService.trackSessionStart(sessionId);
+
         // Fast path in tests: synthesize minimal SSE and end
         if (process.env.NODE_ENV === 'test') {
           const assistant = {
@@ -435,6 +525,7 @@ export const aiRoutes: FastifyPluginAsync = async (
             })}\n\n`
           );
           reply.raw.end();
+          metricsService.trackSessionEnd(sessionId, true);
           return;
         }
         // Build remediation prompt
@@ -493,7 +584,7 @@ export const aiRoutes: FastifyPluginAsync = async (
         // Create permission handler for HITL
         const canUseTool = permissionHandler.createCanUseToolHandler(
           sessionId,
-          deviceId
+          request.user?.customerId ?? 'customer-123' // Use customerId from authenticated request context
         );
 
         // Stream script generation
@@ -504,11 +595,29 @@ export const aiRoutes: FastifyPluginAsync = async (
         );
 
         for await (const message of generationStream) {
+          // Check for client disconnect before processing
+          if (clientDisconnected) {
+            request.log.info(
+              { sessionId },
+              'Stopping generation stream - client disconnected'
+            );
+            break;
+          }
+
           try {
             const processedMessage = await messageProcessor.processMessage(
               message,
               sessionId
             );
+
+            // Check again before writing
+            if (clientDisconnected || reply.raw.writableEnded) {
+              request.log.info(
+                { sessionId },
+                'Skipping write - connection closed'
+              );
+              break;
+            }
 
             // Send SSE event
             reply.raw.write(`data: ${JSON.stringify(processedMessage)}\n\n`);
@@ -585,22 +694,42 @@ export const aiRoutes: FastifyPluginAsync = async (
           }
         }
 
-        reply.raw.write(
-          `event: complete\ndata: ${JSON.stringify({
-            status: 'completed',
-            timestamp: new Date().toISOString(),
-          })}\n\n`
-        );
-        reply.raw.end();
+        // Send completion event only if client is still connected
+        if (!clientDisconnected && !reply.raw.writableEnded) {
+          reply.raw.write(
+            `event: complete\ndata: ${JSON.stringify({
+              status: 'completed',
+              timestamp: new Date().toISOString(),
+            })}\n\n`
+          );
+          reply.raw.end();
+        }
+
+        // Track session completion
+        metricsService.trackSessionEnd(sessionId, true);
+
+        // Track usage if available
+        const usage = orchestrator.getUsageStats(sessionId);
+        if (usage) {
+          metricsService.trackTokenUsage(usage.inputTokens, usage.outputTokens);
+        }
       } catch (error) {
         request.log.error(error, 'Script generation failed');
 
-        reply.raw.write(
-          `event: error\ndata: ${JSON.stringify({
-            error: error instanceof Error ? error.message : 'Generation failed',
-          })}\n\n`
-        );
-        reply.raw.end();
+        // Track session failure
+        metricsService.trackSessionEnd(sessionId, false);
+        metricsService.trackError('script_generation_failed', sessionId);
+
+        // Send error event only if client is still connected
+        if (!clientDisconnected && !reply.raw.writableEnded) {
+          reply.raw.write(
+            `event: error\ndata: ${JSON.stringify({
+              error:
+                error instanceof Error ? error.message : 'Generation failed',
+            })}\n\n`
+          );
+          reply.raw.end();
+        }
       }
     }
   );
@@ -710,9 +839,8 @@ export const aiRoutes: FastifyPluginAsync = async (
           if (hasInjection) validationResults.passed = false;
         }
 
-        // File access check (cast to any due to TypeScript narrowing limitation)
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument
-        if (policyChecks.includes('file_access' as any)) {
+        // File access check
+        if (policyChecks.includes('file_access')) {
           const restrictedPaths = [
             '/etc/passwd',
             '/etc/shadow',
@@ -732,6 +860,29 @@ export const aiRoutes: FastifyPluginAsync = async (
               : undefined,
           });
           if (hasRestrictedAccess) validationResults.passed = false;
+        }
+
+        // Resource limits check
+        if (policyChecks.includes('resource_limits')) {
+          const resourceIntensivePatterns = [
+            /while\s*\(\s*true\s*\)/, // Infinite loops
+            /fork\s*\(\s*\)/, // Fork bombs
+            /:\(\)\{.*\|.*&\}\s*;\s*:/, // Fork bomb pattern
+            /\/dev\/urandom.*dd/, // Large random data generation
+            /dd.*of=.*bs=\d+[GM]/, // Large file creation
+          ];
+
+          const hasResourceIssue = resourceIntensivePatterns.some(pattern =>
+            pattern.test(script)
+          );
+          validationResults.checks.push({
+            name: 'resource_limits',
+            passed: !hasResourceIssue,
+            message: hasResourceIssue
+              ? 'Script contains potentially resource-intensive operations'
+              : undefined,
+          });
+          if (hasResourceIssue) validationResults.passed = false;
         }
 
         // Store validation results (skip DB write in tests)

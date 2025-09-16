@@ -16,7 +16,7 @@ export interface TrackedMessage {
   parentToolUseId?: string;
 }
 
-export interface SessionMetrics {
+export interface SessionTrackingMetrics {
   sessionId: string;
   correlationId: string;
   startTime: Date;
@@ -50,9 +50,84 @@ export interface ToolMetrics {
  */
 export class SDKMessageTracker {
   private messages = new Map<string, TrackedMessage[]>();
-  private sessionMetrics = new Map<string, SessionMetrics>();
+  private sessionMetrics = new Map<string, SessionTrackingMetrics>();
   private toolMetrics = new Map<string, ToolMetrics>();
   private messageCounter = new Map<string, number>();
+  private sessionLastActivity = new Map<string, Date>();
+  private cleanupIntervalId: NodeJS.Timeout | null = null;
+  private readonly SESSION_TTL_MS = 2 * 60 * 60 * 1000; // 2 hours
+  private isRunning = false;
+
+  constructor() {
+    // Do not auto-start cleanup interval to avoid side effects on module import
+    // Call startCleanupInterval() explicitly when needed
+  }
+
+  /**
+   * Start the cleanup interval
+   * Must be called explicitly to begin session cleanup
+   */
+  startCleanupInterval(): void {
+    if (this.isRunning) {
+      return; // Already running
+    }
+
+    this.isRunning = true;
+
+    // Clean up old sessions every 30 minutes
+    this.cleanupIntervalId = setInterval(
+      () => {
+        this.cleanupStaleSessions();
+      },
+      30 * 60 * 1000
+    );
+  }
+
+  /**
+   * Stop the cleanup interval
+   */
+  stopCleanupInterval(): void {
+    if (!this.isRunning) {
+      return;
+    }
+
+    this.isRunning = false;
+
+    if (this.cleanupIntervalId) {
+      clearInterval(this.cleanupIntervalId);
+      this.cleanupIntervalId = null;
+    }
+  }
+
+  /**
+   * Clean up stale sessions that haven't been active for SESSION_TTL_MS
+   */
+  private cleanupStaleSessions(): void {
+    const now = Date.now();
+    const staleSessionIds: string[] = [];
+
+    // Find stale sessions
+    for (const [
+      sessionId,
+      lastActivity,
+    ] of this.sessionLastActivity.entries()) {
+      if (now - lastActivity.getTime() > this.SESSION_TTL_MS) {
+        staleSessionIds.push(sessionId);
+      }
+    }
+
+    // Clean up stale sessions
+    for (const sessionId of staleSessionIds) {
+      this.clearSession(sessionId);
+    }
+
+    // Log cleanup summary (could emit an event instead)
+    if (staleSessionIds.length > 0) {
+      console.log(
+        `[SDKMessageTracker] Cleaned up ${staleSessionIds.length} stale sessions`
+      );
+    }
+  }
 
   /**
    * Track an SDK message with correlation ID
@@ -77,6 +152,9 @@ export class SDKMessageTracker {
     const sessionMessages = this.messages.get(sessionId) ?? [];
     sessionMessages.push(trackedMessage);
     this.messages.set(sessionId, sessionMessages);
+
+    // Update last activity timestamp for TTL tracking
+    this.sessionLastActivity.set(sessionId, new Date());
 
     // Update metrics based on message type
     this.updateMetricsForMessage(message, sessionId, correlationId);
@@ -130,7 +208,7 @@ export class SDKMessageTracker {
   private initializeSessionMetrics(
     sessionId: string,
     correlationId: string
-  ): SessionMetrics {
+  ): SessionTrackingMetrics {
     return {
       sessionId,
       correlationId,
@@ -151,7 +229,7 @@ export class SDKMessageTracker {
    */
   private handleSystemMessage(
     message: SDKSystemMessage,
-    metrics: SessionMetrics
+    metrics: SessionTrackingMetrics
   ): void {
     if (message.subtype === 'init') {
       // Track initialization
@@ -164,16 +242,20 @@ export class SDKMessageTracker {
    */
   private handleAssistantMessage(
     message: SDKAssistantMessage,
-    metrics: SessionMetrics
+    metrics: SessionTrackingMetrics
   ): void {
     // Check for tool uses
-    if ('message' in message && message.message?.content) {
-      for (const content of message.message.content) {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any
+    const assistantMessage = message as any;
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    if (assistantMessage.message?.content) {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      for (const content of assistantMessage.message.content) {
         if (
           typeof content === 'object' &&
           content !== null &&
           'type' in content &&
-          content.type === 'tool_use' &&
+          (content as { type: unknown }).type === 'tool_use' &&
           'name' in content &&
           'id' in content
         ) {
@@ -188,8 +270,10 @@ export class SDKMessageTracker {
     }
 
     // Track token usage if available
-    if ('message' in message && message.message?.usage) {
-      this.updateTokenUsage(metrics, message.message.usage);
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    if (assistantMessage.message?.usage) {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      this.updateTokenUsage(metrics, assistantMessage.message.usage);
     }
   }
 
@@ -198,7 +282,7 @@ export class SDKMessageTracker {
    */
   private handleResultMessage(
     message: SDKResultMessage,
-    metrics: SessionMetrics
+    metrics: SessionTrackingMetrics
   ): void {
     metrics.endTime = new Date();
 
@@ -241,7 +325,7 @@ export class SDKMessageTracker {
    */
   private handleStreamEvent(
     _message: SDKPartialAssistantMessage,
-    metrics: SessionMetrics
+    metrics: SessionTrackingMetrics
   ): void {
     // Track streaming events for real-time metrics
     // This is useful for measuring streaming latency
@@ -251,11 +335,22 @@ export class SDKMessageTracker {
   /**
    * Update token usage from Usage object
    */
-  private updateTokenUsage(metrics: SessionMetrics, usage: Usage): void {
-    metrics.totalInputTokens += usage.input_tokens ?? 0;
-    metrics.totalOutputTokens += usage.output_tokens ?? 0;
-    metrics.totalCacheReadTokens += usage.cache_read_input_tokens ?? 0;
-    metrics.totalCacheCreationTokens += usage.cache_creation_input_tokens ?? 0;
+  private updateTokenUsage(
+    metrics: SessionTrackingMetrics,
+    usage: Usage
+  ): void {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any
+    const usageData = usage as any;
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    metrics.totalInputTokens += usageData.input_tokens ?? 0;
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    metrics.totalOutputTokens += usageData.output_tokens ?? 0;
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    metrics.totalCacheReadTokens += usageData.cache_read_input_tokens ?? 0;
+
+    metrics.totalCacheCreationTokens +=
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      usageData.cache_creation_input_tokens ?? 0;
   }
 
   /**
@@ -368,7 +463,7 @@ export class SDKMessageTracker {
   /**
    * Get session metrics
    */
-  getSessionMetrics(sessionId: string): SessionMetrics | undefined {
+  getSessionMetrics(sessionId: string): SessionTrackingMetrics | undefined {
     return this.sessionMetrics.get(sessionId);
   }
 
@@ -391,7 +486,7 @@ export class SDKMessageTracker {
    */
   exportSessionData(sessionId: string): {
     messages: TrackedMessage[];
-    metrics: SessionMetrics | undefined;
+    metrics: SessionTrackingMetrics | undefined;
     toolMetrics: ToolMetrics[];
   } {
     const messages = this.getSessionMessages(sessionId);
@@ -401,14 +496,17 @@ export class SDKMessageTracker {
     const usedTools = new Set<string>();
     for (const msg of messages) {
       if (msg.message.type === 'assistant') {
-        const assistantMsg = msg.message;
-        if ('message' in assistantMsg && assistantMsg.message?.content) {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any
+        const assistantMsg = msg.message as any;
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        if (assistantMsg.message?.content) {
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
           for (const content of assistantMsg.message.content) {
             if (
               typeof content === 'object' &&
               content !== null &&
               'type' in content &&
-              content.type === 'tool_use' &&
+              (content as { type: unknown }).type === 'tool_use' &&
               'name' in content
             ) {
               usedTools.add(String((content as { name: unknown }).name));
@@ -432,6 +530,7 @@ export class SDKMessageTracker {
     this.messages.delete(sessionId);
     this.sessionMetrics.delete(sessionId);
     this.messageCounter.delete(sessionId);
+    this.sessionLastActivity.delete(sessionId);
   }
 
   /**
@@ -442,6 +541,7 @@ export class SDKMessageTracker {
     this.sessionMetrics.clear();
     this.toolMetrics.clear();
     this.messageCounter.clear();
+    this.sessionLastActivity.clear();
   }
 }
 

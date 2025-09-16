@@ -18,8 +18,14 @@ vi.mock('../middleware/web-portal-auth.middleware', () => {
 });
 
 // Mock the AI orchestrator and related services
-vi.mock('../ai/services/ai-orchestrator.service', () => ({
-  AIOrchestrator: vi.fn().mockImplementation(() => ({
+vi.mock('../ai/services/ai-orchestrator.service', () => {
+  const mockOrchestrator = {
+    // EventEmitter methods
+    on: vi.fn(),
+    emit: vi.fn(),
+    removeListener: vi.fn(),
+    removeAllListeners: vi.fn(),
+    // Custom methods
     analyzeDiagnostics: vi.fn().mockImplementation(async function* () {
       yield {
         type: 'assistant',
@@ -78,8 +84,16 @@ vi.mock('../ai/services/ai-orchestrator.service', () => ({
         ],
       };
     }),
-  })),
-}));
+    getUsageStats: vi.fn().mockReturnValue({
+      inputTokens: 100,
+      outputTokens: 50,
+    }),
+  };
+
+  return {
+    AIOrchestrator: vi.fn(() => mockOrchestrator),
+  };
+});
 
 vi.mock('../ai/services/hitl-permission-handler.service', () => ({
   HITLPermissionHandler: vi.fn().mockImplementation(() => ({
@@ -152,15 +166,22 @@ describe('AI Routes', () => {
   let authToken: string;
 
   beforeEach(async () => {
-    app = await createApp();
-    await app.ready();
+    try {
+      app = await createApp();
+      await app.ready();
 
-    // Create a mock auth token
-    authToken = 'Bearer test-token';
+      // Create a mock auth token
+      authToken = 'Bearer test-token';
+    } catch (error) {
+      console.error('Failed to create app:', error);
+      throw error;
+    }
   });
 
   afterEach(async () => {
-    await app.close();
+    if (app) {
+      await app.close();
+    }
     vi.clearAllMocks();
   });
 

@@ -56,7 +56,11 @@ export interface ScriptValidationRequest {
     requiredCapabilities?: string[];
   };
   policyChecks: Array<
-    'pii' | 'network_safety' | 'command_injection' | 'resource_limits'
+    | 'pii'
+    | 'network_safety'
+    | 'command_injection'
+    | 'resource_limits'
+    | 'file_access'
   >;
 }
 

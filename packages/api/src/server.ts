@@ -14,6 +14,7 @@ if (process.env.NODE_ENV === 'test') {
 
 import { config } from './config';
 import { aiRoutes } from './routes/ai';
+import { aiMetricsRoutes } from './routes/ai-metrics';
 import { registerChatRoutes } from './routes/chat';
 import { registerCustomerDeviceRoutes } from './routes/customer-devices';
 import { registerCustomerSessionRoutes } from './routes/customer-sessions';
@@ -109,6 +110,7 @@ export async function createApp(): Promise<FastifyInstance> {
 
   // Register AI orchestration routes
   await app.register(aiRoutes);
+  await app.register(aiMetricsRoutes);
 
   // Register WebSocket routes before chat routes (chat routes depend on websocketConnectionManager)
   await registerWebSocketRoutes(app);
@@ -160,6 +162,16 @@ export async function createApp(): Promise<FastifyInstance> {
     );
     stopVisibilityCheck();
 
+    // Stop metrics collection timers
+    const { metricsService } = await import(
+      './ai/services/sdk-metrics.service'
+    );
+    const { messageTracker } = await import(
+      './ai/services/sdk-message-tracker.service'
+    );
+    metricsService.stopMetricsCollection();
+    messageTracker.stopCleanupInterval();
+
     // Close WebSocket connections
     const connectionManager = getConnectionManager();
     if (connectionManager) {
@@ -203,6 +215,17 @@ export async function gracefulShutdown(app: FastifyInstance): Promise<void> {
     );
     stopVisibilityCheck();
     app.log.info('Background processes stopped');
+
+    // Stop metrics collection timers
+    const { metricsService } = await import(
+      './ai/services/sdk-metrics.service'
+    );
+    const { messageTracker } = await import(
+      './ai/services/sdk-message-tracker.service'
+    );
+    metricsService.stopMetricsCollection();
+    messageTracker.stopCleanupInterval();
+    app.log.info('Metrics collection stopped');
 
     // Close Fastify server
     await app.close();
