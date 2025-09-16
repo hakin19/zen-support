@@ -5,8 +5,8 @@ import { ScriptExecutionService } from './script-execution.service';
 import type { ScriptExecutionRequest } from './script-execution.service';
 
 // Mock dependencies
-vi.mock('@aizen/shared', () => ({
-  getSupabase: vi.fn(() => ({
+vi.mock('@aizen/shared/utils/supabase-client', () => ({
+  getSupabaseAdminClient: vi.fn(() => ({
     from: vi.fn(() => ({
       insert: vi.fn(() => ({ error: null })),
       select: vi.fn(() => ({
