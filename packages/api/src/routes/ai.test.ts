@@ -139,6 +139,7 @@ vi.mock('./websocket', () => ({
     getConnectionsByType: vi.fn().mockReturnValue([]),
     addConnection: vi.fn(),
     removeConnection: vi.fn(),
+    closeAllConnections: vi.fn().mockResolvedValue(undefined),
   }),
   registerWebSocketRoutes: vi.fn().mockResolvedValue(undefined),
 }));

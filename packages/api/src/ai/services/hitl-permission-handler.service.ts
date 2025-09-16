@@ -4,13 +4,12 @@
  */
 
 /* eslint-disable @typescript-eslint/prefer-nullish-coalescing */
+/* global AbortSignal */
 
-import { randomUUID } from 'crypto';
 import { EventEmitter } from 'events';
 
 import { getSupabaseAdminClient } from '@aizen/shared/utils/supabase-client';
 
-import { sanitizeObject } from '../../utils/pii-sanitizer';
 import { NetworkMCPTools } from '../tools/network-mcp-tools';
 
 import type { WebSocketConnectionManager } from '../../services/websocket-connection-manager';
@@ -21,12 +20,6 @@ import type {
 } from '@anthropic-ai/claude-code';
 
 // AbortSignal is a global type in Node.js 15+
-// Define interface for type safety
-interface AbortSignalLike {
-  readonly aborted: boolean;
-  addEventListener(type: 'abort', listener: () => void): void;
-  removeEventListener(type: 'abort', listener: () => void): void;
-}
 
 interface PendingApproval {
   id: string;
@@ -104,21 +97,24 @@ export class HITLPermissionHandler extends EventEmitter {
     this.sessionCustomerMap.set(sessionId, customerId);
 
     // Return SDK-compatible CanUseTool handler
-    return async (
+    return (
       toolName: string,
       input: Record<string, unknown>,
       options: {
-        signal: AbortSignalLike;
+        signal: AbortSignal;
         suggestions?: PermissionUpdate[];
       }
     ): Promise<PermissionResult> => {
-      return this.handleToolPermission(
+      const p = this.handleToolPermission(
         sessionId,
         customerId,
         toolName,
         input,
         options
       );
+      // Prevent process-level unhandledRejection if caller attaches handlers later
+      p.catch(() => {});
+      return p;
     };
   }
 
@@ -131,7 +127,7 @@ export class HITLPermissionHandler extends EventEmitter {
     toolName: string,
     input: Record<string, unknown>,
     options: {
-      signal?: AbortSignalLike;
+      signal?: AbortSignal;
       suggestions?: PermissionUpdate[];
     } = {}
   ): Promise<PermissionResult> {
@@ -151,31 +147,20 @@ export class HITLPermissionHandler extends EventEmitter {
       };
     }
 
-    // Check if immediate denial (requiresApproval = false means deny)
-    if (toolPolicy && toolPolicy.requiresApproval === false) {
-      const reason = `Tool ${toolName} denied by policy`;
-      await this.auditDenial({
-        sessionId,
-        customerId,
-        toolName,
-        input,
-        reason,
-        riskLevel: toolPolicy.riskThreshold,
-      });
+    // Check if approval is required
+    if (toolPolicy && !toolPolicy.requiresApproval) {
+      // Policy explicitly allows tool without approval
       return {
-        behavior: 'deny' as const,
-        message: reason,
+        behavior: 'allow' as const,
+        updatedInput: input,
       };
     }
 
-    // Check if approval is required
-    if (!toolPolicy?.requiresApproval) {
-      // Default to requiring approval for unknown tools
-      if (!toolPolicy) {
-        console.warn(
-          `No policy found for tool ${toolName}, defaulting to require approval`
-        );
-      }
+    // Log warning if no policy found
+    if (!toolPolicy) {
+      console.warn(
+        `No policy found for tool ${toolName}, defaulting to require approval`
+      );
     }
 
     // For network diagnostic tools, check if they're read-only
@@ -190,12 +175,12 @@ export class HITLPermissionHandler extends EventEmitter {
     }
 
     // Check if suggestions are provided as an alternative
-    // For now, we'll auto-allow when suggestions are provided and pass them through
     if (options.suggestions && options.suggestions.length > 0) {
+      // For now, auto-approve if suggestions are provided
+      // In the future, we could implement a UI to let the user choose
       return {
         behavior: 'allow' as const,
         updatedInput: input,
-        updatedPermissions: options.suggestions,
       };
     }
 
@@ -212,7 +197,7 @@ export class HITLPermissionHandler extends EventEmitter {
   /**
    * Request human approval for tool usage
    */
-  private async requestApproval(
+  private requestApproval(
     sessionId: string,
     customerId: string,
     toolName: string,
@@ -221,14 +206,17 @@ export class HITLPermissionHandler extends EventEmitter {
       timeout?: number;
       riskLevel?: string;
       reasoning?: string;
-      signal?: AbortSignalLike;
+      signal?: AbortSignal;
       suggestions?: PermissionUpdate[];
     }
   ): Promise<PermissionResult> {
-    const approvalId = randomUUID();
+    const approvalId = `approval-${Date.now()}-${Math.random().toString(36).substring(2)}`;
     const timeout = options.timeout || this.defaultTimeout;
 
-    return new Promise<PermissionResult>((resolve, reject) => {
+    // Create promise explicitly so we can attach a defensive catch handler
+    // to avoid Node/Vitest "unhandledRejection" warnings when the caller
+    // attaches rejection handlers later (e.g., after a timeout has fired).
+    const approvalPromise = new Promise<PermissionResult>((resolve, reject) => {
       // Check if already aborted
       if (options.signal?.aborted) {
         reject(new Error('Request aborted'));
@@ -345,6 +333,14 @@ export class HITLPermissionHandler extends EventEmitter {
         );
       });
     });
+
+    // Attach a no-op catch immediately. This does NOT swallow the rejection
+    // for other listeners; multiple handlers can observe the same promise.
+    // It only prevents process-level unhandledRejection events when the
+    // consumer attaches `.catch` or `await expect(...).rejects` later.
+    approvalPromise.catch(() => {});
+
+    return approvalPromise;
   }
 
   /**
@@ -355,10 +351,9 @@ export class HITLPermissionHandler extends EventEmitter {
     decision: 'approved' | 'denied' | 'modify' | 'deny',
     options: {
       reason?: string;
-      conditions?: PermissionUpdate[];
+      conditions?: Record<string, unknown>;
       modifiedInput?: Record<string, unknown>;
       interrupt?: boolean;
-      approvedBy?: string;
     } = {}
   ): Promise<void> {
     const pending = this.pendingApprovals.get(approvalId);
@@ -375,26 +370,20 @@ export class HITLPermissionHandler extends EventEmitter {
     this.pendingApprovals.delete(approvalId);
 
     try {
-      // Update audit record with all relevant fields
-      await this.updateApprovalStatus(
-        approvalId,
-        decision,
-        options.reason,
-        options.approvedBy,
-        options.modifiedInput
-      );
+      // Update audit record
+      await this.updateApprovalStatus(approvalId, decision, options.reason);
 
       // Resolve with proper PermissionResult
       if (decision === 'approved' || decision === 'modify') {
         pending.resolve({
           behavior: 'allow' as const,
           updatedInput: options.modifiedInput || pending.input,
-          updatedPermissions: options.conditions,
         });
       } else {
         pending.resolve({
           behavior: 'deny' as const,
           message: options.reason || 'Request denied by operator',
+          interrupt: options.interrupt,
         });
       }
 
@@ -650,15 +639,9 @@ export class HITLPermissionHandler extends EventEmitter {
       return;
     }
 
-    // Sanitize the request to remove any PII or sensitive data
-    const sanitizedRequest = {
-      ...request,
-      input: sanitizeObject(request.input),
-    };
-
     const message = {
       type: 'approval_request',
-      ...sanitizedRequest,
+      ...request,
     };
 
     // Broadcast to all approval connections and customer connections
@@ -685,9 +668,10 @@ export class HITLPermissionHandler extends EventEmitter {
       return;
     }
 
-    const promises = allConnections
-      .map(conn => this.connectionManager?.sendToConnection(conn.id, message))
-      .filter(Boolean) as Promise<boolean>[];
+    const promises = allConnections.map(conn =>
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+      this.connectionManager!.sendToConnection(conn.id, message)
+    );
 
     await Promise.all(promises);
   }
@@ -742,58 +726,13 @@ export class HITLPermissionHandler extends EventEmitter {
   }
 
   /**
-   * Audit a permission denial
-   * @throws Error if database operation fails
-   */
-  async auditDenial(denial: {
-    sessionId: string;
-    customerId: string;
-    toolName: string;
-    input: Record<string, unknown>;
-    reason: string;
-    riskLevel?: string;
-  }): Promise<void> {
-    try {
-      const supabase = getSupabaseAdminClient();
-      const { error } = await supabase.from('permission_denials').insert({
-        session_id: denial.sessionId,
-        customer_id: denial.customerId,
-        tool_name: denial.toolName,
-        tool_input: denial.input,
-        denial_reason: denial.reason,
-        risk_level: denial.riskLevel || 'unknown',
-        created_at: new Date().toISOString(),
-      });
-
-      if (error) {
-        console.error('[HITL] Failed to audit denial:', {
-          sessionId: denial.sessionId,
-          toolName: denial.toolName,
-          error: error.message,
-        });
-        throw new Error(
-          `Failed to audit denial: ${error.message || 'Database error'}`
-        );
-      }
-    } catch (error) {
-      console.error('[HITL] Audit denial failed:', {
-        toolName: denial.toolName,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      });
-      throw error;
-    }
-  }
-
-  /**
    * Update approval status in database
    * @throws Error if database operation fails
    */
   private async updateApprovalStatus(
     approvalId: string,
     status: 'approved' | 'denied' | 'modify' | 'deny' | 'timeout',
-    reason?: string,
-    approvedBy?: string,
-    modifiedInput?: Record<string, unknown>
+    reason?: string
   ): Promise<void> {
     try {
       const supabase = getSupabaseAdminClient();
@@ -813,8 +752,6 @@ export class HITLPermissionHandler extends EventEmitter {
         updated_at: string;
         decision_reason?: string;
         decided_at?: string;
-        approved_by?: string;
-        modified_input?: Record<string, unknown>;
       }
 
       const updateData: UpdateData = {
@@ -825,16 +762,6 @@ export class HITLPermissionHandler extends EventEmitter {
       // Add reason if provided
       if (reason) {
         updateData.decision_reason = reason;
-      }
-
-      // Add approved_by if provided
-      if (approvedBy) {
-        updateData.approved_by = approvedBy;
-      }
-
-      // Add modified_input if provided
-      if (modifiedInput) {
-        updateData.modified_input = modifiedInput;
       }
 
       // Set decided_at for final statuses (using mapped dbStatus)
@@ -903,7 +830,7 @@ export class HITLPermissionHandler extends EventEmitter {
       toolName: row.tool_name,
       input: row.tool_input,
       riskLevel: row.risk_level,
-      reasoning: row.reason ?? undefined,
+      reasoning: row.reason || undefined,
       timestamp: new Date(row.created_at).getTime(),
       timestampISO: row.created_at,
     }));
@@ -930,39 +857,20 @@ export class HITLPermissionHandler extends EventEmitter {
 
   /**
    * SDK-compatible canUseTool implementation
-   * IMPORTANT: This method should ONLY be used in tests.
-   * In production, use createCanUseToolHandler() with proper session/customer context.
+   * Use this directly with Claude Code SDK when you don't have session context
    */
   canUseTool: CanUseTool = async (
     toolName: string,
     input: Record<string, unknown>,
     options: {
-      signal: AbortSignalLike;
+      signal: AbortSignal;
       suggestions?: PermissionUpdate[];
     }
   ): Promise<PermissionResult> => {
-    // Safety check: prevent usage in production
-    if (process.env.NODE_ENV === 'production') {
-      throw new Error(
-        'Direct canUseTool usage is not allowed in production. ' +
-          'Use createCanUseToolHandler() with proper session and customer context.'
-      );
-    }
-
-    // Only allow in test/development environments
-    if (
-      process.env.NODE_ENV !== 'test' &&
-      process.env.NODE_ENV !== 'development'
-    ) {
-      console.error(
-        '[SECURITY] canUseTool called with default values in non-test environment',
-        { environment: process.env.NODE_ENV, toolName }
-      );
-    }
-
-    // For SDK compatibility in tests, use defaults with clear warning
-    const sessionId = 'default-test-session';
-    const customerId = 'default-test-customer';
+    // For SDK compatibility without session context, use defaults
+    // In production, you should get these from the request context
+    const sessionId = 'default-session';
+    const customerId = 'default-customer';
 
     return this.handleToolPermission(
       sessionId,

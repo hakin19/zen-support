@@ -5,7 +5,8 @@
 
 import { z } from 'zod';
 
-import type { CallToolResult } from '../schemas/sdk-message-validation';
+// Import CallToolResult from shared types (SDK doesn't export this type directly)
+import type { CallToolResult } from '../types/sdk-types';
 
 /**
  * Base schema for all network MCP tools

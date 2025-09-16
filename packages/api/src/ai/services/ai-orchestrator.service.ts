@@ -435,7 +435,13 @@ export class AIOrchestrator extends EventEmitter {
       baseline?: unknown;
     }
 
-    const { metrics, timeRange, thresholds } = prompt.input as PerformanceInput;
+    const performanceInput = prompt.input as unknown as PerformanceInput;
+    const { metrics, timeRange } = performanceInput;
+    const thresholds = performanceInput.thresholds ?? {
+      latencyMs: 100,
+      packetLossPercent: 1,
+      utilizationPercent: 80,
+    };
 
     // Sanitize metrics data for PII
     const sanitizedMetrics = sanitizeObject(metrics);

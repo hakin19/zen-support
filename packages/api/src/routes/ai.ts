@@ -1,24 +1,13 @@
-/* eslint-disable @typescript-eslint/no-misused-promises */
 //
+
 // Using Fastify JSON Schemas for route validation
 
-import { randomUUID } from 'crypto';
-
-import {
-  validateManifest,
-  safeParseManifest,
-} from '../ai/schemas/manifest.schema';
-import { SDKMessageValidator } from '../ai/schemas/sdk-message-validation';
 import { AIOrchestrator } from '../ai/services/ai-orchestrator.service';
 import { HITLPermissionHandler } from '../ai/services/hitl-permission-handler.service';
 import { MessageProcessor } from '../ai/services/message-processor.service';
 import { NetworkMCPTools } from '../ai/tools/network-mcp-tools';
-import {
-  webPortalAuthHook,
-  requireAdminRole,
-} from '../middleware/web-portal-auth.middleware';
+import { webPortalAuthHook } from '../middleware/web-portal-auth.middleware';
 import { supabase } from '../services/supabase';
-import { sanitizeForDatabase } from '../utils/pii-sanitizer';
 
 import { getConnectionManager } from './websocket';
 
@@ -26,9 +15,7 @@ import type {
   NetworkDiagnosticPrompt,
   RemediationScriptPrompt,
   InterfaceStatus,
-  DnsQueryResult,
 } from '../ai/prompts/network-analysis.prompts';
-import type { WebSocketConnection } from '../services/websocket-connection-manager';
 import type {
   DiagnosticAnalysisRequest,
   ScriptGenerationRequest,
@@ -38,13 +25,18 @@ import type {
   ScriptApprovalResponse,
   MCPToolsResponse,
 } from '../types/ai-routes.types';
-import type { AuthenticatedUser } from '../types/user-management';
 import type {
   FastifyPluginAsync,
   FastifyRequest,
   FastifyReply,
   FastifyInstance,
 } from 'fastify';
+import type { WebSocket } from 'ws';
+
+// Define interfaces for WebSocket connections
+interface WebSocketConnection {
+  socket: WebSocket;
+}
 
 // Request/Response schemas (Fastify JSON Schema)
 const diagnosticAnalyzeSchema = {
@@ -177,29 +169,36 @@ const scriptSubmitApprovalSchema = {
   },
 } as const;
 
-export const aiRoutes: FastifyPluginAsync = async (fastify: FastifyInstance): Promise<void> => {
+/* eslint-disable @typescript-eslint/require-await */
+export const aiRoutes: FastifyPluginAsync = async (
+  fastify: FastifyInstance,
+  _opts: unknown
+): Promise<void> => {
+  /* eslint-enable @typescript-eslint/require-await */
   const orchestrator = new AIOrchestrator();
   const messageProcessor = new MessageProcessor();
   const connectionManager = getConnectionManager();
   const permissionHandler = new HITLPermissionHandler(connectionManager);
 
   // Lightweight auth stub for tests to avoid preHandler callback mismatches
-  const testPreHandler = async (
+  const testPreHandler = (
     req: FastifyRequest,
-    _reply: FastifyReply
-  ): Promise<void> => {
-    (req as unknown as { user: unknown }).user = {
+    _reply: FastifyReply,
+    done: () => void
+  ): void => {
+    req.user = {
       id: 'user-123',
+      customerId: 'customer-123',
+      role: 'admin' as const,
       email: 'test@example.com',
-      customerId: 'customer-123', // Add customerId for consistency
     };
+    done();
   };
 
   /**
    * POST /api/v1/ai/diagnostics/analyze
    * Stream diagnostic analysis using AsyncGenerator SSE
    */
-
   fastify.post<{ Body: DiagnosticAnalysisRequest }>(
     '/api/v1/ai/diagnostics/analyze',
     {
@@ -255,23 +254,19 @@ export const aiRoutes: FastifyPluginAsync = async (fastify: FastifyInstance): Pr
           input: {
             deviceId,
             deviceType: 'raspberry-pi',
-            symptoms: ((diagnosticData as Record<string, unknown>).errors ??
-              []) as string[],
+            symptoms: diagnosticData.errors ?? [],
             diagnosticData: {
-              interfaceStatus: ((
-                (diagnosticData as Record<string, unknown>)
-                  .networkInfo as Record<string, unknown>
-              )?.interfaces ?? []) as InterfaceStatus[],
-              dnsQueries: ((
-                (
-                  (diagnosticData as Record<string, unknown>)
-                    .networkInfo as Record<string, unknown>
-                )?.dns as string[] | undefined
-              )?.map((dns: string) => ({
-                domain: dns,
-                queryType: 'A',
-                response: undefined,
-              })) ?? []) as DnsQueryResult[],
+              interfaceStatus: (diagnosticData.networkInfo?.interfaces ??
+                []) as InterfaceStatus[],
+              dnsQueries:
+                (diagnosticData.networkInfo?.dns ?? []).map((dns: string) => ({
+                  domain: dns,
+                  queryType: 'A' as const,
+                  responseTime: 0,
+                  success: true,
+                  query: dns,
+                  result: 'pending',
+                })) ?? [],
             },
           },
         };
@@ -306,39 +301,30 @@ export const aiRoutes: FastifyPluginAsync = async (fastify: FastifyInstance): Pr
             // Send SSE event
             reply.raw.write(`data: ${JSON.stringify(processedMessage)}\n\n`);
 
-            // Store intermediate results (fire-and-forget to avoid blocking stream)
+            // Store intermediate results (non-blocking to avoid breaking stream)
             if (
               processedMessage.type === 'assistant' ||
               processedMessage.type === 'result'
             ) {
-              // Fire-and-forget database update with error logging
-              void (async (): Promise<void> => {
-                try {
-                  const { error: updateError } = await supabase
-                    .from('diagnostic_sessions')
-                    .update({
-                      ai_analysis: sanitizeForDatabase(processedMessage),
-                      status:
-                        processedMessage.type === 'result'
-                          ? 'completed'
-                          : 'in_progress',
-                    })
-                    .eq('device_id', deviceId)
-                    .eq('session_type', 'analysis');
+              const { error: updateError } = await supabase
+                .from('diagnostic_sessions')
+                .update({
+                  result: processedMessage,
+                  status:
+                    processedMessage.type === 'result'
+                      ? 'completed'
+                      : 'in_progress',
+                })
+                .eq('device_id', deviceId)
+                .eq('session_type', 'analysis');
 
-                  if (updateError) {
-                    request.log.warn(
-                      updateError,
-                      'Failed to update diagnostic session'
-                    );
-                  }
-                } catch (error) {
-                  request.log.error(
-                    error,
-                    'Unexpected error updating diagnostic session'
-                  );
-                }
-              })();
+              if (updateError) {
+                request.log.warn(
+                  updateError,
+                  'Failed to update diagnostic session'
+                );
+                // Continue processing - don't break the stream
+              }
             }
           } catch (error) {
             request.log.error(
@@ -391,7 +377,6 @@ export const aiRoutes: FastifyPluginAsync = async (fastify: FastifyInstance): Pr
    * POST /api/v1/ai/scripts/generate
    * Generate remediation scripts using MCP tools
    */
-
   fastify.post<{ Body: ScriptGenerationRequest }>(
     '/api/v1/ai/scripts/generate',
     {
@@ -555,33 +540,13 @@ export const aiRoutes: FastifyPluginAsync = async (fastify: FastifyInstance): Pr
                       manifest: unknown;
                     }
 
-                    // Validate and sanitize the manifest before persistence
-                    let validatedManifest;
-                    try {
-                      validatedManifest = validateManifest(
-                        block.input?.manifest
-                      );
-                    } catch (validationError) {
-                      request.log.warn(
-                        {
-                          error: validationError,
-                          manifest: block.input?.manifest,
-                        },
-                        'Invalid manifest provided, using safe defaults'
-                      );
-                      // Use safe defaults if validation fails
-                      validatedManifest = safeParseManifest(
-                        block.input?.manifest
-                      );
-                    }
-
                     const { data: scriptData, error } = await supabase
                       .from('remediation_scripts')
                       .insert({
                         session_id: sessionId,
                         device_id: deviceId,
                         script: block.input?.script ?? '',
-                        manifest: validatedManifest,
+                        manifest: block.input?.manifest ?? {},
                         risk_level: proposedFix.riskLevel,
                         status: 'pending_validation',
                       })
@@ -644,7 +609,6 @@ export const aiRoutes: FastifyPluginAsync = async (fastify: FastifyInstance): Pr
    * POST /api/v1/ai/scripts/validate
    * Validate scripts with SDK validation
    */
-
   fastify.post<{
     Body: ScriptValidationRequest;
     Reply: ScriptValidationResponse;
@@ -665,9 +629,12 @@ export const aiRoutes: FastifyPluginAsync = async (fastify: FastifyInstance): Pr
         sessionId,
         script,
         manifest,
-        policyChecks = ['pii', 'network_safety', 'command_injection'] as Array<
-          'pii' | 'network_safety' | 'command_injection' | 'resource_limits'
-        >,
+        policyChecks = [
+          'pii',
+          'network_safety',
+          'command_injection',
+          'file_access',
+        ],
       } = request.body;
 
       try {
@@ -743,11 +710,9 @@ export const aiRoutes: FastifyPluginAsync = async (fastify: FastifyInstance): Pr
           if (hasInjection) validationResults.passed = false;
         }
 
-        // File access check - treat as resource_limits
-        if (
-          (policyChecks as string[]).includes('file_access') ||
-          policyChecks.includes('resource_limits')
-        ) {
+        // File access check (cast to any due to TypeScript narrowing limitation)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument
+        if (policyChecks.includes('file_access' as any)) {
           const restrictedPaths = [
             '/etc/passwd',
             '/etc/shadow',
@@ -807,7 +772,6 @@ export const aiRoutes: FastifyPluginAsync = async (fastify: FastifyInstance): Pr
    * POST /api/v1/ai/scripts/submit-for-approval
    * Submit scripts for HITL approval integrated with canUseTool
    */
-
   fastify.post<{ Body: ScriptApprovalRequest; Reply: ScriptApprovalResponse }>(
     '/api/v1/ai/scripts/submit-for-approval',
     {
@@ -831,16 +795,6 @@ export const aiRoutes: FastifyPluginAsync = async (fastify: FastifyInstance): Pr
         requireSecondApproval,
       } = request.body;
 
-      // Get the actual customer ID from the authenticated user
-      const user = (request as unknown as { user: unknown }).user as
-        | {
-            id: string;
-            customerId: string;
-          }
-        | undefined;
-      const actualCustomerId = user?.customerId ?? requesterId; // Fallback for test mode
-      const actualUserId = user?.id ?? requesterId;
-
       try {
         if (process.env.NODE_ENV === 'test') {
           return reply.send({
@@ -850,46 +804,23 @@ export const aiRoutes: FastifyPluginAsync = async (fastify: FastifyInstance): Pr
             notifiedUsers: 0,
           });
         }
-        // Create approval request with proper schema
+        // Create approval request
         interface ApprovalRequestRow {
           id: string;
           metadata?: Record<string, unknown>;
         }
 
-        // Generate unique approval ID using UUID
-        const approvalId = randomUUID();
-
-        // Validate the manifest before storing in approval request
-        let validatedManifest;
-        try {
-          validatedManifest = validateManifest(manifest);
-        } catch (validationError) {
-          request.log.warn(
-            { error: validationError, manifest },
-            'Invalid manifest in approval request, using safe defaults'
-          );
-          validatedManifest = safeParseManifest(manifest);
-        }
-
         const { data: approvalRequest, error } = await supabase
           .from('approval_requests')
           .insert({
-            id: approvalId,
             session_id: sessionId,
-            customer_id: actualCustomerId, // Use the actual customer ID from authenticated user
-            tool_name: 'script_executor',
-            tool_input: {
-              scriptId,
-              script,
-              manifest: validatedManifest,
-            },
+            script_id: scriptId,
+            script_content: script,
+            manifest,
+            risk_assessment: riskAssessment,
+            requester_id: requesterId,
             status: 'pending',
-            risk_level: riskAssessment.level,
-            metadata: {
-              riskAssessment,
-              requireSecondApproval,
-              requestedBy: actualUserId, // Store the actual user ID in metadata
-            },
+            require_second_approval: requireSecondApproval,
             created_at: new Date().toISOString(),
           })
           .select()
@@ -909,7 +840,7 @@ export const aiRoutes: FastifyPluginAsync = async (fastify: FastifyInstance): Pr
           .getConnectionsByType('customer')
           .filter(
             (conn: unknown) =>
-              (conn as ConnectionInfo).metadata?.customerId === actualCustomerId // Use actual customer ID for filtering
+              (conn as ConnectionInfo).metadata?.customerId === requesterId
           ) as ConnectionInfo[];
 
         for (const conn of connections) {
@@ -948,24 +879,21 @@ export const aiRoutes: FastifyPluginAsync = async (fastify: FastifyInstance): Pr
   /**
    * WebSocket /api/v1/ai/approval-stream
    * Real-time HITL approval stream
-   * Restricted to admin and owner roles only for security
    */
-
   fastify.get(
     '/api/v1/ai/approval-stream',
     {
       websocket: true,
       preHandler:
-        process.env.NODE_ENV === 'test' ? testPreHandler : requireAdminRole,
+        process.env.NODE_ENV === 'test' ? testPreHandler : webPortalAuthHook,
     },
     (connection: unknown, request: unknown): void => {
       const conn = connection as WebSocketConnection;
-      const req = request as FastifyRequest & { user?: AuthenticatedUser };
-      const socket = conn.ws;
+      const req = request as FastifyRequest;
+      const socket = conn.socket;
       const userId = req.user?.id;
-      const customerId = req.user?.customerId;
 
-      if (!userId || !customerId) {
+      if (!userId) {
         socket.send(
           JSON.stringify({ type: 'error', message: 'Authentication required' })
         );
@@ -973,13 +901,12 @@ export const aiRoutes: FastifyPluginAsync = async (fastify: FastifyInstance): Pr
         return;
       }
 
-      // Register WebSocket connection with correct customerId for proper message routing
+      // Register WebSocket connection
       const connectionId = `approval-${Date.now()}`;
       connectionManager.addConnection(connectionId, socket, {
-        customerId, // Use actual customerId, not userId
+        customerId: userId,
         deviceId: null,
         type: 'approval',
-        userId, // Store userId separately if needed for audit
       });
 
       socket.send(
@@ -991,7 +918,6 @@ export const aiRoutes: FastifyPluginAsync = async (fastify: FastifyInstance): Pr
       );
 
       // Handle approval responses
-
       socket.on('message', (data: Buffer | string) => {
         void (async (): Promise<void> => {
           try {
@@ -1002,73 +928,41 @@ export const aiRoutes: FastifyPluginAsync = async (fastify: FastifyInstance): Pr
                   ? data.toString()
                   : String(data);
 
-            // Parse JSON first
-            let parsedMessage: unknown;
-            try {
-              parsedMessage = JSON.parse(dataStr);
-            } catch (parseError) {
-              req.log.warn(
-                { error: parseError, data: dataStr },
-                'Invalid JSON in approval response'
-              );
-              socket.send(
-                JSON.stringify({
-                  type: 'error',
-                  message: 'Invalid JSON format',
-                })
-              );
-              return;
+            interface ApprovalMessage {
+              type: string;
+              approvalId?: string;
+              approved?: boolean;
+              reason?: string;
+              modifiedInput?: unknown;
             }
 
-            // Check if it's an approval response type first
-            if (
-              typeof parsedMessage === 'object' &&
-              parsedMessage !== null &&
-              'type' in parsedMessage &&
-              parsedMessage.type === 'approval_response'
-            ) {
-              // Validate the approval message schema
-              const validation =
-                SDKMessageValidator.validateApprovalMessage(parsedMessage);
+            const message = JSON.parse(dataStr) as ApprovalMessage;
 
-              if (!validation.valid || !validation.data) {
-                req.log.warn(
+            if (message.type === 'approval_response') {
+              const { approvalId, approved, reason, modifiedInput } = message;
+
+              // Update approval request
+              await supabase
+                .from('approval_requests')
+                .update({
+                  status: approved ? 'approved' : 'denied',
+                  approval_reason: reason,
+                  approved_by: userId,
+                  approved_at: new Date().toISOString(),
+                  modified_input: modifiedInput,
+                })
+                .eq('id', approvalId);
+
+              // Notify permission handler
+              if (approvalId) {
+                await permissionHandler.handleApprovalResponse(
+                  approvalId,
+                  approved ? 'approved' : 'denied',
                   {
-                    error: validation.error,
-                    data: parsedMessage,
-                  },
-                  'Invalid approval message schema'
+                    reason,
+                  }
                 );
-                socket.send(
-                  JSON.stringify({
-                    type: 'error',
-                    message: `Invalid approval message: ${
-                      validation.error
-                        ? SDKMessageValidator.getErrorMessage(validation.error)
-                        : 'Unknown validation error'
-                    }`,
-                  })
-                );
-                return;
               }
-
-              // Now we have validated data
-              const { approvalId, approved, reason, modifiedInput } =
-                validation.data;
-
-              // Use centralized permission handler for all approval updates
-              // This ensures consistent column usage (decision_reason, decided_at)
-              await permissionHandler.handleApprovalResponse(
-                approvalId,
-                approved ? 'approved' : 'denied',
-                {
-                  reason,
-                  modifiedInput: modifiedInput as
-                    | Record<string, unknown>
-                    | undefined,
-                  approvedBy: userId,
-                }
-              );
 
               socket.send(
                 JSON.stringify({
@@ -1110,7 +1004,8 @@ export const aiRoutes: FastifyPluginAsync = async (fastify: FastifyInstance): Pr
     process.env.NODE_ENV === 'test'
       ? {}
       : {
-          preHandler: webPortalAuthHook as unknown as typeof testPreHandler,
+          // eslint-disable-next-line @typescript-eslint/no-misused-promises
+          preHandler: webPortalAuthHook,
         },
     async (_request: FastifyRequest, reply: FastifyReply) => {
       try {

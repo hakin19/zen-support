@@ -3,16 +3,7 @@
  * Defines the SDK configuration with safety-first defaults for the Aizen vNE system
  */
 
-// TODO: Install @anthropic/claude-code-sdk in Task 2
-// import type {
-//   Options,
-//   PermissionMode,
-//   CanUseTool,
-//   PermissionResult,
-//   McpServerConfig,
-// } from '../types/sdk-types';
-
-// Use official SDK types to avoid mismatch with orchestrator
+// Use official SDK types from @anthropic-ai/claude-code package
 import type {
   Options,
   PermissionMode,
@@ -492,9 +483,18 @@ Remember: You are working on production networks. Every action matters.`;
    */
   static createMcpServerConfig(): Record<string, McpServerConfig> {
     try {
-      // For testing, return empty config to avoid module loading issues
-      // In production, this would be populated with actual network tools
-      return {};
+      // Dynamically load the network MCP server to avoid circular dependencies
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { createNetworkMcpServer } = require('../tools/network-mcp-server');
+      const networkServer = createNetworkMcpServer();
+
+      return {
+        'network-tools': {
+          type: 'sdk',
+          name: 'aizen-network-tools',
+          instance: networkServer,
+        } as McpServerConfig,
+      };
     } catch (error) {
       // If network tools aren't available, return empty config
       console.warn('Network MCP tools not available:', error);
