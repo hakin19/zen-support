@@ -8,7 +8,7 @@
 
 import { EventEmitter } from 'events';
 
-import { getSupabaseAdminClient } from '@aizen/shared/utils/supabase-client';
+import { getSupabaseAdminClient } from '@aizen/shared';
 
 import { NetworkMCPTools } from '../tools/network-mcp-tools';
 

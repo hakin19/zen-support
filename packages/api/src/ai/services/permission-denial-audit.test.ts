@@ -2,11 +2,14 @@
 
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 
+// Import the function that will be mocked
+import { getSupabaseAdminClient } from '@aizen/shared';
+
 // Create a shared insertMock for testing
 const insertMock = vi.fn();
 
 // Mock getSupabaseAdminClient
-vi.mock('@aizen/shared/utils/supabase-client', () => ({
+vi.mock('@aizen/shared', () => ({
   getSupabaseAdminClient: vi.fn(() => ({
     from: vi.fn((table: string) => {
       if (table === 'permission_denials') {
@@ -60,9 +63,6 @@ describe('Permission Denial Audit Tracking', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     // Capture the mock for verification
-    const {
-      getSupabaseAdminClient,
-    } = require('@aizen/shared/utils/supabase-client');
     supabaseMock = getSupabaseAdminClient();
   });
 
