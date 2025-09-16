@@ -4,7 +4,7 @@ import type {
   SDKResultMessage,
   SDKSystemMessage,
   SDKPartialAssistantMessage,
-  Usage,
+  ModelUsage,
 } from '@anthropic-ai/claude-code';
 
 export interface TrackedMessage {
@@ -272,7 +272,7 @@ export class SDKMessageTracker {
     // Track token usage if available
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     if (assistantMessage.message?.usage) {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument
       this.updateTokenUsage(metrics, assistantMessage.message.usage);
     }
   }
@@ -333,11 +333,11 @@ export class SDKMessageTracker {
   }
 
   /**
-   * Update token usage from Usage object
+   * Update token usage from ModelUsage object
    */
   private updateTokenUsage(
     metrics: SessionTrackingMetrics,
-    usage: Usage
+    usage: ModelUsage
   ): void {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any
     const usageData = usage as any;
