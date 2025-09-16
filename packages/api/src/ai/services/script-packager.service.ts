@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'crypto';
 
-import { ed25519 } from '@noble/curves/ed25519';
+import { KeyManagerService } from './key-manager.service';
 
 import type { ScriptManifest } from '../schemas/manifest.schema';
 
@@ -37,23 +37,11 @@ export interface ExecutionResult {
  * Handles script packaging, signing, and result processing
  */
 export class ScriptPackagerService {
-  private privateKey?: Uint8Array;
-  private publicKey?: Uint8Array;
+  private keyManager: KeyManagerService;
 
   constructor() {
-    this.initializeKeys();
-  }
-
-  /**
-   * Initialize Ed25519 keypair for signing
-   * In production, these should be loaded from secure storage
-   */
-  private initializeKeys(): void {
-    // For now, generate ephemeral keys
-    // TODO: Load from environment/secure storage
-    const seed = randomBytes(32);
-    this.privateKey = seed;
-    this.publicKey = ed25519.getPublicKey(seed);
+    // Use singleton key manager for persistent keys across instances
+    this.keyManager = KeyManagerService.getInstance();
   }
 
   /**
@@ -77,11 +65,8 @@ export class ScriptPackagerService {
     // Calculate checksum
     const checksum = this.calculateChecksum(script, manifest);
 
-    // Sign the package if keys are available
-    let signature: string | undefined;
-    if (this.privateKey) {
-      signature = this.signPackage(encodedScript, checksum);
-    }
+    // Sign the package
+    const signature = this.signPackage(encodedScript, checksum);
 
     const scriptPackage: ScriptPackage = {
       id,
@@ -116,16 +101,12 @@ export class ScriptPackagerService {
    * @returns Base64 encoded signature
    */
   private signPackage(encodedScript: string, checksum: string): string {
-    if (!this.privateKey) {
-      throw new Error('Private key not initialized');
-    }
-
     // Create message to sign
     const message = `${encodedScript}:${checksum}`;
     const messageBytes = Buffer.from(message);
 
-    // Sign the message
-    const signature = ed25519.sign(messageBytes, this.privateKey);
+    // Sign the message using persistent key
+    const signature = this.keyManager.sign(messageBytes);
 
     return Buffer.from(signature).toString('base64');
   }
@@ -136,7 +117,7 @@ export class ScriptPackagerService {
    * @returns True if signature is valid
    */
   verifyPackage(scriptPackage: ScriptPackage): boolean {
-    if (!scriptPackage.signature || !this.publicKey) {
+    if (!scriptPackage.signature) {
       return false;
     }
 
@@ -148,8 +129,8 @@ export class ScriptPackagerService {
       // Decode signature
       const signature = Buffer.from(scriptPackage.signature, 'base64');
 
-      // Verify signature
-      return ed25519.verify(signature, messageBytes, this.publicKey);
+      // Verify signature using persistent key
+      return this.keyManager.verify(new Uint8Array(signature), messageBytes);
     } catch {
       return false;
     }
@@ -221,10 +202,7 @@ export class ScriptPackagerService {
    * Get public key for device verification
    * @returns Base64 encoded public key
    */
-  getPublicKey(): string | null {
-    if (!this.publicKey) {
-      return null;
-    }
-    return Buffer.from(this.publicKey).toString('base64');
+  getPublicKey(): string {
+    return this.keyManager.getPublicKeyBase64();
   }
 }

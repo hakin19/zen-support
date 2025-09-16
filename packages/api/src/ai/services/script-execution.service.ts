@@ -8,6 +8,7 @@ import { ScriptPackagerService } from './script-packager.service';
 import type { ScriptPackage, ExecutionResult } from './script-packager.service';
 import type { ScriptManifest } from '../schemas/manifest.schema';
 import type { SDKMessage } from '@anthropic-ai/claude-code';
+import type { RedisClientType } from 'redis';
 
 /**
  * Script execution request from AI orchestrator
@@ -68,6 +69,7 @@ interface RemediationScriptRecord {
 export class ScriptExecutionService {
   private packager: ScriptPackagerService;
   private redis = getRedisClient();
+  private redisClient: RedisClientType = getRedisClient().getClient();
   private supabase = getSupabase();
 
   constructor() {
@@ -155,20 +157,28 @@ export class ScriptExecutionService {
     });
 
     // Add to device-specific queue
-    if (priority === 'high') {
-      await this.redis.lpush(queueKey, packageData);
-    } else {
-      await this.redis.rpush(queueKey, packageData);
+    try {
+      if (priority === 'high') {
+        await this.redisClient.lPush(queueKey, packageData);
+      } else {
+        await this.redisClient.rPush(queueKey, packageData);
+      }
+    } catch (error) {
+      console.error('Failed to queue script for device:', error);
     }
 
     // Notify device of new script
-    await this.redis.publish(
-      `device:${deviceId}:commands`,
-      JSON.stringify({
-        type: 'EXECUTE_SCRIPT',
-        packageId: scriptPackage.id,
-      })
-    );
+    try {
+      await this.redis.publish(
+        `device:${deviceId}:commands`,
+        JSON.stringify({
+          type: 'EXECUTE_SCRIPT',
+          packageId: scriptPackage.id,
+        })
+      );
+    } catch (error) {
+      console.error('Failed to notify device:', error);
+    }
   }
 
   /**
@@ -179,18 +189,24 @@ export class ScriptExecutionService {
     packageId: string
   ): Promise<number | undefined> {
     const queueKey = `device:${deviceId}:script_queue`;
-    const queue = await this.redis.lrange(queueKey, 0, -1);
 
-    const position = queue.findIndex(item => {
-      try {
-        const data = JSON.parse(item) as { packageId: string };
-        return data.packageId === packageId;
-      } catch {
-        return false;
-      }
-    });
+    try {
+      const queue = await this.redisClient.lRange(queueKey, 0, -1);
 
-    return position >= 0 ? position + 1 : undefined;
+      const position = queue.findIndex(item => {
+        try {
+          const data = JSON.parse(item) as { packageId: string };
+          return data.packageId === packageId;
+        } catch {
+          return false;
+        }
+      });
+
+      return position >= 0 ? position + 1 : undefined;
+    } catch (error) {
+      console.error('Failed to get queue position:', error);
+      return undefined;
+    }
   }
 
   /**
