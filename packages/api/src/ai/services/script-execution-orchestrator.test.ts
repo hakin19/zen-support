@@ -4,6 +4,30 @@ import { ScriptExecutionOrchestrator } from './script-execution-orchestrator';
 
 import type { ExecutionResult } from './script-execution.service';
 
+// Mock Redis client
+vi.mock('@aizen/shared/utils/redis-client', () => ({
+  getRedisClient: vi.fn(() => ({
+    publish: vi.fn(),
+    getClient: vi.fn(() => ({
+      lPush: vi.fn(),
+      rPush: vi.fn(),
+      lRange: vi.fn(() => []),
+      lRem: vi.fn(),
+    })),
+  })),
+}));
+
+// Mock Supabase admin client
+vi.mock('@aizen/shared/utils/supabase-client', () => ({
+  getSupabaseAdminClient: vi.fn(() => ({
+    from: vi.fn(() => ({
+      update: vi.fn(() => ({
+        eq: vi.fn(() => ({ error: null })),
+      })),
+    })),
+  })),
+}));
+
 // Mock the script execution service
 vi.mock('./script-execution.service', () => {
   const mockServiceInstance = {

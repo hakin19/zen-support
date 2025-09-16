@@ -50,9 +50,9 @@
   - [x] 7.4 Device agent integration with SDK-generated scripts
   - [x] 7.5 Result reporting back through SDK message pipeline
 
-- [ ] 8. Observability and documentation
-  - [ ] 8.1 SDK message tracking with correlation IDs
-  - [ ] 8.2 Metrics for SDK usage (tokens, latency, tool calls)
-  - [ ] 8.3 TypeScript API documentation with SDK types
-  - [ ] 8.4 Integration guide for SDK Options and MCP tools
-  - [ ] 8.5 Runbook for ANTHROPIC_API_KEY management
+- [x] 8. Observability and documentation
+  - [x] 8.1 SDK message tracking with correlation IDs
+  - [x] 8.2 Metrics for SDK usage (tokens, latency, tool calls)
+  - [x] 8.3 TypeScript API documentation with SDK types
+  - [x] 8.4 Integration guide for SDK Options and MCP tools
+  - [x] 8.5 Runbook for ANTHROPIC_API_KEY management
