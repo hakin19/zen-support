@@ -13,10 +13,10 @@
   - [x] 2.2 Build `/settings/organization` single-page profile form with validation + billing portal link to satisfy tests
   - [x] 2.3 Connect form submissions to the organization PATCH endpoint and extend tests for error/success states
 
-- [ ] 3. Device Management Basics (Test First)
-  - [ ] 3.1 Write failing tests for `/devices` table filters, status badges, and registration flow
-  - [ ] 3.2 Implement `/devices` list and registration modal (activation code surfaced) to make tests pass
-  - [ ] 3.3 Hook into websocket `device_*` events and assert refresh behavior via tests
+- [x] 3. Device Management Basics (Test First)
+  - [x] 3.1 Write failing tests for `/devices` table filters, status badges, and registration flow
+  - [x] 3.2 Implement `/devices` list and registration modal (activation code surfaced) to make tests pass
+  - [x] 3.3 Hook into websocket `device_*` events and assert refresh behavior via tests
 
 - [ ] 4. User Administration Basics (Test First)
   - [ ] 4.1 Draft failing tests for `/users` table search, pagination, and role display

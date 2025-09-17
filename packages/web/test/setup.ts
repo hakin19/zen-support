@@ -129,6 +129,34 @@ vi.mock('@/store/auth.store', () => ({
   })),
 }));
 
+// Mock device store with selector support like auth store
+vi.mock('@/store/device.store', () => ({
+  useDeviceStore: vi.fn(selector => {
+    const state = {
+      devices: [],
+      loading: false,
+      error: null,
+      currentPage: 1,
+      totalPages: 1,
+      pageSize: 10,
+      webSocketClient: undefined,
+      fetchDevices: vi.fn().mockResolvedValue(undefined),
+      refreshDevices: vi.fn().mockResolvedValue(undefined),
+      registerDevice: vi
+        .fn()
+        .mockResolvedValue({ activationCode: 'XXXX-YYYY-ZZZZ' }),
+      updateDeviceStatus: vi.fn(),
+      updateDeviceHeartbeat: vi.fn(),
+      addDevice: vi.fn(),
+      removeDevice: vi.fn(),
+      deleteDevice: vi.fn().mockResolvedValue(undefined),
+      setWebSocketClient: vi.fn(),
+      reset: vi.fn(),
+    };
+    return selector ? selector(state) : state;
+  }),
+}));
+
 // Mock API client
 vi.mock('@/lib/api-client', () => ({
   api: {
