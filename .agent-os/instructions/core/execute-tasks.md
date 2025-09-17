@@ -72,62 +72,24 @@ Use the context-fetcher subagent to gather minimal context for task understandin
 
 ### Step 3: Git Branch Management
 
-Use the git-workflow subagent to manage git branches so each new branch for the SAME feature
-gets a unique sequential name.
-
 <instructions>
   ACTION: Use git-workflow subagent
   REQUEST: |
-    Check and manage branch for spec: [SPEC_FOLDER]
-      - Derive base branch slug from SPEC_FOLDER by:
-        * remove leading date prefix: ^\d{4}-\d{2}-\d{2}-
-        * kebab-case the remainder: [^a-z0-9]+ -> '-'; lowercase; trim '-' ends
-        * limit to 40 chars (avoid overly long refs)
-      - Determine target branch:
-        * If a branch for this feature already exists in the current working copy (tracked file or commit context),
-          reuse it (checkout).
-        * Else, compute the next sequential branch name using the base slug:
-              <base>
-              <base>-NNN   (zero-padded, 3 digits: 001, 002, 003, …)
-          where NNN = 1 + max(existing suffixes for both local and remote branches matching:
-                               ^refs/(heads|remotes/.+/heads)/(<prefix>/)?<base>(-[0-9]{3})?$ )
-          If no matches exist, use "<base>-001".
-        * Optional prefix (e.g., "feature/" or "spec/"): configurable; default "feature/".
-      - Create the branch if needed, or switch to it if it already exists.
-      - Handle any uncommitted changes safely:
-        * if dirty: stash with message "autostash:[SPEC_FOLDER]" before checkout; pop after.
-      - Push new branches with upstream set: `git push -u origin <full-branch>`
-      - Re-check just before push to avoid race conditions:
-        * if the name became taken, recompute next NNN and rename before push.
+    Manage branch for spec [SPEC_FOLDER] and task [TASK_NUMBER]:
+      - Base = SPEC_FOLDER without ^YYYY-MM-DD-; kebab-case, lower, trim, max 40 chars.
+      - Name = <prefix><Base>-task-<TASK_NUMBER> (prefix default "feature/").
+      - If taken (local or remote), append "-vN" (N≥2) to first free.
+      - If dirty: stash "autostash:[SPEC_FOLDER]" before checkout; pop after.
+      - Create/switch branch; push with upstream; re-check collision just before push.
   WAIT: For branch setup completion
 </instructions>
 
 <branch_naming>
-  <source>spec folder name</source>
-  <format>exclude date prefix; kebab-case; zero-padded numeric suffix</format>
   <prefix>feature/</prefix>
-  <suffix>
-    <pattern>-NNN</pattern>
-    <digits>3</digits>
-    <start>001</start>
-    <collision_policy>re-scan and increment before push</collision_policy>
-  </suffix>
-  <examples>
-    <example>
-      <folder>2025-03-15-password-reset</folder>
-      <first_branch>feature/password-reset-001</first_branch>
-      <next_branch>feature/password-reset-002</next_branch>
-    </example>
-    <example>
-      <folder>2025-04-02-User Signup Flow</folder>
-      <first_branch>feature/user-signup-flow-001</first_branch>
-      <next_branch>feature/user-signup-flow-002</next_branch>
-    </example>
-  </examples>
+  <pattern>&lt;prefix&gt;&lt;base&gt;-task-&lt;TASK_NUMBER&gt;(-vN)?</pattern>
 </branch_naming>
 
 </step>
-
 
 ## Phase 2: Task Execution Loop
 
