@@ -65,6 +65,10 @@ interface DashboardState {
   organization: OrganizationSummary | null;
   devices: DeviceRecord[];
   users: UserRecord[];
+  userMetrics: {
+    total: number;
+    pendingInvites: number;
+  };
   summary: DashboardSummary | null;
   fetchInitial: () => Promise<void>;
   refreshDevices: () => Promise<void>;
@@ -82,6 +86,9 @@ interface DevicesResponse {
 
 interface UsersResponse {
   users?: UserRecord[] | null;
+  total?: number;
+  page?: number;
+  limit?: number;
 }
 
 const initialState = {
@@ -90,6 +97,10 @@ const initialState = {
   organization: null,
   devices: [] as DeviceRecord[],
   users: [] as UserRecord[],
+  userMetrics: {
+    total: 0,
+    pendingInvites: 0,
+  },
   summary: null,
 };
 
@@ -142,14 +153,14 @@ function computeRecentActivity(devices: DeviceRecord[]): DashboardActivity[] {
 function buildSummary(
   organization: OrganizationSummary | null,
   devices: DeviceRecord[],
-  users: UserRecord[]
+  userMetrics: { total: number; pendingInvites: number }
 ): DashboardSummary {
   const totalDevices = devices.length;
   const onlineDevices = devices.filter(d => d.status === 'online').length;
   const offlineDevices = devices.filter(d => d.status !== 'online').length;
 
-  const totalUsers = users.length;
-  const pendingInvites = users.filter(u => u.status === 'invited').length;
+  const totalUsers = userMetrics.total;
+  const pendingInvites = userMetrics.pendingInvites;
 
   const alerts = computeAlerts(offlineDevices, pendingInvites);
   const recentActivity = computeRecentActivity(devices);
@@ -188,24 +199,34 @@ export const useDashboardStore = create<DashboardState>()(
       );
 
       try {
-        const [orgResponse, devicesResponse, usersResponse] = await Promise.all(
-          [
-            api.get<OrganizationResponse>('/api/organization'),
-            api.get<DevicesResponse>('/api/devices'),
-            api.get<UsersResponse>('/api/users?page=1&limit=50'),
-          ]
-        );
+        const [
+          orgResponse,
+          devicesResponse,
+          usersResponse,
+          invitedUsersResponse,
+        ] = await Promise.all([
+          api.get<OrganizationResponse>('/api/organization'),
+          api.get<DevicesResponse>('/api/devices'),
+          api.get<UsersResponse>('/api/users?page=1&limit=50'),
+          // Fetch count of invited users only
+          api.get<UsersResponse>('/api/users?page=1&limit=1&status=invited'),
+        ]);
 
         const organization = orgResponse.data.organization ?? null;
         const devices = devicesResponse.data.devices ?? [];
         const users = usersResponse.data.users ?? [];
+        const userMetrics = {
+          total: usersResponse.data.total ?? users.length,
+          pendingInvites: invitedUsersResponse.data.total ?? 0,
+        };
 
         set(
           {
             organization,
             devices,
             users,
-            summary: buildSummary(organization, devices, users),
+            userMetrics,
+            summary: buildSummary(organization, devices, userMetrics),
             loading: false,
             error: null,
           },
@@ -231,7 +252,11 @@ export const useDashboardStore = create<DashboardState>()(
         set(
           state => ({
             devices,
-            summary: buildSummary(state.organization, devices, state.users),
+            summary: buildSummary(
+              state.organization,
+              devices,
+              state.userMetrics
+            ),
             error: null,
           }),
           false,
@@ -246,15 +271,26 @@ export const useDashboardStore = create<DashboardState>()(
 
     refreshUsers: async (): Promise<void> => {
       try {
-        const response = await api.get<UsersResponse>(
-          '/api/users?page=1&limit=50'
-        );
-        const users = response.data.users ?? [];
+        const [usersResponse, invitedUsersResponse] = await Promise.all([
+          api.get<UsersResponse>('/api/users?page=1&limit=50'),
+          api.get<UsersResponse>('/api/users?page=1&limit=1&status=invited'),
+        ]);
+
+        const users = usersResponse.data.users ?? [];
+        const userMetrics = {
+          total: usersResponse.data.total ?? users.length,
+          pendingInvites: invitedUsersResponse.data.total ?? 0,
+        };
 
         set(
           state => ({
             users,
-            summary: buildSummary(state.organization, state.devices, users),
+            userMetrics,
+            summary: buildSummary(
+              state.organization,
+              state.devices,
+              userMetrics
+            ),
             error: null,
           }),
           false,

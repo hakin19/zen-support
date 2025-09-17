@@ -53,6 +53,18 @@ describe('dashboard.store', () => {
           data: { devices },
         } as { data: unknown };
       }
+      if (path.includes('status=invited')) {
+        // Return count of invited users only
+        const invitedUsers = users.filter(u => u.status === 'invited');
+        return {
+          data: {
+            users: invitedUsers,
+            total: invitedUsers.length,
+            page: 1,
+            limit: 1,
+          },
+        } as { data: unknown };
+      }
       if (path.startsWith('/api/users')) {
         return {
           data: { users, total: users.length, page: 1, limit: 50 },
@@ -125,6 +137,12 @@ describe('dashboard.store', () => {
           },
         } as { data: unknown };
       }
+      if (path.includes('status=invited')) {
+        // No invited users in this test
+        return {
+          data: { users: [], total: 0, page: 1, limit: 1 },
+        } as { data: unknown };
+      }
       if (path.startsWith('/api/users')) {
         return {
           data: { users, total: users.length, page: 1, limit: 50 },
@@ -140,5 +158,73 @@ describe('dashboard.store', () => {
     await useDashboardStore.getState().refreshDevices();
 
     expect(useDashboardStore.getState().summary?.offlineDevices).toBe(0);
+  });
+
+  it('handles pagination correctly when there are more than 50 users', async () => {
+    // Simulate a response where there are 75 total users but only 50 returned
+    const first50Users = Array.from({ length: 50 }, (_, i) => ({
+      id: `user-${i + 1}`,
+      status: i < 45 ? 'active' : 'invited', // 5 invited users in first page
+      role: 'viewer',
+      email: `user${i + 1}@example.com`,
+    }));
+
+    vi.mocked(api.get).mockImplementation(async path => {
+      if (path === '/api/organization') {
+        return {
+          data: {
+            organization: {
+              id: 'org-1',
+              name: 'Large Corp',
+              subscription: { plan: 'enterprise', seats: 100, used_seats: 75 },
+            },
+          },
+        } as { data: unknown };
+      }
+      if (path === '/api/devices') {
+        return {
+          data: { devices: [] },
+        } as { data: unknown };
+      }
+      if (path.includes('status=invited')) {
+        // Total of 12 invited users across all pages
+        return {
+          data: { users: [], total: 12, page: 1, limit: 1 },
+        } as { data: unknown };
+      }
+      if (path.startsWith('/api/users')) {
+        // Return first 50 users but total is 75
+        return {
+          data: { users: first50Users, total: 75, page: 1, limit: 50 },
+        } as { data: unknown };
+      }
+      throw new Error(`Unexpected path ${path}`);
+    });
+
+    await useDashboardStore.getState().fetchInitial();
+
+    const { summary, userMetrics } = useDashboardStore.getState();
+
+    // Verify that we use the total from API, not the array length
+    expect(summary?.totalUsers).toBe(75); // Not 50
+    expect(summary?.pendingInvites).toBe(12); // Total from API, not just first page
+
+    // Verify userMetrics are stored correctly
+    expect(userMetrics.total).toBe(75);
+    expect(userMetrics.pendingInvites).toBe(12);
+
+    // Verify subscription usage still works
+    expect(summary?.subscriptionUsage?.used).toBe(75);
+    expect(summary?.subscriptionUsage?.total).toBe(100);
+
+    // Verify alert is generated for pending invites
+    expect(summary?.alerts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'pending-invites',
+          message: '12 pending invites awaiting action',
+        }),
+      ])
+    );
   });
 });
