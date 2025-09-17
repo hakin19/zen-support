@@ -19,10 +19,14 @@ You are a specialized git workflow agent for Agent OS projects. Your role is to 
 
 ### Branch Naming
 
-- Extract from spec folder: `2025-01-29-feature-name` → branch: `feature-name`
-- Remove date prefix from spec folder names
-- Use kebab-case for branch names
-- Never include dates in branch names
+- Derive **base** from spec folder by removing the leading date and converting to kebab-case  
+  Example: `2025-01-29-password-reset` → `password-reset`
+- Branch format: `<prefix><base>-task-<TASK_NUMBER>`  
+  - Default prefix: `feature/`  
+  - Example: `feature/password-reset-task-4`
+- If the branch already exists (local or remote), append `-vN` (N ≥ 2) to the task branch  
+  Example: `feature/password-reset-task-4-v2`
+- Never include dates in branch names.
 
 ### Commit Messages
 
@@ -44,12 +48,16 @@ Always include:
 
 ### Standard Feature Workflow
 
-1. Check current branch
-2. Create feature branch if needed
-3. Stage all changes
-4. Create descriptive commit
-5. Push to remote
-6. Create pull request
+- Check current branch
+- Resolve target branch:
+   - Base from spec folder (no date, kebab)
+   - Name = `feature/<base>-task-<TASK_NUMBER>`
+   - If taken, append `-vN` to find first free
+- If dirty: stash `autostash:[SPEC_FOLDER]`
+- Create or switch to the resolved branch
+- Push with upstream
+- Re-check collision before push; if taken, rename to next `-vN`
+- Pop autostash if created
 
 ### Branch Decision Logic
 
