@@ -60,7 +60,7 @@ import {
   type DeviceStatus,
 } from '@/store/device.store';
 
-export function DeviceManagement(): JSX.Element {
+function DeviceManagement(): JSX.Element {
   const { toast } = useToast();
   const user = useAuthStore(state => state.user);
   const {
@@ -76,6 +76,7 @@ export function DeviceManagement(): JSX.Element {
     updateDeviceHeartbeat,
     addDevice,
     removeDevice,
+    upsertDevice,
     webSocketClient,
   } = useDeviceStore();
 
@@ -87,6 +88,7 @@ export function DeviceManagement(): JSX.Element {
   const [isRegistrationOpen, setIsRegistrationOpen] = useState(false);
   const [registrationData, setRegistrationData] = useState({
     name: '',
+    serial_number: '',
     location: '',
     description: '',
   });
@@ -118,9 +120,12 @@ export function DeviceManagement(): JSX.Element {
       const eventData = data as {
         deviceId: string;
         status: DeviceStatus;
-        timestamp: string;
+        lastSeen?: string | null;
       };
       updateDeviceStatus(eventData.deviceId, eventData.status);
+      if (eventData.lastSeen) {
+        updateDeviceHeartbeat(eventData.deviceId, eventData.lastSeen);
+      }
     };
 
     const handleDeviceRegistered = (data: unknown): void => {
@@ -133,24 +138,30 @@ export function DeviceManagement(): JSX.Element {
       removeDevice(eventData.deviceId);
     };
 
-    const handleHeartbeat = (data: unknown): void => {
-      const eventData = data as {
-        deviceId: string;
-        timestamp: string;
-      };
-      updateDeviceHeartbeat(eventData.deviceId, eventData.timestamp);
+    const handleDeviceUpdated = (data: unknown): void => {
+      const eventData = data as { device: Device };
+
+      if (!eventData.device?.id) return;
+
+      upsertDevice({
+        ...eventData.device,
+        last_heartbeat:
+          eventData.device.last_heartbeat ??
+          eventData.device.last_heartbeat_at ??
+          null,
+      });
     };
 
-    webSocketClient.subscribe('device_status_changed', handleStatusChange);
+    webSocketClient.subscribe('device_status', handleStatusChange);
     webSocketClient.subscribe('device_registered', handleDeviceRegistered);
-    webSocketClient.subscribe('device_deleted', handleDeviceDeleted);
-    webSocketClient.subscribe('device_heartbeat', handleHeartbeat);
+    webSocketClient.subscribe('device_removed', handleDeviceDeleted);
+    webSocketClient.subscribe('device_updated', handleDeviceUpdated);
 
     return (): void => {
-      webSocketClient.unsubscribe('device_status_changed');
+      webSocketClient.unsubscribe('device_status');
       webSocketClient.unsubscribe('device_registered');
-      webSocketClient.unsubscribe('device_deleted');
-      webSocketClient.unsubscribe('device_heartbeat');
+      webSocketClient.unsubscribe('device_removed');
+      webSocketClient.unsubscribe('device_updated');
     };
   }, [
     webSocketClient,
@@ -158,6 +169,7 @@ export function DeviceManagement(): JSX.Element {
     addDevice,
     removeDevice,
     updateDeviceHeartbeat,
+    upsertDevice,
   ]);
 
   // Filter devices based on search and filters
@@ -166,7 +178,7 @@ export function DeviceManagement(): JSX.Element {
       const matchesSearch =
         !searchQuery ||
         device.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        device.device_code.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        device.device_id.toLowerCase().includes(searchQuery.toLowerCase()) ||
         device.location.toLowerCase().includes(searchQuery.toLowerCase());
 
       const matchesStatus =
@@ -183,6 +195,10 @@ export function DeviceManagement(): JSX.Element {
   const uniqueLocations = useMemo(() => {
     return Array.from(new Set(devices.map(d => d.location))).sort();
   }, [devices]);
+
+  const getDeviceLastHeartbeat = (device: Device): string | null => {
+    return device.last_heartbeat ?? device.last_heartbeat_at ?? null;
+  };
 
   // Filter count for UI badge
   const filterCount = useMemo(() => {
@@ -250,6 +266,9 @@ export function DeviceManagement(): JSX.Element {
     const errors: Record<string, string> = {};
     if (!registrationData.name.trim()) {
       errors.name = 'Device name is required';
+    }
+    if (!registrationData.serial_number.trim()) {
+      errors.serial_number = 'Serial number is required';
     }
     if (!registrationData.location.trim()) {
       errors.location = 'Location is required';
@@ -323,11 +342,25 @@ export function DeviceManagement(): JSX.Element {
 
   const handleDisableDevice = async (deviceId: string): Promise<void> => {
     try {
-      await api.patch(`/api/devices/${deviceId}`, { status: 'disabled' });
-      updateDeviceStatus(deviceId, 'offline');
+      // Use 'offline' status since backend doesn't have 'disabled' status
+      const response = await api.patch<{ device: Device }>(
+        `/api/devices/${deviceId}`,
+        {
+          status: 'offline',
+        }
+      );
+      // Update local state with the actual device data from response
+      upsertDevice({
+        ...response.data.device,
+        last_heartbeat:
+          response.data.device.last_heartbeat ??
+          response.data.device.last_heartbeat_at ??
+          null,
+      });
+      updateDeviceStatus(deviceId, response.data.device.status);
       toast({
         title: 'Device disabled',
-        description: 'The device has been disabled successfully.',
+        description: 'The device has been set to offline status.',
       });
     } catch (err) {
       const errorMessage =
@@ -344,7 +377,7 @@ export function DeviceManagement(): JSX.Element {
     const csv = [
       [
         'Name',
-        'Device Code',
+        'Device ID',
         'Status',
         'Location',
         'IP Address',
@@ -353,11 +386,11 @@ export function DeviceManagement(): JSX.Element {
       ],
       ...filteredDevices.map(d => [
         d.name,
-        d.device_code,
+        d.device_id,
         d.status,
         d.location,
         d.ip_address ?? '',
-        d.last_heartbeat ?? '',
+        getDeviceLastHeartbeat(d) ?? '',
         d.registered_at,
       ]),
     ]
@@ -383,7 +416,12 @@ export function DeviceManagement(): JSX.Element {
 
   const closeRegistrationModal = (): void => {
     setIsRegistrationOpen(false);
-    setRegistrationData({ name: '', location: '', description: '' });
+    setRegistrationData({
+      name: '',
+      serial_number: '',
+      location: '',
+      description: '',
+    });
     setActivationCode(null);
     setValidationErrors({});
     if (activationCode) {
@@ -544,94 +582,102 @@ export function DeviceManagement(): JSX.Element {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredDevices.map(device => (
-                <TableRow
-                  key={device.id}
-                  data-testid={`device-row-${device.id}`}
-                >
-                  <TableCell>
-                    <div>
-                      <div className='font-medium'>{device.name}</div>
-                      <div className='text-sm text-muted-foreground'>
-                        {device.device_code}
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      variant={getStatusBadgeVariant(device.status)}
-                      className={
-                        device.status === 'online'
-                          ? 'bg-green-100 text-green-800'
-                          : device.status === 'offline'
-                            ? 'bg-gray-100 text-gray-800'
-                            : device.status === 'error'
-                              ? 'bg-red-100 text-red-800'
-                              : 'bg-yellow-100 text-yellow-800'
-                      }
-                      data-testid={`status-badge-${device.status}`}
-                    >
-                      {getStatusIcon(device.status)}
-                      {formatStatus(device.status)}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>{device.location}</TableCell>
-                  <TableCell>{device.ip_address ?? '-'}</TableCell>
-                  <TableCell>
-                    {device.last_heartbeat && (
-                      <div className='text-sm'>
-                        <div>Last seen:</div>
-                        <div className='text-muted-foreground'>
-                          {formatLastSeen(device.last_heartbeat)}
+              {filteredDevices.map(device => {
+                const lastHeartbeat = getDeviceLastHeartbeat(device);
+
+                return (
+                  <TableRow
+                    key={device.id}
+                    data-testid={`device-row-${device.id}`}
+                  >
+                    <TableCell>
+                      <div>
+                        <div className='font-medium'>{device.name}</div>
+                        <div className='text-sm text-muted-foreground'>
+                          {device.device_id}
                         </div>
                       </div>
-                    )}
-                    {device.status === 'error' && device.error_message && (
-                      <div className='text-sm text-destructive'>
-                        {device.error_message}
-                      </div>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant='ghost' size='sm' aria-label='Actions'>
-                          <MoreHorizontal className='h-4 w-4' />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align='end'>
-                        <DropdownMenuItem
-                          onClick={(): void => setViewDetailsDevice(device)}
-                        >
-                          <Eye className='mr-2 h-4 w-4' />
-                          View Details
-                        </DropdownMenuItem>
-                        {canManageDevices && (
-                          <>
-                            <DropdownMenuItem
-                              onClick={(): void => {
-                                void handleDisableDevice(device.id);
-                              }}
-                            >
-                              <Power className='mr-2 h-4 w-4' />
-                              Disable Device
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={(): void =>
-                                setDeleteConfirmId(device.id)
-                              }
-                              className='text-destructive'
-                            >
-                              <Trash2 className='mr-2 h-4 w-4' />
-                              Delete Device
-                            </DropdownMenuItem>
-                          </>
-                        )}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              ))}
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant={getStatusBadgeVariant(device.status)}
+                        className={
+                          device.status === 'online'
+                            ? 'bg-green-100 text-green-800'
+                            : device.status === 'offline'
+                              ? 'bg-gray-100 text-gray-800'
+                              : device.status === 'error'
+                                ? 'bg-red-100 text-red-800'
+                                : 'bg-yellow-100 text-yellow-800'
+                        }
+                        data-testid={`status-badge-${device.status}`}
+                      >
+                        {getStatusIcon(device.status)}
+                        {formatStatus(device.status)}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>{device.location}</TableCell>
+                    <TableCell>{device.ip_address ?? '-'}</TableCell>
+                    <TableCell>
+                      {lastHeartbeat && (
+                        <div className='text-sm'>
+                          <div>Last seen:</div>
+                          <div className='text-muted-foreground'>
+                            {formatLastSeen(lastHeartbeat)}
+                          </div>
+                        </div>
+                      )}
+                      {device.status === 'error' && device.error_message && (
+                        <div className='text-sm text-destructive'>
+                          {device.error_message}
+                        </div>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant='ghost'
+                            size='sm'
+                            aria-label='Actions'
+                          >
+                            <MoreHorizontal className='h-4 w-4' />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align='end'>
+                          <DropdownMenuItem
+                            onClick={(): void => setViewDetailsDevice(device)}
+                          >
+                            <Eye className='mr-2 h-4 w-4' />
+                            View Details
+                          </DropdownMenuItem>
+                          {canManageDevices && (
+                            <>
+                              <DropdownMenuItem
+                                onClick={(): void => {
+                                  void handleDisableDevice(device.id);
+                                }}
+                              >
+                                <Power className='mr-2 h-4 w-4' />
+                                Disable Device
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={(): void =>
+                                  setDeleteConfirmId(device.id)
+                                }
+                                className='text-destructive'
+                              >
+                                <Trash2 className='mr-2 h-4 w-4' />
+                                Delete Device
+                              </DropdownMenuItem>
+                            </>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </div>
@@ -698,6 +744,29 @@ export function DeviceManagement(): JSX.Element {
                 {validationErrors.name && (
                   <p className='text-sm text-destructive mt-1'>
                     {validationErrors.name}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <Label htmlFor='device-serial'>Serial Number *</Label>
+                <Input
+                  id='device-serial'
+                  value={registrationData.serial_number}
+                  onChange={e =>
+                    setRegistrationData(prev => ({
+                      ...prev,
+                      serial_number: e.target.value,
+                    }))
+                  }
+                  placeholder='e.g., ABC123456'
+                  className={
+                    validationErrors.serial_number ? 'border-destructive' : ''
+                  }
+                />
+                {validationErrors.serial_number && (
+                  <p className='text-sm text-destructive mt-1'>
+                    {validationErrors.serial_number}
                   </p>
                 )}
               </div>
@@ -843,9 +912,9 @@ export function DeviceManagement(): JSX.Element {
                   <p className='text-sm'>{viewDetailsDevice.name}</p>
                 </div>
                 <div>
-                  <Label>Device Code</Label>
+                  <Label>Device ID</Label>
                   <p className='text-sm font-mono'>
-                    {viewDetailsDevice.device_code}
+                    {viewDetailsDevice.device_id}
                   </p>
                 </div>
                 <div>
@@ -876,7 +945,7 @@ export function DeviceManagement(): JSX.Element {
                 <div>
                   <Label>Last Heartbeat</Label>
                   <p className='text-sm'>
-                    {formatLastSeen(viewDetailsDevice.last_heartbeat)}
+                    {formatLastSeen(getDeviceLastHeartbeat(viewDetailsDevice))}
                   </p>
                 </div>
                 <div>
@@ -906,3 +975,5 @@ export function DeviceManagement(): JSX.Element {
     </div>
   );
 }
+
+export default DeviceManagement;

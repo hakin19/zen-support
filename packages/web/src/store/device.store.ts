@@ -7,9 +7,15 @@ export type DeviceStatus = 'online' | 'offline' | 'error' | 'pending';
 export interface Device {
   id: string;
   name: string;
-  device_code: string;
+  device_id: string;
   status: DeviceStatus;
   last_heartbeat: string | null;
+  /**
+   * Raw heartbeat timestamp from Supabase. Some API responses still expose
+   * `last_heartbeat_at`, so we preserve it for compatibility and hydrate the
+   * UI using whichever value is available.
+   */
+  last_heartbeat_at?: string | null;
   registered_at: string;
   ip_address: string | null;
   location: string;
@@ -17,15 +23,43 @@ export interface Device {
   customer_id: string;
   created_at: string;
   updated_at: string;
+  last_seen?: string | null;
   error_message?: string;
   description?: string;
 }
+
+type DeviceUpdate = Partial<Device> & { id: string };
+
+const normalizeDevice = (device: DeviceUpdate, existing?: Device): Device => {
+  const merged = { ...(existing ?? {}), ...device } as Device;
+
+  const lastHeartbeat =
+    device.last_heartbeat ??
+    device.last_heartbeat_at ??
+    existing?.last_heartbeat ??
+    existing?.last_heartbeat_at ??
+    null;
+
+  const lastHeartbeatAt =
+    device.last_heartbeat_at ??
+    device.last_heartbeat ??
+    existing?.last_heartbeat_at ??
+    existing?.last_heartbeat ??
+    null;
+
+  return {
+    ...merged,
+    last_heartbeat: lastHeartbeat,
+    last_heartbeat_at: lastHeartbeatAt,
+  };
+};
 
 interface DevicesResponse {
   devices: Device[];
   total: number;
   page: number;
-  pageSize: number;
+  pageSize?: number;
+  limit?: number;
 }
 
 interface RegisterResponse {
@@ -53,6 +87,7 @@ interface DeviceState {
   refreshDevices: () => Promise<void>;
   registerDevice: (data: {
     name: string;
+    serial_number: string;
     location: string;
     description?: string;
   }) => Promise<{ activationCode: string }>;
@@ -62,6 +97,7 @@ interface DeviceState {
   removeDevice: (deviceId: string) => void;
   deleteDevice: (deviceId: string) => Promise<void>;
   setWebSocketClient: (client: WebSocketClient) => void;
+  upsertDevice: (device: DeviceUpdate) => void;
   reset: () => void;
 }
 
@@ -79,14 +115,25 @@ export const useDeviceStore = create<DeviceState>()((set, get) => ({
     set({ loading: true, error: null });
 
     try {
+      const params = new URLSearchParams({
+        page: String(page),
+        limit: String(get().pageSize),
+      });
       const response = await api.get<DevicesResponse>(
-        `/api/devices?page=${page}&pageSize=${get().pageSize}`
+        `/api/devices?${params.toString()}`,
+        {}
       );
 
+      const pageSize =
+        response.data.pageSize ?? response.data.limit ?? get().pageSize;
+
       set({
-        devices: response.data.devices,
+        devices: response.data.devices.map(device => normalizeDevice(device)),
         currentPage: page,
-        totalPages: Math.ceil(response.data.total / get().pageSize),
+        totalPages: Math.max(
+          1,
+          Math.ceil((response.data.total || 0) / pageSize)
+        ),
         loading: false,
       });
     } catch (err) {
@@ -110,7 +157,7 @@ export const useDeviceStore = create<DeviceState>()((set, get) => ({
     );
 
     if (response.data.device) {
-      get().addDevice(response.data.device);
+      get().upsertDevice(response.data.device);
     }
 
     return { activationCode: response.data.activationCode };
@@ -134,10 +181,8 @@ export const useDeviceStore = create<DeviceState>()((set, get) => ({
     }));
   },
 
-  addDevice: (device): void => {
-    set(state => ({
-      devices: [device, ...state.devices],
-    }));
+  addDevice: device => {
+    get().upsertDevice(device);
   },
 
   removeDevice: (deviceId): void => {
@@ -153,6 +198,20 @@ export const useDeviceStore = create<DeviceState>()((set, get) => ({
 
   setWebSocketClient: (client): void => {
     set({ webSocketClient: client });
+  },
+
+  upsertDevice: device => {
+    set(state => {
+      const devices = state.devices.some(d => d.id === device.id)
+        ? state.devices.map(existing =>
+            existing.id === device.id
+              ? normalizeDevice(device, existing)
+              : existing
+          )
+        : [normalizeDevice(device), ...state.devices];
+
+      return { devices };
+    });
   },
 
   reset: (): void => {

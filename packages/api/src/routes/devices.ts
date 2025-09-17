@@ -160,10 +160,16 @@ export const devicesRoutes: FastifyPluginAsync = async (
           device: newDevice as DeviceRow,
         });
 
+        // Return backward compatible response shape
+        // Both old (success, registration_code, device_id) and new (device, activationCode) formats
         return reply.send({
+          // Legacy format for existing consumers (DeviceRegistration component in Settings)
           success: true,
-          device_id: newDevice?.id ?? '',
           registration_code: registrationCode,
+          device_id: newDevice?.id ?? '',
+          // New format for Device Management page
+          device: newDevice as DeviceRow,
+          activationCode: registrationCode,
         });
       } catch (error: unknown) {
         fastify.log.error('Error registering device: %s', error);
