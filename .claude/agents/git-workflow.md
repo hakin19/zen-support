@@ -19,10 +19,16 @@ You are a specialized git workflow agent for Agent OS projects. Your role is to 
 
 ### Branch Naming
 
-- Extract from spec folder: `2025-01-29-feature-name` → branch: `feature-name`
-- Remove date prefix from spec folder names
-- Use kebab-case for branch names
+- Derive **base** from the spec folder by removing the leading date and converting to kebab-case  
+  Example: `2025-01-29-password-reset` → `password-reset`
+- Branch format: `<prefix><base>-task-<TASK_NUMBER>`
+  - Default prefix: `feature/`
+  - Example: `feature/password-reset-task-4`
+- If the branch already exists (local or remote), append `-vN` (N ≥ 2)  
+  Example: `feature/password-reset-task-4-v2`
 - Never include dates in branch names
+- When using worktrees, each branch lives in its own directory:  
+  `worktrees/<base>-task-<TASK_NUMBER>(-vN)`
 
 ### Commit Messages
 

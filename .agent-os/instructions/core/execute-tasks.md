@@ -72,24 +72,28 @@ Use the context-fetcher subagent to gather minimal context for task understandin
 
 ### Step 3: Git Branch Management
 
-Use the git-workflow subagent to manage git branches to ensure proper isolation by creating or switching to the appropriate branch for the spec.
+Use the git-workflow subagent to manage git branches/worktrees to ensure proper isolation by creating or switching to the appropriate task branch for the spec.
 
 <instructions>
   ACTION: Use git-workflow subagent
-  REQUEST: "Check and manage branch for spec: [SPEC_FOLDER]
-            - Create branch if needed
-            - Switch to correct branch
-            - Handle any uncommitted changes"
-  WAIT: For branch setup completion
+  REQUEST: "Check and manage branch/worktree for spec: [SPEC_FOLDER], task: [TASK_NUMBER]
+            - Derive base from spec folder (remove date prefix, kebab-case)
+            - Target branch = feature/<base>-task-<TASK_NUMBER>
+            - If taken, append -vN (N ≥ 2)
+            - Create or attach worktree at worktrees/<base>-task-<TASK_NUMBER>(-vN)
+            - Handle any uncommitted changes (stash/pop)"
+  WAIT: For branch/worktree setup completion
 </instructions>
 
 <branch_naming>
 
-  <source>spec folder name</source>
-  <format>exclude date prefix</format>
+  <source>spec folder name + task number</source>
+  <format>exclude date prefix; kebab-case; suffix -task-N; optional -vN variant</format>
   <example>
-    - folder: 2025-03-15-password-reset
-    - branch: password-reset
+    - folder: 2025-03-15-password-reset, task: 4
+    - branch: feature/password-reset-task-4
+    - worktree: worktrees/password-reset-task-4
+    - if taken → feature/password-reset-task-4-v2, worktrees/password-reset-task-4-v2
   </example>
 </branch_naming>
 
