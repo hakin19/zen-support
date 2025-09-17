@@ -26,12 +26,19 @@ async function main(): Promise<void> {
     );
   }
 
-  initializeRedis({
+  const redis = initializeRedis({
     host: config.redis.host,
     port: config.redis.port,
     password: config.redis.password,
   });
-  console.log('✓ Redis client initialized');
+
+  try {
+    await redis.connect();
+    console.log('✓ Redis client initialized');
+  } catch (error) {
+    console.error('❌ Failed to connect to Redis:', error);
+    process.exit(1);
+  }
   const app = await createApp();
 
   // Register signal handlers

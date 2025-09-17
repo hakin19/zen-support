@@ -280,13 +280,12 @@ export const deviceAuthService = {
         .eq('device_id', deviceId)
         .single();
 
-      // Update device last_seen timestamp, status, and metrics in DB
+      // Update device heartbeat metadata in the primary table
       const { error } = await supabase
         .from('devices')
         .update({
-          last_seen: new Date().toISOString(),
+          last_heartbeat_at: new Date().toISOString(),
           status: newStatus,
-          metrics: data.metrics ?? null,
         })
         .eq('device_id', deviceId);
 

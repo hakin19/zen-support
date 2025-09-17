@@ -119,7 +119,10 @@ async function main(): Promise<void> {
     });
 
     // Start health check server
-    const healthPort = parseInt(process.env.PORT ?? '3000', 10);
+    const healthPort = parseInt(
+      process.env.DEVICE_AGENT_HEALTH_PORT ?? process.env.PORT ?? '3000',
+      10
+    );
     startHealthServer(healthPort);
 
     // Register shutdown handlers

@@ -46,6 +46,7 @@ The following infrastructure and development setup has been implemented:
 - [x] Customer Web Portal - Next.js 14 dashboard for network status and diagnostics `L`
 - [x] Bootsrapping device agent - bootsrapping device agent with the rest of the system `M`
 - [x] Claude Code SDK Integration - AI orchestration for diagnostic analysis and script generation `L`
+- [ ] Add missing frontend - Add missing pages to match the envision user and owner user workflows `L`
 - [ ] Human-in-the-Loop Approval System - Secure approval workflow for remediation actions `M`
 - [ ] Diagnostic History & Reporting - Historical view of network issues and resolutions `M`
 - [ ] PII Sanitization Engine - Cloud-based data cleaning before AI processing `M`
