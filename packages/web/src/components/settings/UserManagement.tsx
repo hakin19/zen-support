@@ -234,9 +234,16 @@ export function UserManagement(): JSX.Element {
     });
 
     return () => {
-      unsubscribeUserAdded();
-      unsubscribeUserUpdated();
-      unsubscribeUserRemoved();
+      // Add defensive checks to ensure unsubscribe functions exist
+      if (typeof unsubscribeUserAdded === 'function') {
+        unsubscribeUserAdded();
+      }
+      if (typeof unsubscribeUserUpdated === 'function') {
+        unsubscribeUserUpdated();
+      }
+      if (typeof unsubscribeUserRemoved === 'function') {
+        unsubscribeUserRemoved();
+      }
     };
   }, [subscribe, fetchUsers]);
 

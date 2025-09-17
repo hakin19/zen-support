@@ -8,10 +8,10 @@
   - [x] 1.3 Implement `/dashboard` with summary cards and recent activity list until tests pass (no charts)
   - [x] 1.4 Refine websocket refresh hooks and update tests if behavior changes intentionally
 
-- [ ] 2. Organization Settings MVP (Test First)
-  - [ ] 2.1 Add failing tests ensuring Supabase auth guard blocks rendering until hydration completes
-  - [ ] 2.2 Build `/settings/organization` single-page profile form with validation + billing portal link to satisfy tests
-  - [ ] 2.3 Connect form submissions to the organization PATCH endpoint and extend tests for error/success states
+- [x] 2. Organization Settings MVP (Test First)
+  - [x] 2.1 Add failing tests ensuring Supabase auth guard blocks rendering until hydration completes
+  - [x] 2.2 Build `/settings/organization` single-page profile form with validation + billing portal link to satisfy tests
+  - [x] 2.3 Connect form submissions to the organization PATCH endpoint and extend tests for error/success states
 
 - [ ] 3. Device Management Basics (Test First)
   - [ ] 3.1 Write failing tests for `/devices` table filters, status badges, and registration flow
