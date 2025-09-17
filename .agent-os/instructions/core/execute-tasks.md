@@ -81,6 +81,7 @@ Use the git-workflow subagent to manage git branches/worktrees to ensure proper 
             - Target branch = feature/<base>-task-<TASK_NUMBER>
             - If taken, append -vN (N ≥ 2)
             - Create or attach worktree at worktrees/<base>-task-<TASK_NUMBER>(-vN)
+            - Switch into that worktree directory after creation
             - Handle any uncommitted changes (stash/pop)"
   WAIT: For branch/worktree setup completion
 </instructions>

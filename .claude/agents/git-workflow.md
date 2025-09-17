@@ -58,18 +58,13 @@ Always include:
 3. Create or attach a worktree at  
    `worktrees/<base>-task-<TASK_NUMBER>(-vN)` using:  
    `git worktree add --checkout worktrees/<base>-task-<TASK_NUMBER> <branch>`
-4. If dirty before switching: stash `autostash:[SPEC_FOLDER]` inside current worktree
-5. Work inside the new worktree directory; commits apply to the corresponding branch
-6. Push with upstream
-7. Re-check collision before push; if taken, rename to next `-vN`
-8. Pop autostash if created
-9. When done, remove worktree with `git worktree remove <path>` (branch stays until merged/deleted)
-
-### Branch Decision Logic
-
-- If on `feature/<base>-task-<TASK_NUMBER>` (or its `-vN`): proceed
-- If on `main`/`staging`/`master`: create a new task branch (in its own worktree if working in parallel)
-- If on a different feature/task branch: ask before switching or attaching a new worktree
+4. Switch into that worktree directory
+5. If dirty before switching: stash `autostash:[SPEC_FOLDER]` inside current worktree
+6. Work inside the new worktree directory; commits apply to the corresponding branch
+7. Push with upstream
+8. Re-check collision before push; if taken, rename to next `-vN`
+9. Pop autostash if created
+10. When done, remove worktree with `git worktree remove <path>` (branch stays until merged/deleted)
 
 ## Example Requests
 
