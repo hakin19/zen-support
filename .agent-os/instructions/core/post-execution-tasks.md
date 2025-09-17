@@ -22,7 +22,7 @@ EXECUTE: @.agent-os/instructions/meta/pre-flight.md
 
 ### Step 1: Run All Tests
 
-Use the test-runner subagent to run the ALL tests in the application's test suite to ensure no regressions and fix any failures until all tests pass.
+Use the test-runner subagent to run the ALL tests in the application's test suite to ensure no regressions and fix any failures until all tests pass. Use 10 minute timeout.
 
 <instructions>
   ACTION: Use test-runner subagent

@@ -12,7 +12,7 @@ import {
 } from '../../test/test-utils';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
-import { DeviceManagement } from './page';
+import DeviceManagement from './page';
 import { useAuthStore } from '@/store/auth.store';
 import { useDeviceStore } from '@/store/device.store';
 import { api } from '@/lib/api-client';
