@@ -1,6 +1,13 @@
 'use client';
 
-import { MessageCircle, Settings, Menu, X, LogOut } from 'lucide-react';
+import {
+  Activity,
+  MessageCircle,
+  Settings,
+  Menu,
+  X,
+  LogOut,
+} from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import React, { useState } from 'react';
@@ -20,6 +27,11 @@ export function Sidebar({ user, onSignOut }: SidebarProps): React.ReactElement {
   const [isOpen, setIsOpen] = useState(true);
 
   const navigation = [
+    {
+      name: 'Dashboard',
+      href: '/dashboard',
+      icon: Activity,
+    },
     {
       name: 'Chat',
       href: '/chat',

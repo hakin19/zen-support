@@ -53,6 +53,9 @@ describe('Sidebar', () => {
     it('should render navigation links', () => {
       render(<Sidebar user={mockUser} />);
 
+      expect(
+        screen.getByRole('link', { name: /dashboard/i })
+      ).toBeInTheDocument();
       expect(screen.getByRole('link', { name: /chat/i })).toBeInTheDocument();
       expect(
         screen.getByRole('link', { name: /settings/i })
@@ -65,6 +68,14 @@ describe('Sidebar', () => {
 
       const chatLink = screen.getByRole('link', { name: /chat/i });
       expect(chatLink).toHaveClass('active');
+    });
+
+    it('should highlight dashboard link when on dashboard route', () => {
+      mockPathname.mockReturnValue('/dashboard');
+      render(<Sidebar user={mockUser} />);
+
+      const dashboardLink = screen.getByRole('link', { name: /dashboard/i });
+      expect(dashboardLink).toHaveClass('active');
     });
 
     it('should show user info with email and role', () => {
@@ -90,6 +101,13 @@ describe('Sidebar', () => {
 
       const chatLink = screen.getByRole('link', { name: /chat/i });
       expect(chatLink).toHaveAttribute('href', '/chat');
+    });
+
+    it('should navigate to dashboard when dashboard link is clicked', () => {
+      render(<Sidebar user={mockUser} />);
+
+      const dashboardLink = screen.getByRole('link', { name: /dashboard/i });
+      expect(dashboardLink).toHaveAttribute('href', '/dashboard');
     });
 
     it('should navigate to settings when settings link is clicked', () => {

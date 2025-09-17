@@ -61,24 +61,28 @@ if (typeof globalThis !== 'undefined') {
 }
 
 // Mock WebSocket store to avoid real WS dependencies in unit tests
+const defaultWebsocketState = {
+  users: [],
+  devices: [], // Will be overridden by individual tests
+  promptTemplates: [], // Add prompt templates for PromptTemplateEditor
+  organization: null,
+  isConnected: true,
+  connect: vi.fn(),
+  disconnect: vi.fn(),
+  setUsers: vi.fn(),
+  setDevices: vi.fn(),
+  setPromptTemplates: vi.fn(),
+  updatePromptTemplate: vi.fn(),
+  addPromptTemplate: vi.fn(),
+  removePromptTemplate: vi.fn(),
+  setOrganization: vi.fn(),
+  subscribe: vi.fn().mockReturnValue(() => {}),
+};
+
+const useWebSocketStoreMock = vi.fn(() => ({ ...defaultWebsocketState }));
+
 vi.mock('@/store/websocket.store', () => ({
-  useWebSocketStore: () => ({
-    users: [],
-    devices: [], // Will be overridden by individual tests
-    promptTemplates: [], // Add prompt templates for PromptTemplateEditor
-    organization: null,
-    isConnected: true,
-    connect: vi.fn(),
-    disconnect: vi.fn(),
-    setUsers: vi.fn(),
-    setDevices: vi.fn(),
-    setPromptTemplates: vi.fn(),
-    updatePromptTemplate: vi.fn(),
-    addPromptTemplate: vi.fn(),
-    removePromptTemplate: vi.fn(),
-    setOrganization: vi.fn(),
-    subscribe: vi.fn().mockReturnValue(() => {}),
-  }),
+  useWebSocketStore: useWebSocketStoreMock,
 }));
 
 // Mock useSession hook
