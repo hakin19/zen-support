@@ -19,8 +19,11 @@ import {
   type ModelUsage,
 } from '@anthropic-ai/claude-code';
 
+import { generateCorrelationId } from '../../utils/correlation-id';
 import { sanitizeObject } from '../../utils/pii-sanitizer';
 import { SDKOptionsFactory } from '../config/sdk-options.config';
+
+import { messageTracker } from './sdk-message-tracker.service';
 
 import type {
   NetworkDiagnosticPrompt,
@@ -47,12 +50,18 @@ export class AIOrchestrator extends EventEmitter {
    */
   async *analyzeDiagnostics(
     prompt: NetworkDiagnosticPrompt,
-    sessionId: string
+    sessionId: string,
+    correlationId?: string
   ): AsyncGenerator<SDKMessage, void> {
     const promptText = this.buildDiagnosticPrompt(prompt);
     const options = SDKOptionsFactory.createDiagnosticOptions();
 
-    yield* this.executeStreamingQuery(promptText, options, sessionId);
+    yield* this.executeStreamingQuery(
+      promptText,
+      options,
+      sessionId,
+      correlationId
+    );
   }
 
   /**
@@ -61,7 +70,8 @@ export class AIOrchestrator extends EventEmitter {
   async *generateRemediation(
     prompt: RemediationScriptPrompt,
     sessionId: string,
-    canUseTool: CanUseTool
+    canUseTool: CanUseTool,
+    correlationId?: string
   ): AsyncGenerator<SDKMessage, void> {
     const promptText = this.buildRemediationPrompt(prompt);
     const options: Partial<Options> = {
@@ -69,7 +79,12 @@ export class AIOrchestrator extends EventEmitter {
       canUseTool,
     };
 
-    yield* this.executeStreamingQuery(promptText, options, sessionId);
+    yield* this.executeStreamingQuery(
+      promptText,
+      options,
+      sessionId,
+      correlationId
+    );
   }
 
   /**
@@ -77,12 +92,18 @@ export class AIOrchestrator extends EventEmitter {
    */
   async *analyzePerformance(
     prompt: PerformanceAnalysisPrompt,
-    sessionId: string
+    sessionId: string,
+    correlationId?: string
   ): AsyncGenerator<SDKMessage, void> {
     const promptText = this.buildPerformancePrompt(prompt);
     const options = SDKOptionsFactory.createDiagnosticOptions();
 
-    yield* this.executeStreamingQuery(promptText, options, sessionId);
+    yield* this.executeStreamingQuery(
+      promptText,
+      options,
+      sessionId,
+      correlationId
+    );
   }
 
   /**
@@ -90,12 +111,18 @@ export class AIOrchestrator extends EventEmitter {
    */
   async *analyzeSecurity(
     prompt: SecurityAssessmentPrompt,
-    sessionId: string
+    sessionId: string,
+    correlationId?: string
   ): AsyncGenerator<SDKMessage, void> {
     const promptText = this.buildSecurityPrompt(prompt);
     const options = SDKOptionsFactory.createDiagnosticOptions();
 
-    yield* this.executeStreamingQuery(promptText, options, sessionId);
+    yield* this.executeStreamingQuery(
+      promptText,
+      options,
+      sessionId,
+      correlationId
+    );
   }
 
   /**
@@ -104,8 +131,12 @@ export class AIOrchestrator extends EventEmitter {
   private async *executeStreamingQuery(
     promptText: string,
     options: Partial<Options>,
-    sessionId: string
+    sessionId: string,
+    correlationId?: string
   ): AsyncGenerator<SDKMessage, void> {
+    // Generate correlation ID if not provided
+    const corrId = correlationId ?? generateCorrelationId();
+
     // Create abort controller for this query
     const abortController = new globalThis.AbortController();
     this.abortControllers.set(sessionId, abortController);
@@ -129,8 +160,11 @@ export class AIOrchestrator extends EventEmitter {
 
       // Stream messages
       for await (const message of queryResponse) {
+        // Track message with correlation ID
+        messageTracker.trackMessage(message, sessionId, corrId);
+
         // Process different message types
-        await this.processMessage(message, sessionId);
+        await this.processMessage(message, sessionId, corrId);
 
         // Yield message to caller
         yield message;
@@ -139,15 +173,16 @@ export class AIOrchestrator extends EventEmitter {
       // Check for abort error by message or error type
       const errorMessage = (error as Error).message || '';
       if (errorMessage.includes('abort') || errorMessage.includes('cancel')) {
-        this.emit('query:aborted', { sessionId });
+        this.emit('query:aborted', { sessionId, correlationId: corrId });
       } else {
-        this.emit('query:error', { sessionId, error });
+        this.emit('query:error', { sessionId, correlationId: corrId, error });
         throw error;
       }
     } finally {
       // Cleanup
       this.activeQueries.delete(sessionId);
       this.abortControllers.delete(sessionId);
+      messageTracker.clearSession(sessionId);
     }
   }
 
@@ -156,24 +191,29 @@ export class AIOrchestrator extends EventEmitter {
    */
   private async processMessage(
     message: SDKMessage,
-    sessionId: string
+    sessionId: string,
+    correlationId: string
   ): Promise<void> {
     switch (message.type) {
       case 'assistant':
-        await this.handleAssistantMessage(message, sessionId);
+        await this.handleAssistantMessage(message, sessionId, correlationId);
         break;
 
       case 'result':
-        await this.handleResultMessage(message, sessionId);
+        await this.handleResultMessage(message, sessionId, correlationId);
         break;
 
       case 'system':
-        await this.handleSystemMessage(message as SDKSystemMessage, sessionId);
+        await this.handleSystemMessage(
+          message as SDKSystemMessage,
+          sessionId,
+          correlationId
+        );
         break;
 
       case 'stream_event':
         // Partial messages for real-time updates
-        this.emit('stream:partial', { sessionId, message });
+        this.emit('stream:partial', { sessionId, correlationId, message });
         break;
     }
   }
@@ -183,9 +223,10 @@ export class AIOrchestrator extends EventEmitter {
    */
   private async handleAssistantMessage(
     message: SDKAssistantMessage,
-    sessionId: string
+    sessionId: string,
+    correlationId: string
   ): Promise<void> {
-    this.emit('assistant:message', { sessionId, message });
+    this.emit('assistant:message', { sessionId, correlationId, message });
 
     // Check for tool use in message content
     if (message.message.content) {
@@ -195,11 +236,14 @@ export class AIOrchestrator extends EventEmitter {
           content.type === 'tool_use' &&
           'name' in content
         ) {
+          const toolStartTime = Date.now();
           this.emit('tool:use', {
             sessionId,
+            correlationId,
             toolName: (content as any).name,
             toolInput: (content as any).input,
             toolId: (content as any).id,
+            timestamp: toolStartTime,
           });
         }
       }
@@ -211,7 +255,8 @@ export class AIOrchestrator extends EventEmitter {
    */
   private async handleResultMessage(
     message: SDKResultMessage,
-    sessionId: string
+    sessionId: string,
+    correlationId: string
   ): Promise<void> {
     // Track usage
     if (message.modelUsage) {
@@ -224,6 +269,7 @@ export class AIOrchestrator extends EventEmitter {
     if (message.permission_denials?.length > 0) {
       this.emit('permission:denied', {
         sessionId,
+        correlationId,
         denials: message.permission_denials,
       });
     }
@@ -232,6 +278,7 @@ export class AIOrchestrator extends EventEmitter {
     if (message.subtype === 'success') {
       this.emit('query:complete', {
         sessionId,
+        correlationId,
         result: message.result,
         usage: message.usage,
         cost: message.total_cost_usd,
@@ -239,6 +286,7 @@ export class AIOrchestrator extends EventEmitter {
     } else {
       this.emit('query:error', {
         sessionId,
+        correlationId,
         errorType: message.subtype,
         usage: message.usage,
       });
@@ -250,11 +298,13 @@ export class AIOrchestrator extends EventEmitter {
    */
   private async handleSystemMessage(
     message: SDKSystemMessage,
-    sessionId: string
+    sessionId: string,
+    correlationId: string
   ): Promise<void> {
     if (message.subtype === 'init') {
       this.emit('session:init', {
         sessionId,
+        correlationId,
         model: message.model,
         tools: message.tools,
         mcpServers: message.mcp_servers,

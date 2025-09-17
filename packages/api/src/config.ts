@@ -51,4 +51,10 @@ export const config = {
         : false, // Disable CORS in production if not configured
     credentials: process.env.CORS_ALLOW_CREDENTIALS === 'true',
   },
+
+  internalAuth: {
+    // Internal authentication for metrics and monitoring endpoints
+    enabled: process.env.INTERNAL_AUTH_ENABLED !== 'false',
+    token: process.env.INTERNAL_AUTH_TOKEN,
+  },
 } as const;

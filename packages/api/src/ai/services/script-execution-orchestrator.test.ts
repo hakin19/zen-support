@@ -9,6 +9,8 @@ vi.mock('@aizen/shared/utils/redis-client', () => ({
   getRedisClient: vi.fn(() => ({
     publish: vi.fn(),
     getClient: vi.fn(() => ({
+      lPush: vi.fn(),
+      rPush: vi.fn(),
       lRange: vi.fn(() => []),
       lRem: vi.fn(),
     })),
