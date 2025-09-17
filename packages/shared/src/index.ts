@@ -92,3 +92,6 @@ export {
   type HttpsServerConfig,
   type ServerInstances,
 } from './utils/https-server';
+
+// Export Supabase admin client utility
+export { getSupabaseAdminClient } from './utils/supabase-client';
