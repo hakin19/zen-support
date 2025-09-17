@@ -3,6 +3,17 @@ import { config as dotenvConfig } from 'dotenv';
 // Load environment variables
 dotenvConfig();
 
+const corsOrigins = process.env.CORS_ALLOWED_ORIGINS
+  ? process.env.CORS_ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
+  : process.env.NODE_ENV === 'development'
+    ? ['http://localhost:3000', 'http://localhost:3001']
+    : false;
+
+const corsCredentials =
+  process.env.CORS_ALLOW_CREDENTIALS !== undefined
+    ? process.env.CORS_ALLOW_CREDENTIALS === 'true'
+    : process.env.NODE_ENV === 'development';
+
 export const config = {
   port: parseInt(process.env.PORT ?? '3001', 10),
   host: process.env.HOST ?? '0.0.0.0',
@@ -42,14 +53,8 @@ export const config = {
   },
 
   cors: {
-    // Parse comma-separated list of allowed origins from environment
-    // Example: CORS_ALLOWED_ORIGINS=http://localhost:3000,https://app.aizen.ai
-    origins: process.env.CORS_ALLOWED_ORIGINS
-      ? process.env.CORS_ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
-      : process.env.NODE_ENV === 'development'
-        ? ['http://localhost:3000', 'http://localhost:3001'] // Default for development
-        : false, // Disable CORS in production if not configured
-    credentials: process.env.CORS_ALLOW_CREDENTIALS === 'true',
+    origins: corsOrigins,
+    credentials: corsCredentials,
   },
 
   internalAuth: {

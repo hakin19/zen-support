@@ -82,10 +82,36 @@ const nextConfig = {
           },
           {
             key: 'Content-Security-Policy',
-            value:
-              process.env.NODE_ENV === 'development'
-                ? "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' ws://localhost:* wss: https:"
-                : "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' wss: https:",
+            value: (() => {
+              const connectSrc = ["'self'", 'wss:', 'https:'];
+
+              if (process.env.NODE_ENV === 'development') {
+                connectSrc.push('ws://localhost:*', 'http://localhost:*');
+              }
+
+              const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+              if (apiUrl) {
+                try {
+                  const apiOrigin = new URL(apiUrl).origin;
+                  if (!connectSrc.includes(apiOrigin)) {
+                    connectSrc.push(apiOrigin);
+                  }
+                } catch {
+                  // Ignore malformed NEXT_PUBLIC_API_URL, leave policy unchanged
+                }
+              }
+
+              const policySegments = [
+                "default-src 'self'",
+                "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
+                "style-src 'self' 'unsafe-inline'",
+                "img-src 'self' data: https:",
+                "font-src 'self' data:",
+                `connect-src ${connectSrc.join(' ')}`,
+              ];
+
+              return policySegments.join('; ');
+            })(),
           },
         ],
       },
