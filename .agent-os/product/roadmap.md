@@ -1,7 +1,7 @@
 # Product Roadmap
 
-> Last Updated: 2025-09-04
-> Version: 1.0.0
+> Last Updated: 2025-09-17
+> Version: 1.1.0
 > Status: Active Development
 
 ## Phase 0: Already Completed
@@ -46,10 +46,13 @@ The following infrastructure and development setup has been implemented:
 - [x] Customer Web Portal - Next.js 14 dashboard for network status and diagnostics `L`
 - [x] Bootsrapping device agent - bootsrapping device agent with the rest of the system `M`
 - [x] Claude Code SDK Integration - AI orchestration for diagnostic analysis and script generation `L`
-- [ ] Add missing frontend - Add missing pages to match the envision user and owner user workflows `L`
-- [ ] Human-in-the-Loop Approval System - Secure approval workflow for remediation actions `M`
+- [x] Human-in-the-Loop Approval System - Secure approval workflow for remediation actions `M`
+- [x] PII Sanitization Engine - Cloud-based data cleaning before AI processing `M`
+- [x] Dashboard Essentials - Summary cards, metrics, and recent activity display `M`
+- [x] Organization Settings MVP - Company profile management and billing portal access `S`
+- [ ] Add missing frontend pages - Device management, user administration, and sessions queue `L`
 - [ ] Diagnostic History & Reporting - Historical view of network issues and resolutions `M`
-- [ ] PII Sanitization Engine - Cloud-based data cleaning before AI processing `M`
+- [ ] Chat Persistence - Real API integration for conversation storage `S`
 
 ### Dependencies
 
