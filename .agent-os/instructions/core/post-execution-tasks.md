@@ -10,7 +10,7 @@ encoding: UTF-8
 
 ## Overview
 
-Follow these steps to mark your progress updates, create a recap, and deliver the final report to the user.
+Follow these steps to mark your progress updates, create/update a recap, and deliver the final report to the user.
 
 <pre_flight_check>
 EXECUTE: @.agent-os/instructions/meta/pre-flight.md
@@ -132,17 +132,17 @@ CONTINUE with roadmap check
 
 ### Step 5: Create Recap Document
 
-Use the project-manager subagent to create a recap document in .agent-os/recaps/ folder that summarizes what was built for this spec.
+Use the project-manager subagent update the recap document in .agent-os/recaps/ folder (or create a new one if it doesn't already exists) that summarizes what was built for this spec.
 
 <instructions>
   ACTION: Use project-manager subagent
-  REQUEST: "Create recap document for current spec:
+  REQUEST: "Update/create recap document for current spec:
             - Create file: .agent-os/recaps/[SPEC_FOLDER_NAME].md
             - Use template format with completed features summary
             - Include context from spec-lite.md
             - Document: [SPEC_FOLDER_PATH]"
-  WAIT: For recap document creation
-  PROCESS: Verify file is created with proper content
+  WAIT: For recap document update/creation
+  PROCESS: Verify file is updated/created with proper content
 </instructions>
 
 <recap_template>
