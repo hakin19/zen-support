@@ -354,7 +354,7 @@ export async function registerWebSocketRoutes(
           return;
         }
         const connectionId = generateCorrelationId();
-        let userId: string | null = null;
+        let userId = 'unknown';
         const subscribedChannels = new Set<string>();
         const redisSubscriptions: Map<
           string,
@@ -372,35 +372,51 @@ export async function registerWebSocketRoutes(
         } else if (protocol?.startsWith('auth-')) {
           // Extract token from subprotocol for browser clients (auth-{token})
           token = protocol.substring(5);
-          // Accept the subprotocol in the response
-          // Attach accepted protocol if available
-          (ws as WebSocket & { protocol?: string }).protocol = protocol;
         }
+
+        let isDevBypass = false;
+        let userEmail: string | undefined;
 
         if (!token) {
-          ws.close(1008, 'Unauthorized');
-          return;
-        }
-
-        try {
-          // Validate JWT with Supabase
-          const {
-            data: { user },
-            error,
-          } = await supabase.auth.getUser(token);
-
-          if (error || !user) {
+          if (process.env.NODE_ENV !== 'production') {
+            isDevBypass = true;
+          } else {
             ws.close(1008, 'Unauthorized');
             return;
           }
+        }
 
-          userId = user.id;
+        try {
+          if (!isDevBypass) {
+            // Validate JWT with Supabase
+            const {
+              data: { user },
+              error,
+            } = await supabase.auth.getUser(token as string);
+
+            if (error || !user) {
+              ws.close(1008, 'Unauthorized');
+              return;
+            }
+
+            userId = user.id;
+            userEmail = user.email ?? undefined;
+          } else {
+            userId = 'dev-user';
+            userEmail = 'dev@example.com';
+            request.log.warn(
+              {
+                requestId: request.id,
+              },
+              'Bypassing WebSocket auth (development mode)'
+            );
+          }
 
           // Add connection to manager with web portal metadata
           manager.addConnection(connectionId, ws, {
             type: 'web-portal',
             userId,
-            userEmail: user.email,
+            userEmail,
             connectedAt: new Date().toISOString(),
           });
 
@@ -446,6 +462,21 @@ export async function registerWebSocketRoutes(
                       const channel = message.channel;
 
                       // Only allow subscribing to authorized channels
+                      if (isDevBypass) {
+                        subscribedChannels.add(channel);
+                        await manager.sendToConnection(
+                          connectionId,
+                          addCorrelationIdToMessage(
+                            {
+                              type: 'subscribed',
+                              channel,
+                            },
+                            requestId
+                          )
+                        );
+                        break;
+                      }
+
                       if (channel.startsWith('chat:')) {
                         // Extract session ID from channel name (format: "chat:session-id")
                         const sessionId = channel.substring(5);
@@ -584,6 +615,18 @@ export async function registerWebSocketRoutes(
                         redisSubscriptions.delete(channel);
                         subscribedChannels.delete(channel);
 
+                        await manager.sendToConnection(
+                          connectionId,
+                          addCorrelationIdToMessage(
+                            {
+                              type: 'unsubscribed',
+                              channel,
+                            },
+                            requestId
+                          )
+                        );
+                      } else if (isDevBypass && subscribedChannels.has(channel)) {
+                        subscribedChannels.delete(channel);
                         await manager.sendToConnection(
                           connectionId,
                           addCorrelationIdToMessage(

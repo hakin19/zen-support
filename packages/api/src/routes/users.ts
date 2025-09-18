@@ -59,6 +59,21 @@ export const usersRoutes: FastifyPluginAsync = async fastify => {
         const limit = parseInt(params.limit);
         const offset = (page - 1) * limit;
 
+        // In local development we often run without a Supabase service role key.
+        // Rather than surface a hard 500, short circuit with an empty payload so
+        // the portal can render while the backend remains optional.
+        if (!process.env.SUPABASE_SERVICE_KEY) {
+          fastify.log.warn(
+            {
+              requestId: request.id,
+              route: '/users',
+            },
+            'SUPABASE_SERVICE_KEY missing – returning empty user list'
+          );
+
+          return reply.send({ users: [], total: 0, page, limit });
+        }
+
         // Build query using the user_management view
         let query = supabase
           .from('user_management')
@@ -86,6 +101,13 @@ export const usersRoutes: FastifyPluginAsync = async fastify => {
 
         if (error) {
           fastify.log.error({ error }, 'Failed to fetch users');
+
+          // In non-production environments we can still respond with an empty list
+          // so the dashboard stays usable even if Supabase is unavailable.
+          if (process.env.NODE_ENV !== 'production') {
+            return reply.send({ users: [], total: 0, page, limit });
+          }
+
           return reply.code(500).send({ error: 'Failed to fetch users' });
         }
 

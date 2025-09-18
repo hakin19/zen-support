@@ -70,7 +70,7 @@ interface RegisterResponse {
 interface WebSocketClient {
   subscribe: (event: string, handler: (data: unknown) => void) => void;
   unsubscribe: (event: string) => void;
-  isConnected: boolean;
+  isConnected: () => boolean;
 }
 
 interface DeviceState {

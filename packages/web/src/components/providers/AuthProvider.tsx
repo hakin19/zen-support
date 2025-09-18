@@ -63,11 +63,11 @@ export function AuthProvider({
         setUser(mappedUser);
 
         // Sync with auth store
-        if (mappedUser) {
+        if (mappedUser?.email && mappedUser.role) {
           authStore.setUser({
             id: mappedUser.id,
-            email: mappedUser.email!,
-            role: mappedUser.role!,
+            email: mappedUser.email,
+            role: mappedUser.role,
             full_name: undefined,
           });
           authStore.setSession(session as unknown as Record<string, unknown>);
@@ -94,11 +94,11 @@ export function AuthProvider({
         setUser(mappedUser);
 
         // Sync with auth store
-        if (mappedUser) {
+        if (mappedUser?.email && mappedUser.role) {
           authStore.setUser({
             id: mappedUser.id,
-            email: mappedUser.email!,
-            role: mappedUser.role!,
+            email: mappedUser.email,
+            role: mappedUser.role,
             full_name: undefined,
           });
           authStore.setSession(session as unknown as Record<string, unknown>);
@@ -154,11 +154,11 @@ export function AuthProvider({
     setUser(mappedUser);
 
     // Sync with auth store
-    if (mappedUser) {
+    if (mappedUser?.email && mappedUser.role) {
       authStore.setUser({
         id: mappedUser.id,
-        email: mappedUser.email!,
-        role: mappedUser.role!,
+        email: mappedUser.email,
+        role: mappedUser.role,
         full_name: undefined,
       });
       authStore.setSession(session as unknown as Record<string, unknown>);

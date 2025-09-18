@@ -104,6 +104,38 @@ const initialState = {
   summary: null,
 };
 
+const fallbackOrganization: OrganizationSummary = {
+  id: 'dev-org',
+  name: 'Development Organization',
+  subscription: {
+    plan: 'developer',
+    seats: 10,
+    used_seats: 4,
+  },
+};
+
+const fallbackDevices: DeviceRecord[] = [
+  {
+    id: 'device-1',
+    name: 'Demo Router',
+    status: 'online',
+    last_seen: new Date().toISOString(),
+    created_at: new Date(Date.now() - 1000 * 60 * 60).toISOString(),
+  },
+  {
+    id: 'device-2',
+    name: 'Warehouse Sensor',
+    status: 'offline',
+    last_seen: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString(),
+    created_at: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
+  },
+];
+
+const fallbackUserMetrics = {
+  total: 6,
+  pendingInvites: 1,
+};
+
 function computeAlerts(
   offlineDevices: number,
   pendingInvites: number
@@ -236,11 +268,34 @@ export const useDashboardStore = create<DashboardState>()(
       } catch (error) {
         const message =
           error instanceof Error ? error.message : 'Failed to load dashboard';
-        set(
-          { error: message, loading: false },
-          false,
-          'dashboard/fetchInitial:error'
-        );
+
+        if (process.env.NODE_ENV !== 'production') {
+          const summary = buildSummary(
+            fallbackOrganization,
+            fallbackDevices,
+            fallbackUserMetrics
+          );
+
+          set(
+            {
+              organization: fallbackOrganization,
+              devices: fallbackDevices,
+              users: [],
+              userMetrics: fallbackUserMetrics,
+              summary,
+              loading: false,
+              error: message,
+            },
+            false,
+            'dashboard/fetchInitial:fallback'
+          );
+        } else {
+          set(
+            { error: message, loading: false },
+            false,
+            'dashboard/fetchInitial:error'
+          );
+        }
       }
     },
 

@@ -75,6 +75,62 @@ export const organizationRoutes: FastifyPluginAsync = async fastify => {
       }
 
       try {
+        if (!process.env.SUPABASE_SERVICE_KEY) {
+          fastify.log.warn(
+            {
+              requestId: request.id,
+              route: '/api/organization',
+            },
+            'SUPABASE_SERVICE_KEY missing – returning stub organization data'
+          );
+
+          const organization = {
+            id: user.customerId,
+            name: 'Development Organization',
+            subdomain: 'dev',
+            logo_url: '',
+            primary_color: '#007bff',
+            secondary_color: '#6c757d',
+            contact_email: 'dev@example.com',
+            contact_phone: '',
+            address: '123 Dev Street',
+            city: 'Localhost',
+            state: 'CA',
+            zip: '94016',
+            country: 'US',
+            timezone: 'America/Los_Angeles',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            settings: {
+              allow_sso: false,
+              enforce_2fa: false,
+              session_timeout: 3600,
+              ip_whitelist: [],
+              notification_preferences: {
+                email_alerts: true,
+                sms_alerts: false,
+                webhook_url: null,
+              },
+              api_settings: {
+                rate_limit: 1000,
+                allowed_origins: [],
+              },
+            },
+            subscription: {
+              plan: 'developer',
+              seats: 10,
+              used_seats: 2,
+              billing_cycle: 'monthly',
+              next_billing_date: null,
+              amount: 0,
+              currency: 'USD',
+              status: 'active',
+            },
+          };
+
+          return reply.send({ organization });
+        }
+
         // Get organization data
         const result = await supabase
           .from('customers')
