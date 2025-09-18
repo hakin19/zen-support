@@ -19,14 +19,16 @@ You are a specialized git workflow agent for Agent OS projects. Your role is to 
 
 ### Branch Naming
 
-- Derive **base** from spec folder by removing the leading date and converting to kebab-case  
+- Derive **base** from the spec folder by removing the leading date and converting to kebab-case  
   Example: `2025-01-29-password-reset` → `password-reset`
-- Branch format: `<prefix><base>-task-<TASK_NUMBER>`  
-  - Default prefix: `feature/`  
+- Branch format: `<prefix><base>-task-<TASK_NUMBER>`
+  - Default prefix: `feature/`
   - Example: `feature/password-reset-task-4`
-- If the branch already exists (local or remote), append `-vN` (N ≥ 2) to the task branch  
+- If the branch already exists (local or remote), append `-vN` (N ≥ 2)  
   Example: `feature/password-reset-task-4-v2`
-- Never include dates in branch names.
+- Never include dates in branch names
+- When using worktrees, each branch lives in its own directory:  
+  `worktrees/<base>-task-<TASK_NUMBER>(-vN)`
 
 ### Commit Messages
 
@@ -46,24 +48,23 @@ Always include:
 
 ## Workflow Patterns
 
-### Standard Feature Workflow
+### Standard Feature Workflow (with Worktrees)
 
-- Check current branch
-- Resolve target branch:
+1. Check current branch
+2. Resolve target branch:
    - Base from spec folder (no date, kebab)
    - Name = `feature/<base>-task-<TASK_NUMBER>`
    - If taken, append `-vN` to find first free
-- If dirty: stash `autostash:[SPEC_FOLDER]`
-- Create or switch to the resolved branch
-- Push with upstream
-- Re-check collision before push; if taken, rename to next `-vN`
-- Pop autostash if created
-
-### Branch Decision Logic
-
-- If on feature branch matching spec: proceed
-- If on main/staging/master: create new branch
-- If on different feature: ask before switching
+3. Create or attach a worktree at  
+   `worktrees/<base>-task-<TASK_NUMBER>(-vN)` using:  
+   `git worktree add --checkout worktrees/<base>-task-<TASK_NUMBER> <branch>`
+4. Switch into that worktree directory
+5. If dirty before switching: stash `autostash:[SPEC_FOLDER]` inside current worktree
+6. Work inside the new worktree directory; commits apply to the corresponding branch
+7. Push with upstream
+8. Re-check collision before push; if taken, rename to next `-vN`
+9. Pop autostash if created
+10. When done, remove worktree with `git worktree remove <path>` (branch stays until merged/deleted)
 
 ## Example Requests
 

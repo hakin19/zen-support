@@ -18,15 +18,15 @@
   - [x] 3.2 Implement `/devices` list and registration modal (activation code surfaced) to make tests pass
   - [x] 3.3 Hook into websocket `device_*` events and assert refresh behavior via tests
 
-- [ ] 4. User Administration Basics (Test First)
-  - [ ] 4.1 Draft failing tests for `/users` table search, pagination, and role display
-  - [ ] 4.2 Implement invite, resend invite, and role toggle actions until tests succeed
-  - [ ] 4.3 Subscribe to `user_*` websocket events and validate real-time updates in tests
+- [x] 4. User Administration Basics (Test First)
+  - [x] 4.1 Draft failing tests for `/users` table search, pagination, and role display
+  - [x] 4.2 Implement invite, resend invite, and role toggle actions until tests succeed
+  - [x] 4.3 Subscribe to `user_*` websocket events and validate real-time updates in tests
 
-- [ ] 5. Sessions Queue & Approvals (Test First)
-  - [ ] 5.1 Add failing tests for sessions queue filters, approve/reject actions, and transcript access
-  - [ ] 5.2 Implement `/sessions` queue UI plus approval handlers to satisfy tests
-  - [ ] 5.3 Cover websocket or polling refresh ensuring approved sessions leave the queue
+- [x] 5. Sessions Queue & Approvals (Test First)
+  - [x] 5.1 Add failing tests for sessions queue filters, approve/reject actions, and transcript access
+  - [x] 5.2 Implement `/sessions` queue UI plus approval handlers to satisfy tests
+  - [x] 5.3 Cover websocket or polling refresh ensuring approved sessions leave the queue
 
 - [x] 6. Chat Persistence (Test First)
   - [x] 6.1 Write failing store tests that expect chat sessions/messages to load from API and persist

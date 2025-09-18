@@ -4,6 +4,7 @@ import React from 'react';
 import type { Metadata } from 'next';
 
 import { ApiClientProvider } from '@/components/providers/ApiClientProvider';
+import { AuthProvider } from '@/components/providers/AuthProvider';
 
 import './globals.css';
 
@@ -50,11 +51,13 @@ export default function RootLayout({
   return (
     <html lang='en' suppressHydrationWarning>
       <body className={inter.className}>
-        <ApiClientProvider>
-          <div id='app-root' className='min-h-screen bg-background'>
-            {children}
-          </div>
-        </ApiClientProvider>
+        <AuthProvider>
+          <ApiClientProvider>
+            <div id='app-root' className='min-h-screen bg-background'>
+              {children}
+            </div>
+          </ApiClientProvider>
+        </AuthProvider>
       </body>
     </html>
   );

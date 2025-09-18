@@ -72,21 +72,30 @@ Use the context-fetcher subagent to gather minimal context for task understandin
 
 ### Step 3: Git Branch Management
 
+Use the git-workflow subagent to manage git branches/worktrees to ensure proper isolation by creating or switching to the appropriate task branch for the spec.
+
 <instructions>
   ACTION: Use git-workflow subagent
-  REQUEST: |
-    Manage branch for spec [SPEC_FOLDER] and task [TASK_NUMBER]:
-      - Base = SPEC_FOLDER without ^YYYY-MM-DD-; kebab-case, lower, trim, max 40 chars.
-      - Name = <prefix><Base>-task-<TASK_NUMBER> (prefix default "feature/").
-      - If taken (local or remote), append "-vN" (N≥2) to first free.
-      - If dirty: stash "autostash:[SPEC_FOLDER]" before checkout; pop after.
-      - Create/switch branch; push with upstream; re-check collision just before push.
-  WAIT: For branch setup completion
+  REQUEST: "Check and manage branch/worktree for spec: [SPEC_FOLDER], task: [TASK_NUMBER]
+            - Derive base from spec folder (remove date prefix, kebab-case)
+            - Target branch = feature/<base>-task-<TASK_NUMBER>
+            - If taken, append -vN (N ≥ 2)
+            - Create or attach worktree at worktrees/<base>-task-<TASK_NUMBER>(-vN)
+            - Switch into that worktree directory after creation
+            - Handle any uncommitted changes (stash/pop)"
+  WAIT: For branch/worktree setup completion
 </instructions>
 
 <branch_naming>
-  <prefix>feature/</prefix>
-  <pattern>&lt;prefix&gt;&lt;base&gt;-task-&lt;TASK_NUMBER&gt;(-vN)?</pattern>
+
+  <source>spec folder name + task number</source>
+  <format>exclude date prefix; kebab-case; suffix -task-N; optional -vN variant</format>
+  <example>
+    - folder: 2025-03-15-password-reset, task: 4
+    - branch: feature/password-reset-task-4
+    - worktree: worktrees/password-reset-task-4
+    - if taken → feature/password-reset-task-4-v2, worktrees/password-reset-task-4-v2
+  </example>
 </branch_naming>
 
 </step>
@@ -155,11 +164,10 @@ After all tasks in tasks.md have been implemented, use @.agent-os/instructions/c
   LOAD: @.agent-os/instructions/core/post-execution-tasks.md once
   ACTION: execute all steps in the post-execution-tasks.md process_flow.
   **IMPORTANT**: This includes:
-    - Running full test suite
     - Git workflow (commit, push, PR)
     - Verifying task completion
     - Updating roadmap (if applicable)
-    - Creating recap document
+    - Updating/Creating recap document
     - Generating completion summary
     - Playing notification sound
 </instructions>
