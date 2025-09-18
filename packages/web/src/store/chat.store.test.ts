@@ -84,10 +84,9 @@ describe('useChatStore', () => {
       });
 
       await waitFor(() => {
-        expect(apiClient.post).toHaveBeenCalledWith(
-          '/api/chat/sessions',
-          { title: 'Test Session' }
-        );
+        expect(apiClient.post).toHaveBeenCalledWith('/api/chat/sessions', {
+          title: 'Test Session',
+        });
         expect(result.current.sessions).toHaveLength(1);
         expect(result.current.sessions[0]).toEqual(mockSession);
         expect(result.current.activeSessionId).toBe('session-1');
@@ -105,7 +104,7 @@ describe('useChatStore', () => {
           metadata: {},
           created_at: new Date().toISOString(),
           updated_at: null,
-        closed_at: null,
+          closed_at: null,
         },
         {
           id: 'session-2',
@@ -116,7 +115,7 @@ describe('useChatStore', () => {
           metadata: {},
           created_at: new Date().toISOString(),
           updated_at: null,
-        closed_at: null,
+          closed_at: null,
         },
       ];
 
@@ -147,7 +146,7 @@ describe('useChatStore', () => {
           metadata: {},
           created_at: new Date().toISOString(),
           updated_at: null,
-        closed_at: null,
+          closed_at: null,
         },
       ];
 
@@ -200,7 +199,7 @@ describe('useChatStore', () => {
       ];
 
       vi.mocked(apiClient.get).mockResolvedValue({
-        data: { ...mockSession, messages: mockMessages }
+        data: { ...mockSession, messages: mockMessages },
       });
 
       const { result } = renderHook(() => useChatStore());
@@ -216,7 +215,9 @@ describe('useChatStore', () => {
       });
 
       await waitFor(() => {
-        expect(apiClient.get).toHaveBeenCalledWith('/api/chat/sessions/session-1');
+        expect(apiClient.get).toHaveBeenCalledWith(
+          '/api/chat/sessions/session-1'
+        );
         expect(result.current.activeSessionId).toBe('session-1');
         expect(result.current.messages).toEqual(mockMessages);
         expect(result.current.messagesLoading).toBe(false);
@@ -237,7 +238,7 @@ describe('useChatStore', () => {
       };
 
       vi.mocked(apiClient.patch).mockResolvedValue({
-        data: { ...mockSession, status: 'archived' as const }
+        data: { ...mockSession, status: 'archived' as const },
       });
 
       const { result } = renderHook(() => useChatStore());
@@ -323,7 +324,9 @@ describe('useChatStore', () => {
         );
 
         // Check that message is in the store with correct status
-        const message = result.current.messages.find(m => m.content === 'Hello API');
+        const message = result.current.messages.find(
+          m => m.content === 'Hello API'
+        );
         expect(message).toBeDefined();
         expect(message?.status).toBe('sent');
         expect(result.current.isSending).toBe(false);
@@ -442,7 +445,9 @@ describe('useChatStore', () => {
       });
 
       await waitFor(() => {
-        expect(apiClient.get).toHaveBeenCalledWith('/api/chat/sessions/session-1');
+        expect(apiClient.get).toHaveBeenCalledWith(
+          '/api/chat/sessions/session-1'
+        );
         expect(result.current.messages).toEqual(mockMessages);
         expect(result.current.messagesLoading).toBe(false);
         expect(result.current.messagesError).toBeNull();
@@ -510,14 +515,16 @@ describe('useChatStore', () => {
       const mockStream = new ReadableStream({
         start(controller) {
           controller.enqueue(encoder.encode('data: {"content":"Hello"}\n\n'));
-          controller.enqueue(encoder.encode('data: {"content":"Hello world"}\n\n'));
+          controller.enqueue(
+            encoder.encode('data: {"content":"Hello world"}\n\n')
+          );
           controller.enqueue(encoder.encode('data: {"done":true}\n\n'));
           controller.close();
         },
       });
 
       vi.mocked(apiClient.post).mockResolvedValue({
-        data: { stream: mockStream }
+        data: { stream: mockStream },
       });
 
       const { result } = renderHook(() => useChatStore());
@@ -537,6 +544,145 @@ describe('useChatStore', () => {
           '/api/chat/sessions/session-1/messages',
           { content: 'Stream test', stream: true }
         );
+      });
+    });
+
+    it('should replace temporary messages with server records during streaming', async () => {
+      const mockSession: ChatSession = {
+        id: 'session-1',
+        user_id: 'user-1',
+        customer_id: 'customer-1',
+        title: 'Test Session',
+        status: 'active',
+        metadata: {},
+        created_at: new Date().toISOString(),
+        updated_at: null,
+        closed_at: null,
+      };
+
+      // Mock streaming response with message IDs
+      const encoder = new TextEncoder();
+      const mockStream = new ReadableStream({
+        start(controller) {
+          // First, send the real message IDs
+          controller.enqueue(
+            encoder.encode(
+              'data: {"userMessageId":"real-user-msg-id","assistantMessageId":"real-assistant-msg-id"}\n\n'
+            )
+          );
+          // Then send content updates
+          controller.enqueue(encoder.encode('data: {"content":"Hello"}\n\n'));
+          controller.enqueue(
+            encoder.encode('data: {"content":"Hello world"}\n\n')
+          );
+          controller.enqueue(encoder.encode('data: {"done":true}\n\n'));
+          controller.close();
+        },
+      });
+
+      vi.mocked(apiClient.post).mockResolvedValue({
+        data: { stream: mockStream },
+      });
+
+      const { result } = renderHook(() => useChatStore());
+
+      // Set up session
+      act(() => {
+        result.current.addSession(mockSession);
+        result.current.setActiveSession('session-1');
+      });
+
+      // Send message with streaming
+      await act(async () => {
+        await result.current.sendMessageWithStream('Test message');
+      });
+
+      // Wait for streaming to complete
+      await waitFor(() => {
+        const messages = result.current.messages;
+        // Should have exactly 2 messages (user and assistant)
+        expect(messages).toHaveLength(2);
+
+        // Check that temporary IDs have been replaced with real IDs
+        const userMessage = messages.find(m => m.role === 'user');
+        const assistantMessage = messages.find(m => m.role === 'assistant');
+
+        expect(userMessage?.id).toBe('real-user-msg-id');
+        expect(userMessage?.content).toBe('Test message');
+        expect(userMessage?.status).toBe('sent');
+
+        expect(assistantMessage?.id).toBe('real-assistant-msg-id');
+        expect(assistantMessage?.content).toBe('Hello world');
+        expect(assistantMessage?.status).toBe('sent');
+
+        // Verify no temporary IDs remain
+        const hasTemporaryIds = messages.some(
+          m => m.id.startsWith('temp-') || m.id.startsWith('assistant-')
+        );
+        expect(hasTemporaryIds).toBe(false);
+      });
+    });
+
+    it('should handle streaming without real message IDs (fallback)', async () => {
+      const mockSession: ChatSession = {
+        id: 'session-1',
+        user_id: 'user-1',
+        customer_id: 'customer-1',
+        title: 'Test Session',
+        status: 'active',
+        metadata: {},
+        created_at: new Date().toISOString(),
+        updated_at: null,
+        closed_at: null,
+      };
+
+      // Mock streaming response WITHOUT message IDs (fallback scenario)
+      const encoder = new TextEncoder();
+      const mockStream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode('data: {"content":"Hello"}\n\n'));
+          controller.enqueue(
+            encoder.encode('data: {"content":"Hello world"}\n\n')
+          );
+          controller.enqueue(encoder.encode('data: {"done":true}\n\n'));
+          controller.close();
+        },
+      });
+
+      vi.mocked(apiClient.post).mockResolvedValue({
+        data: { stream: mockStream },
+      });
+
+      const { result } = renderHook(() => useChatStore());
+
+      // Set up session
+      act(() => {
+        result.current.addSession(mockSession);
+        result.current.setActiveSession('session-1');
+      });
+
+      // Send message with streaming
+      await act(async () => {
+        await result.current.sendMessageWithStream('Test message');
+      });
+
+      // Wait for streaming to complete
+      await waitFor(() => {
+        const messages = result.current.messages;
+        // Should have exactly 2 messages (user and assistant)
+        expect(messages).toHaveLength(2);
+
+        const userMessage = messages.find(m => m.role === 'user');
+        const assistantMessage = messages.find(m => m.role === 'assistant');
+
+        // In fallback mode, temporary IDs are kept but marked as sent
+        expect(userMessage?.id).toMatch(/^temp-\d+$/);
+        expect(userMessage?.content).toBe('Test message');
+        expect(userMessage?.status).toBe('sent');
+
+        expect(assistantMessage?.id).toMatch(/^assistant-\d+$/);
+        expect(assistantMessage?.content).toBe('Hello world');
+        expect(assistantMessage?.status).toBe('sent');
       });
     });
   });
@@ -566,7 +712,11 @@ describe('useChatStore', () => {
       };
 
       vi.mocked(apiClient.post).mockResolvedValue({
-        data: { ...mockAction, status: 'approved', approved_at: new Date().toISOString() }
+        data: {
+          ...mockAction,
+          status: 'approved',
+          approved_at: new Date().toISOString(),
+        },
       });
 
       const { result } = renderHook(() => useChatStore());
@@ -585,7 +735,9 @@ describe('useChatStore', () => {
           '/api/device-actions/action-1/approve'
         );
 
-        const action = result.current.deviceActions.find(a => a.id === 'action-1');
+        const action = result.current.deviceActions.find(
+          a => a.id === 'action-1'
+        );
         expect(action?.status).toBe('approved');
       });
     });
@@ -614,7 +766,11 @@ describe('useChatStore', () => {
       };
 
       vi.mocked(apiClient.post).mockResolvedValue({
-        data: { ...mockAction, status: 'rejected', rejected_at: new Date().toISOString() }
+        data: {
+          ...mockAction,
+          status: 'rejected',
+          rejected_at: new Date().toISOString(),
+        },
       });
 
       const { result } = renderHook(() => useChatStore());
@@ -633,7 +789,9 @@ describe('useChatStore', () => {
           '/api/device-actions/action-1/reject'
         );
 
-        const action = result.current.deviceActions.find(a => a.id === 'action-1');
+        const action = result.current.deviceActions.find(
+          a => a.id === 'action-1'
+        );
         expect(action?.status).toBe('rejected');
       });
     });
@@ -725,7 +883,9 @@ describe('useChatStore', () => {
       });
 
       await waitFor(() => {
-        expect(apiClient.get).toHaveBeenCalledWith('/api/chat/sessions/session-1');
+        expect(apiClient.get).toHaveBeenCalledWith(
+          '/api/chat/sessions/session-1'
+        );
         expect(result.current.messages).toEqual(mockMessages);
       });
     });
@@ -770,7 +930,9 @@ describe('useChatStore', () => {
         });
       });
 
-      const action = result.current.deviceActions.find(a => a.id === 'action-1');
+      const action = result.current.deviceActions.find(
+        a => a.id === 'action-1'
+      );
       expect(action?.status).toBe('executing');
       expect(action?.executed_at).toBeDefined();
     });
@@ -835,16 +997,23 @@ describe('useChatStore', () => {
       };
 
       vi.mocked(apiClient.post).mockImplementation(
-        () => new Promise(resolve => setTimeout(() => resolve({
-          data: {
-            id: 'msg-1',
-            session_id: 'session-1',
-            role: 'user' as const,
-            content: 'Test',
-            metadata: null,
-            created_at: new Date().toISOString(),
-          }
-        }), 100))
+        () =>
+          new Promise(resolve =>
+            setTimeout(
+              () =>
+                resolve({
+                  data: {
+                    id: 'msg-1',
+                    session_id: 'session-1',
+                    role: 'user' as const,
+                    content: 'Test',
+                    metadata: null,
+                    created_at: new Date().toISOString(),
+                  },
+                }),
+              100
+            )
+          )
       );
 
       const { result } = renderHook(() => useChatStore());
@@ -911,7 +1080,7 @@ describe('useChatStore', () => {
           metadata: {},
           created_at: new Date().toISOString(),
           updated_at: null,
-        closed_at: null,
+          closed_at: null,
         });
         result.current.setActiveSession('session-1');
         result.current.addMessage({

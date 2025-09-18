@@ -286,16 +286,12 @@ export const useChatStore = create<ChatState>()(
       },
 
       archiveSessionWithAPI: async (id: string) => {
-        try {
-          const { data: updatedSession } = await apiClient.patch<ChatSession>(
-            `/api/chat/sessions/${id}`,
-            { status: 'archived' }
-          );
+        const { data: updatedSession } = await apiClient.patch<ChatSession>(
+          `/api/chat/sessions/${id}`,
+          { status: 'archived' }
+        );
 
-          get().updateSession(id, updatedSession);
-        } catch (error) {
-          throw error;
-        }
+        get().updateSession(id, updatedSession);
       },
 
       // Message Actions
@@ -376,15 +372,16 @@ export const useChatStore = create<ChatState>()(
       },
 
       sendMessageWithStream: async (content: string) => {
-        const tempId = `temp-${Date.now()}`;
+        const tempUserMessageId = `temp-${Date.now()}`;
+        const tempAssistantMessageId = `assistant-${Date.now()}`;
         const sessionId = get().activeSessionId;
 
         if (!sessionId) {
           throw new Error('No active session');
         }
 
-        const message: MessageWithStatus = {
-          id: tempId,
+        const tempUserMessage: MessageWithStatus = {
+          id: tempUserMessageId,
           session_id: sessionId,
           role: 'user' as Database['public']['Enums']['message_role'],
           content,
@@ -393,24 +390,39 @@ export const useChatStore = create<ChatState>()(
           status: 'sending',
         };
 
-        get().addMessage(message);
+        get().addMessage(tempUserMessage);
         get().setSending(true);
 
         try {
-          const response = await apiClient.post<{ stream?: ReadableStream }>(
-            `/api/chat/sessions/${sessionId}/messages`,
-            { content, stream: true }
-          );
+          const response = await apiClient.post<{
+            stream?: ReadableStream;
+            userMessage?: ChatMessage;
+            assistantMessage?: ChatMessage;
+          }>(`/api/chat/sessions/${sessionId}/messages`, {
+            content,
+            stream: true,
+          });
+
+          // Replace temp user message with real one if provided
+          if (response.data.userMessage) {
+            get().deleteMessage(tempUserMessageId);
+            get().addMessage({
+              ...response.data.userMessage,
+              status: 'sent',
+            });
+          }
 
           // Handle streaming response
           if (response.data.stream) {
             const reader = response.data.stream.getReader();
             const decoder = new TextDecoder();
             let buffer = '';
+            let realUserMessageId: string | null = null;
+            let realAssistantMessageId: string | null = null;
 
-            const assistantMessageId = `assistant-${Date.now()}`;
-            const assistantMessage: MessageWithStatus = {
-              id: assistantMessageId,
+            // Add temporary assistant message
+            const tempAssistantMessage: MessageWithStatus = {
+              id: tempAssistantMessageId,
               session_id: sessionId,
               role: 'assistant',
               content: '',
@@ -418,27 +430,74 @@ export const useChatStore = create<ChatState>()(
               metadata: null,
               status: 'sending',
             };
-            get().addMessage(assistantMessage);
+            get().addMessage(tempAssistantMessage);
 
             while (true) {
-              const { done, value } = await reader.read();
-              if (done) break;
+              const result = await reader.read();
+              if (result.done || !result.value) break;
 
-              buffer += decoder.decode(value, { stream: true });
+              buffer += decoder.decode(result.value as Uint8Array, {
+                stream: true,
+              });
               const lines = buffer.split('\n');
-              buffer = lines.pop() || '';
+              buffer = lines.pop() ?? '';
 
               for (const line of lines) {
                 if (line.startsWith('data: ')) {
                   try {
-                    const data = JSON.parse(line.slice(6));
+                    const data = JSON.parse(line.slice(6)) as {
+                      userMessageId?: string;
+                      assistantMessageId?: string;
+                      content?: string;
+                      done?: boolean;
+                    };
+
+                    // Handle message ID updates to replace temp messages
+                    if (data.userMessageId && !realUserMessageId) {
+                      realUserMessageId = data.userMessageId;
+                      // Replace temp user message with real ID
+                      const tempMessage = get().messages.find(
+                        m => m.id === tempUserMessageId
+                      );
+                      if (tempMessage && realUserMessageId) {
+                        get().deleteMessage(tempUserMessageId);
+                        get().addMessage({
+                          ...tempMessage,
+                          id: realUserMessageId,
+                          status: 'sent',
+                        });
+                      }
+                    }
+
+                    if (data.assistantMessageId && !realAssistantMessageId) {
+                      realAssistantMessageId = data.assistantMessageId;
+                      // Replace temp assistant message with real ID
+                      const tempMessage = get().messages.find(
+                        m => m.id === tempAssistantMessageId
+                      );
+                      if (tempMessage && realAssistantMessageId) {
+                        get().deleteMessage(tempAssistantMessageId);
+                        get().addMessage({
+                          ...tempMessage,
+                          id: realAssistantMessageId,
+                        });
+                      }
+                    }
+
+                    // Update content on the real assistant message
                     if (data.content) {
-                      get().updateMessage(assistantMessageId, {
+                      const targetId =
+                        realAssistantMessageId ?? tempAssistantMessageId;
+                      get().updateMessage(targetId, {
                         content: data.content,
                       });
                     }
+
+                    // Mark as complete
                     if (data.done) {
-                      get().updateMessage(assistantMessageId, {
+                      const targetId =
+                        realAssistantMessageId ?? tempAssistantMessageId;
+                      get().updateMessage(targetId, {
                         status: 'sent',
                       });
                     }
@@ -448,13 +507,22 @@ export const useChatStore = create<ChatState>()(
                 }
               }
             }
-          }
 
-          get().updateMessage(tempId, {
-            status: 'sent',
-          });
+            // If we still have temp messages after streaming, mark them as sent
+            // This is a fallback in case the server doesn't send real IDs
+            if (!realUserMessageId) {
+              get().updateMessage(tempUserMessageId, {
+                status: 'sent',
+              });
+            }
+            if (!realAssistantMessageId) {
+              get().updateMessage(tempAssistantMessageId, {
+                status: 'sent',
+              });
+            }
+          }
         } catch (error) {
-          get().updateMessage(tempId, {
+          get().updateMessage(tempUserMessageId, {
             status: 'error',
             error:
               error instanceof Error ? error.message : 'Failed to send message',
@@ -623,27 +691,19 @@ export const useChatStore = create<ChatState>()(
 
       // New API methods for device actions
       approveActionWithAPI: async (id: string) => {
-        try {
-          const { data: updatedAction } = await apiClient.post<DeviceAction>(
-            `/api/device-actions/${id}/approve`
-          );
+        const { data: updatedAction } = await apiClient.post<DeviceAction>(
+          `/api/device-actions/${id}/approve`
+        );
 
-          get().updateDeviceAction(id, updatedAction);
-        } catch (error) {
-          throw error;
-        }
+        get().updateDeviceAction(id, updatedAction);
       },
 
       rejectActionWithAPI: async (id: string) => {
-        try {
-          const { data: updatedAction } = await apiClient.post<DeviceAction>(
-            `/api/device-actions/${id}/reject`
-          );
+        const { data: updatedAction } = await apiClient.post<DeviceAction>(
+          `/api/device-actions/${id}/reject`
+        );
 
-          get().updateDeviceAction(id, updatedAction);
-        } catch (error) {
-          throw error;
-        }
+        get().updateDeviceAction(id, updatedAction);
       },
 
       addActionOutput: (id, output) => {
