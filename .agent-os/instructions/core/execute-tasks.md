@@ -164,11 +164,10 @@ After all tasks in tasks.md have been implemented, use @.agent-os/instructions/c
   LOAD: @.agent-os/instructions/core/post-execution-tasks.md once
   ACTION: execute all steps in the post-execution-tasks.md process_flow.
   **IMPORTANT**: This includes:
-    - Running full test suite
     - Git workflow (commit, push, PR)
     - Verifying task completion
     - Updating roadmap (if applicable)
-    - Creating recap document
+    - Updating/Creating recap document
     - Generating completion summary
     - Playing notification sound
 </instructions>
