@@ -210,41 +210,49 @@ export class ClaudeCodeService {
         diagnosticPrompt,
         sessionId
       )) {
-        const processed = await this.messageProcessor.processMessage(
-          message,
-          sessionId
-        );
+        console.log('[ClaudeCodeService] Received message:', {
+          type: message.type,
+          hasMessage: !!(message as any).message,
+        });
 
-        // Convert to legacy format for backward compatibility
-        if (message.type === 'assistant' && processed.content?.content) {
+        // Handle assistant messages directly from SDK
+        if (message.type === 'assistant' && (message as any).message) {
+          const sdkMessage = message as any;
+          const content = sdkMessage.message.content;
+
+          console.log('[ClaudeCodeService] Assistant content:', content);
+
+          // Convert SDK format to legacy format
           const legacyMessage = {
             type: 'message',
             data: {
-              content: processed.content.content,
+              content,
             },
           };
 
           onMessage(legacyMessage);
 
-          // Check for tool use blocks
-          for (const block of processed.content.content) {
-            if (block.type === 'tool_use' && this.approvalHandler) {
-              const deviceAction: DeviceAction = {
-                action: block.name,
-                parameters: block.input as Record<string, unknown>,
-              };
-              const approved = await this.approvalHandler(deviceAction);
-              if (!approved) {
-                return;
+          // Check for tool use blocks in content
+          if (Array.isArray(content)) {
+            for (const block of content) {
+              if (block.type === 'tool_use' && this.approvalHandler) {
+                const deviceAction: DeviceAction = {
+                  action: block.name,
+                  parameters: block.input as Record<string, unknown>,
+                };
+                const approved = await this.approvalHandler(deviceAction);
+                if (!approved) {
+                  return;
+                }
               }
             }
           }
-        } else if (message.type === 'stream_event') {
-          // Pass through streaming events
-          onMessage({
-            type: 'stream',
-            data: processed.content,
-          });
+        } else if (message.type === 'result') {
+          // Log the final result for debugging
+          console.log(
+            '[ClaudeCodeService] Final result:',
+            (message as any).result
+          );
         }
       }
     } catch (error) {

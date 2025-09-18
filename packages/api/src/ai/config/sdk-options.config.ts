@@ -238,9 +238,19 @@ export class SDKOptionsFactory {
   ): Partial<Options> {
     const preset = SAFETY_PRESETS[mode];
 
+    const model =
+      process.env.CLAUDE_MODEL ??
+      process.env.ANTHROPIC_MODEL ??
+      'claude-4.1-sonnet';
+
+    const fallbackModel =
+      process.env.CLAUDE_FALLBACK_MODEL ??
+      process.env.ANTHROPIC_FALLBACK_MODEL ??
+      'claude-3-5-sonnet-20241022';
+
     return {
-      model: process.env.CLAUDE_MODEL ?? 'claude-3-5-sonnet-20241022',
-      fallbackModel: 'claude-3-5-haiku-20241022',
+      model,
+      fallbackModel,
       cwd: process.cwd(),
       env: this.getSanitizedEnv(),
       allowedTools: preset.allowedTools,
@@ -252,6 +262,10 @@ export class SDKOptionsFactory {
       strictMcpConfig: true,
       customSystemPrompt: this.getSystemPrompt(mode),
       appendSystemPrompt: this.getAppendedSystemPrompt(),
+      // Pass API key as extraArgs in case SDK expects it there
+      extraArgs: {
+        'api-key': process.env.ANTHROPIC_API_KEY || '',
+      },
     };
   }
 
@@ -527,6 +541,9 @@ You are generating remediation scripts for network devices. Requirements:
       'PORT',
       'API_URL',
       'LOG_LEVEL',
+      'ANTHROPIC_API_KEY', // Required for Claude SDK
+      'PATH', // Required for Claude SDK to spawn processes
+      'DEBUG', // Enable debug logging in SDK
       // Add other safe environment variables
     ];
 
@@ -534,6 +551,26 @@ You are generating remediation scripts for network devices. Requirements:
       if (process.env[key]) {
         sanitized[key] = process.env[key]!;
       }
+    }
+
+    // Ensure PATH includes node binary location
+    if (!sanitized.PATH?.includes('/opt/homebrew/bin')) {
+      sanitized.PATH = `/opt/homebrew/bin:${sanitized.PATH || '/usr/bin:/bin'}`;
+    }
+
+    // Enable DEBUG mode in development
+    if (process.env.NODE_ENV === 'development') {
+      sanitized.DEBUG = '1';
+    }
+
+    // Debug: Log what env vars we're passing to Claude SDK
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Claude SDK env vars:', {
+        ANTHROPIC_API_KEY: sanitized.ANTHROPIC_API_KEY ? 'Set' : 'Not set',
+        PATH: sanitized.PATH ? 'Set' : 'Not set',
+        NODE_ENV: sanitized.NODE_ENV,
+        DEBUG: sanitized.DEBUG,
+      });
     }
 
     return sanitized;

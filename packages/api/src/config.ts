@@ -1,7 +1,33 @@
+import * as fs from 'fs';
+import * as path from 'path';
+
 import { config as dotenvConfig } from 'dotenv';
 
+// Try to find .env file - check current dir, then parent directories
+let envPath = '.env';
+if (!fs.existsSync(envPath)) {
+  envPath = path.join('..', '..', '.env'); // From packages/api to root
+  if (!fs.existsSync(envPath)) {
+    envPath = path.join('..', '..', '..', '.env'); // From packages/api/src to root
+  }
+}
+
 // Load environment variables
-dotenvConfig();
+const result = dotenvConfig({ path: envPath });
+
+if (result.error) {
+  console.warn('Failed to load .env file:', result.error);
+} else if (process.env.NODE_ENV === 'development') {
+  console.log(`✓ Loaded environment from ${envPath}`);
+  console.log(
+    `✓ ANTHROPIC_API_KEY: ${process.env.ANTHROPIC_API_KEY ? 'Set' : 'Not set'}`
+  );
+}
+
+// Ensure node is in PATH for Claude Code SDK
+if (!process.env.PATH?.includes('/opt/homebrew/bin')) {
+  process.env.PATH = `/opt/homebrew/bin:${process.env.PATH}`;
+}
 
 const corsOrigins = process.env.CORS_ALLOWED_ORIGINS
   ? process.env.CORS_ALLOWED_ORIGINS.split(',').map(origin => origin.trim())

@@ -366,6 +366,7 @@ export async function registerWebSocketRoutes(
         const protocol = request.headers['sec-websocket-protocol'];
 
         let token: string | null = null;
+        let customerId: string | null = null;
 
         if (authHeader?.startsWith('Bearer ')) {
           token = authHeader.substring(7);
@@ -401,9 +402,32 @@ export async function registerWebSocketRoutes(
 
             userId = user.id;
             userEmail = user.email ?? undefined;
+
+            // Resolve the user's customer for targeted broadcasts
+            const adminClient = getSupabaseAdminClient();
+            const { data: roleData, error: roleError } = await adminClient
+              .from('user_roles')
+              .select('customer_id')
+              .eq('user_id', userId)
+              .single();
+
+            if (roleError || !roleData?.customer_id) {
+              request.log.warn(
+                {
+                  userId,
+                  roleError,
+                },
+                'Web portal user missing customer mapping'
+              );
+              ws.close(1008, 'Unauthorized');
+              return;
+            }
+
+            customerId = roleData.customer_id as string;
           } else {
             userId = 'dev-user';
             userEmail = 'dev@example.com';
+            customerId = 'dev-customer';
             request.log.warn(
               {
                 requestId: request.id,
@@ -412,11 +436,21 @@ export async function registerWebSocketRoutes(
             );
           }
 
+          if (!customerId) {
+            request.log.error(
+              { userId },
+              'Unable to resolve customer for web portal WebSocket connection'
+            );
+            ws.close(1011, 'Customer context unavailable');
+            return;
+          }
+
           // Add connection to manager with web portal metadata
           manager.addConnection(connectionId, ws, {
             type: 'web-portal',
             userId,
             userEmail,
+            customerId,
             connectedAt: new Date().toISOString(),
           });
 

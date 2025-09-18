@@ -25,7 +25,7 @@ interface LoadSessionOptions {
   offset?: number;
 }
 
-interface WebSocketMessage {
+export interface WebSocketMessage {
   type: string;
   sessionId?: string;
   data: unknown;
@@ -672,6 +672,103 @@ export const useChatStore = create<ChatState>()(
               }
             }
             break;
+
+          case 'chat:ai_chunk': {
+            if (message.sessionId !== state.activeSessionId || !message.data) {
+              break;
+            }
+
+            const { messageId, chunk, fullContent } = message.data as {
+              messageId?: string;
+              chunk?: string;
+              fullContent?: string;
+            };
+
+            if (!messageId) {
+              break;
+            }
+
+            const existingMessage = state.messages.find(
+              m => m.id === messageId
+            );
+
+            const updatedContent =
+              fullContent ?? `${existingMessage?.content ?? ''}${chunk ?? ''}`;
+
+            if (existingMessage) {
+              get().updateMessage(messageId, {
+                content: updatedContent,
+                status: 'sent',
+              });
+            } else {
+              const sessionId = message.sessionId ?? state.activeSessionId;
+              if (!sessionId) break;
+
+              get().addMessage({
+                id: messageId,
+                session_id: sessionId,
+                role: 'assistant',
+                content: updatedContent,
+                created_at: new Date().toISOString(),
+                metadata: null,
+                status: 'sent',
+              });
+            }
+            break;
+          }
+
+          case 'chat:error': {
+            if (message.sessionId !== state.activeSessionId) {
+              break;
+            }
+
+            const errorText =
+              (message.data as { message?: string } | undefined)?.message ??
+              'AI response failed. Please try again.';
+
+            const sessionId = message.sessionId ?? state.activeSessionId;
+            if (!sessionId) break;
+
+            get().addMessage({
+              id: `error-${Date.now()}`,
+              session_id: sessionId,
+              role: 'error',
+              content: errorText,
+              created_at: new Date().toISOString(),
+              metadata: null,
+              status: 'error',
+              error: errorText,
+            });
+
+            get().setTyping(false);
+            get().setSending(false);
+            break;
+          }
+
+          case 'chat:device_action': {
+            if (!message.data || typeof message.data !== 'object') {
+              break;
+            }
+
+            const action = message.data as DeviceActionWithStatus & {
+              message_id?: string;
+            };
+
+            if (
+              action.id &&
+              !state.deviceActions.find(a => a.id === action.id)
+            ) {
+              get().addDeviceAction({
+                ...action,
+                isExecuting: false,
+              });
+
+              if (action.message_id) {
+                get().addDeviceActionForMessage(action, action.message_id);
+              }
+            }
+            break;
+          }
 
           case 'device:action:update':
             // Update device action status

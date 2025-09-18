@@ -148,11 +148,47 @@ export class AIOrchestrator extends EventEmitter {
       abortController: abortController as unknown as never,
     };
 
+    // Debug: Log the options being passed to SDK
+    console.log('Calling Claude SDK with options:', {
+      model: queryOptions.model,
+      hasEnv: !!queryOptions.env,
+      envKeys: queryOptions.env ? Object.keys(queryOptions.env) : [],
+      hasAnthropicKey: !!queryOptions.env?.ANTHROPIC_API_KEY,
+      actualApiKey: process.env.ANTHROPIC_API_KEY
+        ? 'Set in process.env'
+        : 'NOT in process.env',
+      promptLength: promptText.length,
+    });
+
+    // Ensure ANTHROPIC_API_KEY is in the process environment for the SDK worker
+    if (queryOptions.env?.ANTHROPIC_API_KEY && !process.env.ANTHROPIC_API_KEY) {
+      process.env.ANTHROPIC_API_KEY = queryOptions.env.ANTHROPIC_API_KEY;
+      console.log('Set ANTHROPIC_API_KEY in process.env for SDK worker');
+    }
+
+    // Debug: Test if we can call the SDK at all with minimal options
+    console.log('Testing SDK with minimal options first...');
+
     try {
+      // Try with absolute minimal options first
+      const testOptions: Partial<Options> = {
+        model: 'claude-3-5-sonnet-20241022',
+        env: {
+          ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY!,
+          PATH: process.env.PATH!,
+        },
+      };
+
+      console.log('Minimal test options:', {
+        model: testOptions.model,
+        hasApiKey: !!testOptions.env?.ANTHROPIC_API_KEY,
+        apiKeyLength: testOptions.env?.ANTHROPIC_API_KEY?.length,
+      });
+
       // Create query with SDK
       const queryResponse = query({
         prompt: promptText,
-        options: queryOptions as Options,
+        options: testOptions as Options,
       });
 
       // Store active query
@@ -160,6 +196,17 @@ export class AIOrchestrator extends EventEmitter {
 
       // Stream messages
       for await (const message of queryResponse) {
+        console.log(`[SDK Message] Type: ${message.type}`);
+
+        // Log specific message types for debugging
+        if (message.type === 'assistant') {
+          console.log('[SDK] Assistant message received');
+        } else if (message.type === 'result') {
+          console.log('[SDK] Result:', (message as any).result);
+        } else if (message.type === 'system') {
+          console.log('[SDK] System message:', (message as any).subtype);
+        }
+
         // Track message with correlation ID
         messageTracker.trackMessage(message, sessionId, corrId);
 

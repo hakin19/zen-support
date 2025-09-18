@@ -157,10 +157,20 @@ export const useWebSocketStore = create<WebSocketState>((set, get) => ({
         data: { session },
       } = await supabase.auth.getSession();
 
-      if (!session?.access_token) {
+      const token = session?.access_token;
+      const isDevBypass = !token && process.env.NODE_ENV !== 'production';
+
+      if (!token && !isDevBypass) {
         // eslint-disable-next-line no-console
         console.error('No access token available for WebSocket connection');
         return;
+      }
+
+      if (isDevBypass) {
+        // eslint-disable-next-line no-console
+        console.warn(
+          'WebSocket auth token missing – using development bypass connection.'
+        );
       }
 
       const wsUrl = process.env.NEXT_PUBLIC_WS_URL
@@ -168,7 +178,7 @@ export const useWebSocketStore = create<WebSocketState>((set, get) => ({
         : 'ws://localhost:3001/ws';
 
       const wsClient = new WebSocketClient(wsUrl, {
-        auth: { token: session.access_token },
+        ...(token ? { auth: { token } } : {}),
         autoConnect: true,
         reconnect: true,
       });

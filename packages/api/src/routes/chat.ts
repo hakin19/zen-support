@@ -1,17 +1,192 @@
+import { randomUUID } from 'crypto';
 import { PassThrough } from 'stream';
 
 import { Type } from '@sinclair/typebox';
 
-import { getAuthenticatedSupabaseClient } from '@aizen/shared/utils/supabase-client';
+import {
+  getAuthenticatedSupabaseClient,
+  getSupabaseAdminClient,
+} from '@aizen/shared/utils/supabase-client';
 
 import { webPortalAuthMiddleware } from '../middleware/web-portal-auth.middleware';
 import { ClaudeCodeService } from '../services/claude-code.service';
 import { publishToChannel } from '../utils/redis-pubsub';
 
 import type { WebSocketConnectionManager } from '../services/websocket-connection-manager';
-import type { Json } from '@aizen/shared/types/database.generated';
+import type { Database, Json } from '@aizen/shared/types/database.generated';
 import type { RedisClient } from '@aizen/shared/utils/redis-client';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+
+type SupabaseDbClient = SupabaseClient<Database>;
+type ChatSessionRow = Database['public']['Tables']['chat_sessions']['Row'];
+type ChatMessageRow = Database['public']['Tables']['chat_messages']['Row'];
+
+type ChatDataStore =
+  | { type: 'supabase'; client: SupabaseDbClient }
+  | { type: 'memory' };
+
+const inMemorySessions = new Map<string, ChatSessionRow>();
+const inMemoryMessages = new Map<string, ChatMessageRow[]>();
+
+interface FastifyWithRedis {
+  redis?: RedisClient;
+}
+
+let supabaseAvailability: 'unknown' | 'ready' | 'failed' = 'unknown';
+
+function tryGetSupabaseClient(
+  request: FastifyRequest
+): SupabaseDbClient | null {
+  const tokenHeader = request.headers.authorization;
+  const token = tokenHeader ? tokenHeader.replace('Bearer ', '').trim() : '';
+
+  if (token) {
+    try {
+      return getAuthenticatedSupabaseClient(token);
+    } catch (error) {
+      request.log.warn(
+        { error },
+        'Failed to initialize authenticated Supabase client'
+      );
+      return null;
+    }
+  }
+
+  try {
+    return getSupabaseAdminClient() as SupabaseDbClient;
+  } catch (error) {
+    request.log.debug(
+      { error },
+      'Supabase admin client unavailable; falling back to in-memory store'
+    );
+    return null;
+  }
+}
+
+function resolveDataStore(request: FastifyRequest): ChatDataStore {
+  if (supabaseAvailability === 'failed') {
+    return { type: 'memory' };
+  }
+
+  const client = tryGetSupabaseClient(request);
+  if (client) {
+    supabaseAvailability = 'ready';
+    return { type: 'supabase', client };
+  }
+
+  supabaseAvailability = 'failed';
+  return { type: 'memory' };
+}
+
+function touchMemorySession(sessionId: string): void {
+  const session = inMemorySessions.get(sessionId);
+  if (session) {
+    inMemorySessions.set(sessionId, {
+      ...session,
+      updated_at: new Date().toISOString(),
+    });
+  }
+}
+
+function getMemoryMessages(sessionId: string): ChatMessageRow[] {
+  const messages = inMemoryMessages.get(sessionId);
+  if (!messages) {
+    const empty: ChatMessageRow[] = [];
+    inMemoryMessages.set(sessionId, empty);
+    return empty;
+  }
+  return messages;
+}
+
+function ensureMemoryMessages(sessionId: string): ChatMessageRow[] {
+  const messages = inMemoryMessages.get(sessionId);
+  if (messages) {
+    return messages;
+  }
+  const empty: ChatMessageRow[] = [];
+  inMemoryMessages.set(sessionId, empty);
+  return empty;
+}
+
+function convertMetadata(metadata?: Record<string, unknown>): Json | null {
+  if (!metadata || Object.keys(metadata).length === 0) {
+    return null;
+  }
+  return metadata as Json;
+}
+
+function createMemorySessionRecord(params: {
+  userId: string;
+  customerId: string;
+  title?: string | null;
+  metadata?: Json | null;
+}): ChatSessionRow {
+  const now = new Date().toISOString();
+  return {
+    id: randomUUID(),
+    user_id: params.userId,
+    customer_id: params.customerId,
+    title: params.title ?? null,
+    status: 'active',
+    metadata: params.metadata ?? null,
+    created_at: now,
+    updated_at: now,
+    closed_at: null,
+  };
+}
+
+function storeMemorySession(session: ChatSessionRow): void {
+  inMemorySessions.set(session.id, session);
+  ensureMemoryMessages(session.id);
+}
+
+function getMemorySessionForUser(
+  sessionId: string,
+  userId: string
+): ChatSessionRow | undefined {
+  const session = inMemorySessions.get(sessionId);
+  if (session && session.user_id === userId) {
+    return session;
+  }
+  return undefined;
+}
+
+function listMemorySessionsForUser(
+  userId: string,
+  status?: 'active' | 'closed' | 'archived'
+): ChatSessionRow[] {
+  let sessions = Array.from(inMemorySessions.values()).filter(
+    session => session.user_id === userId
+  );
+
+  if (status) {
+    sessions = sessions.filter(session => session.status === status);
+  }
+
+  sessions.sort((a, b) => {
+    const timeA = new Date(a.updated_at ?? a.created_at ?? '').getTime();
+    const timeB = new Date(b.updated_at ?? b.created_at ?? '').getTime();
+    return timeB - timeA;
+  });
+
+  return sessions;
+}
+
+function cloneMemoryMessages(sessionId: string): ChatMessageRow[] {
+  return [...getMemoryMessages(sessionId)].map(message => ({ ...message }));
+}
+
+function addMemoryMessage(sessionId: string, message: ChatMessageRow): void {
+  const messages = ensureMemoryMessages(sessionId);
+  const index = messages.findIndex(existing => existing.id === message.id);
+  if (index === -1) {
+    messages.push(message);
+  } else {
+    messages[index] = message;
+  }
+  touchMemorySession(sessionId);
+}
 
 // Create a wrapper for the middleware without options
 const webPortalAuth = async (
@@ -84,9 +259,26 @@ export function registerChatRoutes(fastify: FastifyInstance): void {
         return reply.code(401).send({ error: 'Unauthorized' });
       }
 
-      // Get authenticated Supabase client using the token from middleware
-      const token = request.headers.authorization?.replace('Bearer ', '') ?? '';
-      const supabase = getAuthenticatedSupabaseClient(token);
+      const dataStore = resolveDataStore(request);
+
+      const metadataJson = convertMetadata(metadata);
+
+      const createMemorySession = (): FastifyReply => {
+        const session = createMemorySessionRecord({
+          userId,
+          customerId,
+          title,
+          metadata: metadataJson,
+        });
+        storeMemorySession(session);
+        return reply.code(201).send(session);
+      };
+
+      if (dataStore.type === 'memory') {
+        return createMemorySession();
+      }
+
+      const supabase = dataStore.client;
 
       const { data: session, error } = await supabase
         .from('chat_sessions')
@@ -94,15 +286,16 @@ export function registerChatRoutes(fastify: FastifyInstance): void {
           user_id: userId,
           customer_id: customerId,
           title: title ?? null,
-          metadata: metadata as Json,
+          metadata: metadataJson,
           status: 'active',
         })
         .select()
         .single();
 
-      if (error) {
-        fastify.log.error(error);
-        return reply.code(500).send({ error: 'Failed to create session' });
+      if (error || !session) {
+        supabaseAvailability = 'failed';
+        request.log.warn({ error }, 'Supabase unavailable, using memory store');
+        return createMemorySession();
       }
 
       return reply.code(201).send(session);
@@ -136,9 +329,16 @@ export function registerChatRoutes(fastify: FastifyInstance): void {
         return reply.code(401).send({ error: 'Unauthorized' });
       }
 
-      // Get authenticated Supabase client using the token from middleware
-      const token = request.headers.authorization?.replace('Bearer ', '') ?? '';
-      const supabase = getAuthenticatedSupabaseClient(token);
+      const dataStore = resolveDataStore(request);
+
+      const paginate = (sessions: ChatSessionRow[]): ChatSessionRow[] =>
+        sessions.slice(offset, offset + limit);
+
+      if (dataStore.type === 'memory') {
+        return reply.send(paginate(listMemorySessionsForUser(userId, status)));
+      }
+
+      const supabase = dataStore.client;
 
       let query = supabase
         .from('chat_sessions')
@@ -153,12 +353,14 @@ export function registerChatRoutes(fastify: FastifyInstance): void {
 
       const { data: sessions, error } = await query;
 
-      if (error) {
-        fastify.log.error(error);
-        return reply.code(500).send({ error: 'Failed to list sessions' });
+      if (error || !sessions) {
+        supabaseAvailability = 'failed';
+        request.log.warn({ error }, 'Supabase list sessions failed');
+        return reply.send(paginate(listMemorySessionsForUser(userId, status)));
       }
 
-      return reply.send(sessions || []);
+      sessions.forEach(storeMemorySession);
+      return reply.send(sessions);
     }
   );
 
@@ -181,11 +383,26 @@ export function registerChatRoutes(fastify: FastifyInstance): void {
         return reply.code(401).send({ error: 'Unauthorized' });
       }
 
-      // Get authenticated Supabase client using the token from middleware
-      const token = request.headers.authorization?.replace('Bearer ', '') ?? '';
-      const supabase = getAuthenticatedSupabaseClient(token);
+      const dataStore = resolveDataStore(request);
 
-      // Get session
+      const respondWithMemory = (): FastifyReply => {
+        const memorySession = getMemorySessionForUser(id, userId);
+        if (!memorySession) {
+          return reply.code(404).send({ error: 'Session not found' });
+        }
+
+        return reply.send({
+          ...memorySession,
+          messages: cloneMemoryMessages(id),
+        });
+      };
+
+      if (dataStore.type === 'memory') {
+        return respondWithMemory();
+      }
+
+      const supabase = dataStore.client;
+
       const { data: session, error: sessionError } = await supabase
         .from('chat_sessions')
         .select('*')
@@ -193,11 +410,16 @@ export function registerChatRoutes(fastify: FastifyInstance): void {
         .eq('user_id', userId)
         .single();
 
-      if (sessionError || !session) {
-        return reply.code(404).send({ error: 'Session not found' });
+      if (sessionError) {
+        supabaseAvailability = 'failed';
+        request.log.warn({ sessionError }, 'Supabase get session failed');
+        return respondWithMemory();
       }
 
-      // Get messages
+      if (!session) {
+        return respondWithMemory();
+      }
+
       const { data: messages, error: messagesError } = await supabase
         .from('chat_messages')
         .select('*')
@@ -205,9 +427,16 @@ export function registerChatRoutes(fastify: FastifyInstance): void {
         .order('created_at', { ascending: true });
 
       if (messagesError) {
-        fastify.log.error(messagesError);
-        return reply.code(500).send({ error: 'Failed to get messages' });
+        supabaseAvailability = 'failed';
+        request.log.warn({ messagesError }, 'Supabase get messages failed');
+        return respondWithMemory();
       }
+
+      storeMemorySession(session);
+      inMemoryMessages.set(
+        id,
+        (messages ?? []).map(message => ({ ...message }))
+      );
 
       return reply.send({
         ...session,
@@ -241,11 +470,113 @@ export function registerChatRoutes(fastify: FastifyInstance): void {
         return reply.code(401).send({ error: 'Unauthorized' });
       }
 
-      // Get authenticated Supabase client using the token from middleware
-      const token = request.headers.authorization?.replace('Bearer ', '') ?? '';
-      const supabase = getAuthenticatedSupabaseClient(token);
+      const dataStore = resolveDataStore(request);
+      const memoryStore: ChatDataStore = { type: 'memory' };
+      const redis = (fastify as FastifyWithRedis).redis;
+      const anthropicKey = process.env.ANTHROPIC_API_KEY?.trim();
+      const aiUnavailableMessage =
+        'AI assistance is not configured for this environment. Please contact your administrator.';
 
-      // Verify session ownership
+      const saveAndBroadcastAIError = async (): Promise<void> => {
+        if (dataStore.type === 'supabase') {
+          const { data: errorMessage } = await dataStore.client
+            .from('chat_messages')
+            .insert({
+              session_id: sessionId,
+              role: 'error' as const,
+              content: aiUnavailableMessage,
+              metadata: { code: 'ANTHROPIC_NOT_CONFIGURED' } as Json,
+            })
+            .select()
+            .single();
+
+          if (errorMessage) {
+            addMemoryMessage(sessionId, errorMessage);
+          }
+        } else {
+          addMemoryMessage(sessionId, {
+            id: randomUUID(),
+            session_id: sessionId,
+            role: 'error',
+            content: aiUnavailableMessage,
+            metadata: { code: 'ANTHROPIC_NOT_CONFIGURED' } as Json,
+            created_at: new Date().toISOString(),
+          });
+        }
+
+        const errorPayload = {
+          type: 'chat:error',
+          sessionId,
+          data: {
+            message: aiUnavailableMessage,
+          },
+        };
+
+        await connectionManager.broadcastToCustomer(customerId, errorPayload);
+
+        if (redis) {
+          await publishToChannel(redis, `chat:${sessionId}`, errorPayload);
+        }
+      };
+
+      const handleMemoryMessage = async (): Promise<FastifyReply> => {
+        const session = getMemorySessionForUser(sessionId, userId);
+        if (!session) {
+          return reply.code(404).send({ error: 'Session not found' });
+        }
+
+        const now = new Date().toISOString();
+        const userMessage: ChatMessageRow = {
+          id: randomUUID(),
+          session_id: sessionId,
+          role: 'user',
+          content,
+          metadata: {} as Json,
+          created_at: now,
+        };
+
+        addMemoryMessage(sessionId, userMessage);
+
+        const messageData = {
+          type: 'chat:message',
+          sessionId,
+          data: userMessage,
+        };
+
+        await connectionManager.broadcastToCustomer(customerId, messageData);
+
+        if (redis) {
+          await publishToChannel(redis, `chat:${sessionId}`, messageData);
+        }
+
+        if (!anthropicKey) {
+          await saveAndBroadcastAIError();
+          return reply.code(201).send(userMessage);
+        }
+
+        void processAIResponse(
+          fastify,
+          memoryStore,
+          sessionId,
+          content,
+          userId,
+          customerId
+        ).catch((error: unknown) => {
+          fastify.log.error(
+            'Failed to process AI response: %s',
+            error as Error
+          );
+        });
+
+        return reply.code(201).send(userMessage);
+      };
+
+      if (dataStore.type === 'memory') {
+        return handleMemoryMessage();
+      }
+
+      const supabase = dataStore.client;
+
       const { data: session, error: sessionError } = await supabase
         .from('chat_sessions')
         .select('*')
@@ -253,52 +584,60 @@ export function registerChatRoutes(fastify: FastifyInstance): void {
         .eq('user_id', userId)
         .single();
 
-      if (sessionError || !session) {
-        return reply.code(404).send({ error: 'Session not found' });
+      if (sessionError) {
+        supabaseAvailability = 'failed';
+        request.log.warn({ sessionError }, 'Supabase get session failed');
+        return handleMemoryMessage();
       }
 
-      // Save user message
+      if (!session) {
+        return handleMemoryMessage();
+      }
+
       const { data: userMessage, error: userMessageError } = await supabase
         .from('chat_messages')
         .insert({
           session_id: sessionId,
           role: 'user',
           content,
-          metadata: {},
+          metadata: {} as Json,
         })
         .select()
         .single();
 
-      if (userMessageError) {
-        fastify.log.error(userMessageError);
-        return reply.code(500).send({ error: 'Failed to save message' });
+      if (userMessageError || !userMessage) {
+        supabaseAvailability = 'failed';
+        request.log.warn({ userMessageError }, 'Supabase save message failed');
+        return handleMemoryMessage();
       }
 
-      // Broadcast user message via WebSocket and Redis
+      storeMemorySession(session);
+      addMemoryMessage(sessionId, userMessage);
+
       const messageData = {
         type: 'chat:message',
         sessionId,
         data: userMessage,
       };
 
-      // Send to customer WebSocket clients only (not devices)
-      // Scoped to the specific customer for multi-tenant isolation
       await connectionManager.broadcastToCustomer(customerId, messageData);
 
-      // Publish to Redis for multi-server fanout
-      const redis = (fastify as unknown as { redis?: RedisClient }).redis;
       if (redis) {
         await publishToChannel(redis, `chat:${sessionId}`, messageData);
       }
 
-      // Process AI response asynchronously
+      if (!anthropicKey) {
+        await saveAndBroadcastAIError();
+        return reply.code(201).send(userMessage);
+      }
+
       void processAIResponse(
         fastify,
+        dataStore,
         sessionId,
         content,
         userId,
-        customerId,
-        token
+        customerId
       ).catch((error: unknown) => {
         fastify.log.error('Failed to process AI response: %s', error as Error);
       });
@@ -331,20 +670,42 @@ export function registerChatRoutes(fastify: FastifyInstance): void {
         return reply.code(401).send({ error: 'Unauthorized' });
       }
 
-      // Get authenticated Supabase client using the token from middleware
-      const token = request.headers.authorization?.replace('Bearer ', '') ?? '';
-      const supabase = getAuthenticatedSupabaseClient(token);
+      const dataStore = resolveDataStore(request);
 
-      // Verify session ownership
-      const { data: session } = await supabase
+      const respondWithMemory = (): FastifyReply => {
+        const session = getMemorySessionForUser(sessionId, userId);
+        if (!session) {
+          return reply.code(404).send({ error: 'Session not found' });
+        }
+
+        const paged = cloneMemoryMessages(sessionId).slice(
+          offset,
+          offset + limit
+        );
+        return reply.send(paged);
+      };
+
+      if (dataStore.type === 'memory') {
+        return respondWithMemory();
+      }
+
+      const supabase = dataStore.client;
+
+      const { data: session, error: sessionError } = await supabase
         .from('chat_sessions')
         .select('id')
         .eq('id', sessionId)
         .eq('user_id', userId)
         .single();
 
+      if (sessionError) {
+        supabaseAvailability = 'failed';
+        request.log.warn({ sessionError }, 'Supabase verify session failed');
+        return respondWithMemory();
+      }
+
       if (!session) {
-        return reply.code(404).send({ error: 'Session not found' });
+        return respondWithMemory();
       }
 
       const { data: messages, error } = await supabase
@@ -354,12 +715,13 @@ export function registerChatRoutes(fastify: FastifyInstance): void {
         .order('created_at', { ascending: true })
         .range(offset, offset + limit - 1);
 
-      if (error) {
-        fastify.log.error(error);
-        return reply.code(500).send({ error: 'Failed to get messages' });
+      if (error || !messages) {
+        supabaseAvailability = 'failed';
+        request.log.warn({ error }, 'Supabase list messages failed');
+        return respondWithMemory();
       }
 
-      return reply.send(messages || []);
+      return reply.send(messages);
     }
   );
 
@@ -382,20 +744,42 @@ export function registerChatRoutes(fastify: FastifyInstance): void {
         return reply.code(401).send({ error: 'Unauthorized' });
       }
 
-      // Get authenticated Supabase client using the token from middleware
-      const token = request.headers.authorization?.replace('Bearer ', '') ?? '';
-      const supabase = getAuthenticatedSupabaseClient(token);
+      const dataStore = resolveDataStore(request);
 
-      // Verify session ownership
-      const { data: session } = await supabase
-        .from('chat_sessions')
-        .select('id')
-        .eq('id', sessionId)
-        .eq('user_id', userId)
-        .single();
+      const ensureMemoryPermission = (): FastifyReply | null => {
+        const session = getMemorySessionForUser(sessionId, userId);
+        if (!session) {
+          return reply.code(404).send({ error: 'Session not found' });
+        }
+        return null;
+      };
 
-      if (!session) {
-        return reply.code(404).send({ error: 'Session not found' });
+      if (dataStore.type === 'memory') {
+        const result = ensureMemoryPermission();
+        if (result) {
+          return result;
+        }
+      } else {
+        const { data: session, error: sessionError } = await dataStore.client
+          .from('chat_sessions')
+          .select('id')
+          .eq('id', sessionId)
+          .eq('user_id', userId)
+          .single();
+
+        if (sessionError) {
+          supabaseAvailability = 'failed';
+          request.log.warn({ sessionError }, 'Supabase SSE auth failed');
+          const result = ensureMemoryPermission();
+          if (result) {
+            return result;
+          }
+        } else if (!session) {
+          const result = ensureMemoryPermission();
+          if (result) {
+            return result;
+          }
+        }
       }
 
       // Set SSE headers
@@ -486,9 +870,42 @@ export function registerChatRoutes(fastify: FastifyInstance): void {
         return reply.code(401).send({ error: 'Unauthorized' });
       }
 
-      // Get authenticated Supabase client using the token from middleware
-      const token = request.headers.authorization?.replace('Bearer ', '') ?? '';
-      const supabase = getAuthenticatedSupabaseClient(token);
+      const dataStore = resolveDataStore(request);
+
+      const updateMemorySession = (): FastifyReply => {
+        const existing = inMemorySessions.get(sessionId);
+        if (!existing || existing.user_id !== userId) {
+          return reply.code(404).send({ error: 'Session not found' });
+        }
+
+        const now = new Date().toISOString();
+        let closedAt = existing.closed_at;
+
+        if (status !== undefined) {
+          if (status === 'closed') {
+            closedAt = now;
+          } else if (status === 'active') {
+            closedAt = null;
+          }
+        }
+
+        const updated: ChatSessionRow = {
+          ...existing,
+          title: title ?? existing.title,
+          status: status ?? existing.status,
+          updated_at: now,
+          closed_at: closedAt,
+        };
+
+        storeMemorySession(updated);
+        return reply.send(updated);
+      };
+
+      if (dataStore.type === 'memory') {
+        return updateMemorySession();
+      }
+
+      const supabase = dataStore.client;
 
       const updateData: Record<string, unknown> = {};
       if (title !== undefined) updateData.title = title;
@@ -496,6 +913,8 @@ export function registerChatRoutes(fastify: FastifyInstance): void {
         updateData.status = status;
         if (status === 'closed') {
           updateData.closed_at = new Date().toISOString();
+        } else if (status === 'active') {
+          updateData.closed_at = null;
         }
       }
 
@@ -508,7 +927,11 @@ export function registerChatRoutes(fastify: FastifyInstance): void {
         .single();
 
       if (error || !session) {
-        return reply.code(404).send({ error: 'Session not found' });
+        if (error) {
+          supabaseAvailability = 'failed';
+          request.log.warn({ error }, 'Supabase update session failed');
+        }
+        return updateMemorySession();
       }
 
       return reply.send(session);
@@ -534,9 +957,29 @@ export function registerChatRoutes(fastify: FastifyInstance): void {
         return reply.code(401).send({ error: 'Unauthorized' });
       }
 
-      // Get authenticated Supabase client using the token from middleware
-      const token = request.headers.authorization?.replace('Bearer ', '') ?? '';
-      const supabase = getAuthenticatedSupabaseClient(token);
+      const dataStore = resolveDataStore(request);
+
+      const archiveMemorySession = (): FastifyReply => {
+        const existing = inMemorySessions.get(sessionId);
+        if (!existing || existing.user_id !== userId) {
+          return reply.code(404).send({ error: 'Session not found' });
+        }
+
+        const updated: ChatSessionRow = {
+          ...existing,
+          status: 'archived',
+          updated_at: new Date().toISOString(),
+        };
+
+        storeMemorySession(updated);
+        return reply.send(updated);
+      };
+
+      if (dataStore.type === 'memory') {
+        return archiveMemorySession();
+      }
+
+      const supabase = dataStore.client;
 
       const { data: session, error } = await supabase
         .from('chat_sessions')
@@ -547,7 +990,11 @@ export function registerChatRoutes(fastify: FastifyInstance): void {
         .single();
 
       if (error || !session) {
-        return reply.code(404).send({ error: 'Session not found' });
+        if (error) {
+          supabaseAvailability = 'failed';
+          request.log.warn({ error }, 'Supabase archive session failed');
+        }
+        return archiveMemorySession();
       }
 
       return reply.send(session);
@@ -557,38 +1004,66 @@ export function registerChatRoutes(fastify: FastifyInstance): void {
   // Helper function to process AI response
   async function processAIResponse(
     fastify: FastifyInstance,
+    dataStore: ChatDataStore,
     sessionId: string,
     prompt: string,
     _userId: string,
-    customerId: string,
-    token: string
+    customerId: string
   ): Promise<void> {
+    console.log('[processAIResponse] Starting with:', {
+      dataStoreType: dataStore.type,
+      sessionId,
+      customerId,
+    });
+
     let assistantMessageId: string | null = null;
     let fullResponse = '';
-    const supabase = getAuthenticatedSupabaseClient(token);
 
-    // Throttle configuration
+    // Get connection manager for WebSocket broadcasting
+    const connectionManager = (
+      fastify as unknown as {
+        websocketConnectionManager: WebSocketConnectionManager;
+      }
+    ).websocketConnectionManager;
+
     let lastUpdateTime = 0;
-    const UPDATE_INTERVAL_MS = 500; // Update DB at most every 500ms
+    const UPDATE_INTERVAL_MS = 500;
     let pendingUpdate = false;
     let updateTimer: NodeJS.Timeout | null = null;
 
-    // Function to perform the DB update
     const updateDatabase = async (): Promise<void> => {
       if (!assistantMessageId || !pendingUpdate) return;
 
       pendingUpdate = false;
       lastUpdateTime = Date.now();
 
-      await supabase
-        .from('chat_messages')
-        .update({
-          content: fullResponse,
-        })
-        .eq('id', assistantMessageId);
+      if (dataStore.type === 'supabase') {
+        await dataStore.client
+          .from('chat_messages')
+          .update({ content: fullResponse })
+          .eq('id', assistantMessageId);
+
+        const messages = ensureMemoryMessages(sessionId);
+        const index = messages.findIndex(msg => msg.id === assistantMessageId);
+        if (index !== -1) {
+          messages[index] = {
+            ...messages[index],
+            content: fullResponse,
+          };
+        }
+      } else {
+        const messages = getMemoryMessages(sessionId);
+        const index = messages.findIndex(msg => msg.id === assistantMessageId);
+        if (index !== -1) {
+          messages[index] = {
+            ...messages[index],
+            content: fullResponse,
+          };
+          touchMemorySession(sessionId);
+        }
+      }
     };
 
-    // Schedule a throttled update
     const scheduleUpdate = (): void => {
       if (!assistantMessageId) return;
 
@@ -596,10 +1071,8 @@ export function registerChatRoutes(fastify: FastifyInstance): void {
       const timeSinceLastUpdate = Date.now() - lastUpdateTime;
 
       if (timeSinceLastUpdate >= UPDATE_INTERVAL_MS) {
-        // Enough time has passed, update immediately
         void updateDatabase();
       } else if (!updateTimer) {
-        // Schedule update for later
         const delay = UPDATE_INTERVAL_MS - timeSinceLastUpdate;
         updateTimer = setTimeout(() => {
           updateTimer = null;
@@ -613,41 +1086,63 @@ export function registerChatRoutes(fastify: FastifyInstance): void {
         prompt,
         // eslint-disable-next-line @typescript-eslint/no-misused-promises
         async (output: unknown) => {
+          console.log(
+            '[processAIResponse] Received output:',
+            JSON.stringify(output, null, 2)
+          );
+
           const typedOutput = output as {
             type: string;
-            data?: { content?: Array<{ text?: string }> };
+            data?: { content?: Array<{ text?: string; type?: string }> };
           };
+
           if (typedOutput.type === 'message' && typedOutput.data?.content) {
             const text = typedOutput.data.content
-              .map(c => c.text ?? '')
+              .map(chunk => chunk.text ?? '')
               .join('');
 
             if (text) {
               fullResponse += text;
 
-              // Create assistant message on first chunk
               if (!assistantMessageId) {
-                const { data: message } = await supabase
-                  .from('chat_messages')
-                  .insert({
+                if (dataStore.type === 'supabase') {
+                  const { data: message } = await dataStore.client
+                    .from('chat_messages')
+                    .insert({
+                      session_id: sessionId,
+                      role: 'assistant',
+                      content: fullResponse,
+                      metadata: {} as Json,
+                    })
+                    .select()
+                    .single();
+
+                  if (message) {
+                    assistantMessageId = message.id;
+                    lastUpdateTime = Date.now();
+                    addMemoryMessage(sessionId, message);
+                  }
+                } else {
+                  const now = new Date().toISOString();
+                  const message: ChatMessageRow = {
+                    id: randomUUID(),
                     session_id: sessionId,
                     role: 'assistant',
                     content: fullResponse,
-                    metadata: {},
-                  })
-                  .select()
-                  .single();
+                    metadata: {} as Json,
+                    created_at: now,
+                  };
 
-                if (message) {
-                  assistantMessageId = message.id;
+                  const messages = getMemoryMessages(sessionId);
+                  messages.push(message);
+                  assistantMessageId = message.id; // THIS WAS ALREADY HERE
                   lastUpdateTime = Date.now();
+                  touchMemorySession(sessionId);
                 }
               } else {
-                // Schedule a throttled update
                 scheduleUpdate();
               }
 
-              // Broadcast via WebSocket and Redis
               const messageData = {
                 type: 'chat:ai_chunk',
                 sessionId,
@@ -658,14 +1153,20 @@ export function registerChatRoutes(fastify: FastifyInstance): void {
                 },
               };
 
-              // Only broadcast to connections from the same customer
+              console.log('[processAIResponse] Broadcasting AI chunk:', {
+                type: messageData.type,
+                sessionId: messageData.sessionId,
+                messageId: messageData.data.messageId,
+                chunkLength: messageData.data.chunk.length,
+                customerId,
+              });
+
               await connectionManager.broadcastToCustomer(
                 customerId,
                 messageData
               );
 
-              const redis = (fastify as unknown as { redis?: RedisClient })
-                .redis;
+              const redis = (fastify as FastifyWithRedis).redis;
               if (redis) {
                 await publishToChannel(redis, `chat:${sessionId}`, messageData);
               }
@@ -674,17 +1175,15 @@ export function registerChatRoutes(fastify: FastifyInstance): void {
             typedOutput.type === 'tool_use' &&
             (typedOutput as { data?: unknown }).data
           ) {
-            // Handle device actions
             const toolData = {
               type: 'chat:device_action',
               sessionId,
               data: (typedOutput as { data: unknown }).data,
             };
 
-            // Only broadcast to connections from the same customer
             await connectionManager.broadcastToCustomer(customerId, toolData);
 
-            const redis = (fastify as unknown as { redis?: RedisClient }).redis;
+            const redis = (fastify as FastifyWithRedis).redis;
             if (redis) {
               await publishToChannel(redis, `chat:${sessionId}`, toolData);
             }
@@ -696,7 +1195,6 @@ export function registerChatRoutes(fastify: FastifyInstance): void {
         }
       );
 
-      // Ensure final update is saved and clean up timer
       if (updateTimer) {
         clearTimeout(updateTimer);
         updateTimer = null;
@@ -705,23 +1203,47 @@ export function registerChatRoutes(fastify: FastifyInstance): void {
         await updateDatabase();
       }
     } catch (error) {
+      if (dataStore.type === 'supabase') {
+        supabaseAvailability = 'failed';
+      }
       fastify.log.error({ error }, 'AI processing error');
 
-      // Clean up timer on error
       if (updateTimer) {
         clearTimeout(updateTimer);
         updateTimer = null;
       }
 
-      // Save error message
-      await supabase.from('chat_messages').insert({
-        session_id: sessionId,
-        role: 'error' as const,
-        content: 'Failed to process AI response. Please try again.',
-        metadata: { error: String(error) } as Json,
-      });
+      if (dataStore.type === 'supabase') {
+        const { data: errorMessage } = await dataStore.client
+          .from('chat_messages')
+          .insert({
+            session_id: sessionId,
+            role: 'error' as const,
+            content: 'Failed to process AI response. Please try again.',
+            metadata: { error: String(error) } as Json,
+          })
+          .select()
+          .single();
 
-      // Broadcast error
+        if (errorMessage) {
+          addMemoryMessage(sessionId, errorMessage);
+        }
+      } else {
+        const now = new Date().toISOString();
+        const message: ChatMessageRow = {
+          id: randomUUID(),
+          session_id: sessionId,
+          role: 'error',
+          content: 'Failed to process AI response. Please try again.',
+          metadata: { error: String(error) } as Json,
+          created_at: now,
+        };
+
+        const messages = getMemoryMessages(sessionId);
+        messages.push(message);
+        touchMemorySession(sessionId);
+      }
+
       const errorData = {
         type: 'chat:error',
         sessionId,
@@ -730,10 +1252,9 @@ export function registerChatRoutes(fastify: FastifyInstance): void {
         },
       };
 
-      // Only broadcast to connections from the same customer
       await connectionManager.broadcastToCustomer(customerId, errorData);
 
-      const redis = (fastify as unknown as { redis?: RedisClient }).redis;
+      const redis = (fastify as FastifyWithRedis).redis;
       if (redis) {
         await publishToChannel(redis, `chat:${sessionId}`, errorData);
       }

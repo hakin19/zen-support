@@ -1,21 +1,22 @@
 'use client';
 
-import React from 'react';
-
-import type { Database } from '@aizen/shared';
+import React, { useEffect } from 'react';
 
 import { ChatInput } from '@/components/chat/ChatInput';
 import { ChatSessionList } from '@/components/chat/ChatSessionList';
 import { DeviceActionModal } from '@/components/chat/DeviceActionModal';
 import { MessageList } from '@/components/chat/MessageList';
-import { useChatStore } from '@/store/chat.store';
+import { useChatStore, type WebSocketMessage } from '@/store/chat.store';
+import { useWebSocketStore } from '@/store/websocket.store';
 
 export default function ChatPage(): React.ReactElement {
   const {
     sessions,
     activeSessionId,
     setActiveSession,
-    addSession,
+    createSession,
+    loadSessions,
+    loadSession,
     archiveSession,
     deleteSession,
     updateSession,
@@ -32,7 +33,15 @@ export default function ChatPage(): React.ReactElement {
     isTyping,
     isSending,
     setTyping,
+    handleWebSocketMessage,
+    resyncOnReconnect,
+    setConnected,
   } = useChatStore();
+
+  const connectWebSocket = useWebSocketStore(state => state.connect);
+  const disconnectWebSocket = useWebSocketStore(state => state.disconnect);
+  const subscribeToEvent = useWebSocketStore(state => state.subscribe);
+  const isWebSocketConnected = useWebSocketStore(state => state.isConnected);
 
   // Derive currentSession from sessions and activeSessionId
   const currentSession: { id: string; title?: string } | null = ((): {
@@ -48,22 +57,57 @@ export default function ChatPage(): React.ReactElement {
       : null;
   })();
 
-  const handleSessionCreate = (): void => {
-    // Create a new session with all required fields
-    const sessionId = globalThis.crypto.randomUUID();
-    const newSession = {
-      id: sessionId,
-      title: 'New Session',
-      status: 'active' as Database['public']['Enums']['chat_session_status'],
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      closed_at: null,
-      customer_id: 'temp-customer-id', // This would normally come from auth context
-      user_id: 'temp-user-id', // This would normally come from auth context
-      metadata: null,
+  useEffect(() => {
+    void loadSessions();
+  }, [loadSessions]);
+
+  useEffect(() => {
+    void connectWebSocket();
+    return () => {
+      disconnectWebSocket();
     };
-    addSession(newSession);
-    setActiveSession(sessionId);
+  }, [connectWebSocket, disconnectWebSocket]);
+
+  useEffect(() => {
+    const listeners = [
+      'chat:message',
+      'chat:ai_chunk',
+      'chat:error',
+      'chat:device_action',
+      'device:action:update',
+      'session:update',
+    ] as const;
+
+    const unsubscribers = listeners.map(event =>
+      subscribeToEvent(event, data => {
+        if (!data || typeof data !== 'object') return;
+        handleWebSocketMessage(data as WebSocketMessage);
+      })
+    );
+
+    return () => {
+      unsubscribers.forEach(unsubscribe => {
+        unsubscribe();
+      });
+    };
+  }, [subscribeToEvent, handleWebSocketMessage]);
+
+  useEffect(() => {
+    setConnected(isWebSocketConnected);
+    if (isWebSocketConnected) {
+      void resyncOnReconnect();
+    }
+  }, [isWebSocketConnected, setConnected, resyncOnReconnect]);
+
+  const handleSessionCreate = (): void => {
+    void createSession('New Session').catch(() => {
+      // Store already sets sessionsError; UI components can surface it.
+    });
+  };
+
+  const handleSessionSelect = (id: string): void => {
+    setActiveSession(id);
+    void loadSession(id);
   };
 
   const handleSessionRename = (id: string, title: string): void => {
@@ -82,7 +126,7 @@ export default function ChatPage(): React.ReactElement {
         <ChatSessionList
           sessions={sessions}
           activeSessionId={activeSessionId}
-          onSessionSelect={setActiveSession}
+          onSessionSelect={handleSessionSelect}
           onSessionCreate={handleSessionCreate}
           onSessionArchive={archiveSession}
           onSessionDelete={deleteSession}
