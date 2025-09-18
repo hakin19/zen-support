@@ -15,6 +15,7 @@ import '@testing-library/jest-dom';
 import DeviceManagement from './page';
 import { useAuthStore } from '@/store/auth.store';
 import { useDeviceStore } from '@/store/device.store';
+import { useWebSocketStore } from '@/store/websocket.store';
 import { api } from '@/lib/api-client';
 
 const mockToast = vi.fn();
@@ -23,6 +24,11 @@ vi.mock('@/hooks/use-toast', () => ({
   useToast: () => ({
     toast: mockToast,
   }),
+}));
+
+// Mock WebSocket store
+vi.mock('@/store/websocket.store', () => ({
+  useWebSocketStore: vi.fn(),
 }));
 
 describe('DeviceManagement', () => {
@@ -135,6 +141,37 @@ describe('DeviceManagement', () => {
     vi.mocked(useDeviceStore).mockImplementation(() =>
       createDeviceStoreMock({ devices: mockDevices })
     );
+
+    // Mock WebSocket store
+    vi.mocked(useWebSocketStore).mockImplementation((selector?: any) => {
+      const state = {
+        isConnected: false,
+        wsClient: null,
+        devices: [],
+        users: [],
+        organization: null,
+        promptTemplates: [],
+        listeners: new Map(),
+        connect: vi.fn().mockResolvedValue(undefined),
+        disconnect: vi.fn(),
+        setConnected: vi.fn(),
+        setDevices: vi.fn(),
+        updateDevice: vi.fn(),
+        addDevice: vi.fn(),
+        removeDevice: vi.fn(),
+        setUsers: vi.fn(),
+        updateUser: vi.fn(),
+        addUser: vi.fn(),
+        removeUser: vi.fn(),
+        setOrganization: vi.fn(),
+        setPromptTemplates: vi.fn(),
+        updatePromptTemplate: vi.fn(),
+        addPromptTemplate: vi.fn(),
+        removePromptTemplate: vi.fn(),
+        subscribe: vi.fn(),
+      };
+      return selector ? selector(state) : state;
+    });
 
     // Mock API responses
     vi.mocked(api.get).mockResolvedValue({
@@ -1272,6 +1309,136 @@ describe('DeviceManagement', () => {
       // Verify both rows are in the document
       expect(firstRow).toBeInTheDocument();
       expect(secondRow).toBeInTheDocument();
+    });
+  });
+
+  describe('WebSocket Real-time Updates', () => {
+    it('should update device status when device_status event received', async () => {
+      const mockWebSocketClient = {
+        subscribe: vi.fn(),
+        unsubscribe: vi.fn(),
+        isConnected: vi.fn().mockReturnValue(true),
+      };
+
+      const mockUseDeviceStore = vi.fn().mockImplementation(selector => {
+        const state = {
+          devices: mockDevices,
+          loading: false,
+          error: null,
+          currentPage: 1,
+          totalPages: 1,
+          fetchDevices: vi.fn(),
+          registerDevice: vi.fn(),
+          deleteDevice: vi.fn(),
+          updateDeviceStatus: vi.fn(),
+          updateDeviceHeartbeat: vi.fn(),
+          addDevice: vi.fn(),
+          removeDevice: vi.fn(),
+          upsertDevice: vi.fn(),
+          setWebSocketClient: vi.fn(),
+          reset: vi.fn(),
+          webSocketClient: mockWebSocketClient,
+        };
+        return selector ? selector(state) : state;
+      });
+
+      (
+        useDeviceStore as unknown as typeof mockUseDeviceStore
+      ).mockImplementation(mockUseDeviceStore);
+
+      render(<DeviceManagement />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Office Router')).toBeInTheDocument();
+      });
+
+      // Verify WebSocket subscriptions were set up
+      expect(mockWebSocketClient.subscribe).toHaveBeenCalledWith(
+        'device_status',
+        expect.any(Function)
+      );
+      expect(mockWebSocketClient.subscribe).toHaveBeenCalledWith(
+        'device_registered',
+        expect.any(Function)
+      );
+      expect(mockWebSocketClient.subscribe).toHaveBeenCalledWith(
+        'device_removed',
+        expect.any(Function)
+      );
+      expect(mockWebSocketClient.subscribe).toHaveBeenCalledWith(
+        'device_updated',
+        expect.any(Function)
+      );
+    });
+
+    it('should update last heartbeat when device_updated event received', async () => {
+      const mockWebSocketClient = {
+        subscribe: vi.fn(),
+        unsubscribe: vi.fn(),
+        isConnected: vi.fn().mockReturnValue(true),
+      };
+
+      const mockUpsertDevice = vi.fn();
+
+      const mockUseDeviceStore = vi.fn().mockImplementation(selector => {
+        const state = {
+          devices: mockDevices,
+          loading: false,
+          error: null,
+          currentPage: 1,
+          totalPages: 1,
+          fetchDevices: vi.fn(),
+          registerDevice: vi.fn(),
+          deleteDevice: vi.fn(),
+          updateDeviceStatus: vi.fn(),
+          updateDeviceHeartbeat: vi.fn(),
+          addDevice: vi.fn(),
+          removeDevice: vi.fn(),
+          upsertDevice: mockUpsertDevice,
+          setWebSocketClient: vi.fn(),
+          reset: vi.fn(),
+          webSocketClient: mockWebSocketClient,
+        };
+        return selector ? selector(state) : state;
+      });
+
+      (
+        useDeviceStore as unknown as typeof mockUseDeviceStore
+      ).mockImplementation(mockUseDeviceStore);
+
+      render(<DeviceManagement />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Office Router')).toBeInTheDocument();
+      });
+
+      // Get the device_updated handler
+      const deviceUpdatedCall = mockWebSocketClient.subscribe.mock.calls.find(
+        call => call[0] === 'device_updated'
+      );
+      expect(deviceUpdatedCall).toBeDefined();
+
+      const deviceUpdatedHandler = deviceUpdatedCall?.[1];
+
+      // Simulate device_updated event
+      const updatedDevice = {
+        device: {
+          id: 'dev-1',
+          name: 'Office Router',
+          status: 'online',
+          last_heartbeat: '2024-02-20T11:00:00Z',
+        },
+      };
+
+      deviceUpdatedHandler?.(updatedDevice);
+
+      // Verify upsertDevice was called with the updated device
+      expect(mockUpsertDevice).toHaveBeenCalledWith({
+        id: 'dev-1',
+        name: 'Office Router',
+        status: 'online',
+        last_heartbeat: '2024-02-20T11:00:00Z',
+      });
     });
   });
 });

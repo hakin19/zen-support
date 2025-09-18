@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 
+import { useDeviceStore } from './device.store';
+
 import { createClient } from '@/lib/supabase/client';
 import { WebSocketClient } from '@/lib/websocket-client';
 
@@ -171,6 +173,9 @@ export const useWebSocketStore = create<WebSocketState>((set, get) => ({
         reconnect: true,
       });
 
+      // Set the WebSocket client in the device store for device page subscriptions
+      useDeviceStore.getState().setWebSocketClient(wsClient);
+
       // Set up event handlers
       wsClient.on('connect', () => {
         set({ isConnected: true });
@@ -278,6 +283,8 @@ export const useWebSocketStore = create<WebSocketState>((set, get) => ({
     if (wsClient) {
       wsClient.disconnect();
       set({ wsClient: null, isConnected: false });
+      // Clear the WebSocket client from the device store
+      useDeviceStore.getState().setWebSocketClient(undefined);
     }
   },
 

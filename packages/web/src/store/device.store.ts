@@ -96,7 +96,7 @@ interface DeviceState {
   addDevice: (device: Device) => void;
   removeDevice: (deviceId: string) => void;
   deleteDevice: (deviceId: string) => Promise<void>;
-  setWebSocketClient: (client: WebSocketClient) => void;
+  setWebSocketClient: (client: WebSocketClient | undefined) => void;
   upsertDevice: (device: DeviceUpdate) => void;
   reset: () => void;
 }

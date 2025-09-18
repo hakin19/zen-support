@@ -59,6 +59,7 @@ import {
   type Device,
   type DeviceStatus,
 } from '@/store/device.store';
+import { useWebSocketStore } from '@/store/websocket.store';
 
 function DeviceManagement(): JSX.Element {
   const { toast } = useToast();
@@ -79,6 +80,8 @@ function DeviceManagement(): JSX.Element {
     upsertDevice,
     webSocketClient,
   } = useDeviceStore();
+  const connect = useWebSocketStore(state => state.connect);
+  const disconnect = useWebSocketStore(state => state.disconnect);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -111,6 +114,12 @@ function DeviceManagement(): JSX.Element {
   useEffect(() => {
     void fetchDevices();
   }, [fetchDevices]);
+
+  // Connect to WebSocket on mount, disconnect on unmount
+  useEffect(() => {
+    void connect();
+    return () => disconnect();
+  }, [connect, disconnect]);
 
   // WebSocket subscriptions
   useEffect(() => {
