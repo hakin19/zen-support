@@ -28,10 +28,10 @@
   - [ ] 5.2 Implement `/sessions` queue UI plus approval handlers to satisfy tests
   - [ ] 5.3 Cover websocket or polling refresh ensuring approved sessions leave the queue
 
-- [ ] 6. Chat Persistence (Test First)
-  - [ ] 6.1 Write failing store tests that expect chat sessions/messages to load from API and persist
-  - [ ] 6.2 Replace mock chat adapters with real API wiring until tests pass
-  - [ ] 6.3 Add tests (or extend existing) for live updates post-send via websocket/polling
+- [x] 6. Chat Persistence (Test First)
+  - [x] 6.1 Write failing store tests that expect chat sessions/messages to load from API and persist
+  - [x] 6.2 Replace mock chat adapters with real API wiring until tests pass
+  - [x] 6.3 Add tests (or extend existing) for live updates post-send via websocket/polling
 
 - [ ] 7. QA & Documentation
   - [ ] 7.1 Run the full Vitest suite, update snapshots, and ensure all new tests cover key flows

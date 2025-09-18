@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 
+import { apiClient } from '../lib/api-client';
+
 import type { Database } from '@aizen/shared';
 
 type ChatSession = Database['public']['Tables']['chat_sessions']['Row'];
@@ -15,6 +17,18 @@ export interface MessageWithStatus extends ChatMessage {
 export interface DeviceActionWithStatus extends DeviceAction {
   isExecuting?: boolean;
   output?: string[];
+}
+
+interface LoadSessionOptions {
+  status?: 'active' | 'closed' | 'archived';
+  limit?: number;
+  offset?: number;
+}
+
+interface WebSocketMessage {
+  type: string;
+  sessionId?: string;
+  data: unknown;
 }
 
 interface ChatState {
@@ -53,6 +67,10 @@ interface ChatState {
   setActiveSession: (id: string | null) => void;
   archiveSession: (id: string) => void;
   deleteSession: (id: string) => void;
+  createSession: (title?: string) => Promise<void>;
+  loadSessions: (options?: LoadSessionOptions) => Promise<void>;
+  loadSession: (id: string) => Promise<void>;
+  archiveSessionWithAPI: (id: string) => Promise<void>;
 
   // Message Actions
   setMessages: (messages: MessageWithStatus[]) => void;
@@ -60,6 +78,7 @@ interface ChatState {
   updateMessage: (id: string, updates: Partial<MessageWithStatus>) => void;
   deleteMessage: (id: string) => void;
   sendMessage: (content: string) => Promise<void>;
+  sendMessageWithStream: (content: string) => Promise<void>;
   retryMessage: (id: string) => Promise<void>;
 
   // Device Action Actions
@@ -75,6 +94,8 @@ interface ChatState {
   ) => void;
   approveAction: (id: string) => Promise<void>;
   rejectAction: (id: string) => Promise<void>;
+  approveActionWithAPI: (id: string) => Promise<void>;
+  rejectActionWithAPI: (id: string) => Promise<void>;
   addActionOutput: (id: string, output: string) => void;
 
   // UI Actions
@@ -88,6 +109,8 @@ interface ChatState {
   // WebSocket Actions
   setConnected: (connected: boolean) => void;
   setConnectionError: (error: string | null) => void;
+  handleWebSocketMessage: (message: WebSocketMessage) => void;
+  resyncOnReconnect: () => Promise<void>;
 
   // Loading State Actions
   setSessionsLoading: (loading: boolean) => void;
@@ -182,6 +205,99 @@ export const useChatStore = create<ChatState>()(
           'deleteSession'
         ),
 
+      // New API methods for sessions
+      createSession: async (title?: string) => {
+        try {
+          get().setSessionsLoading(true);
+          get().setSessionsError(null);
+
+          const { data: session } = await apiClient.post<ChatSession>(
+            '/api/chat/sessions',
+            { title }
+          );
+
+          get().addSession(session);
+          get().setActiveSession(session.id);
+        } catch (error) {
+          const errorMessage =
+            error instanceof Error ? error.message : 'Failed to create session';
+          get().setSessionsError(errorMessage);
+          throw error;
+        } finally {
+          get().setSessionsLoading(false);
+        }
+      },
+
+      loadSessions: async (options?: LoadSessionOptions) => {
+        try {
+          get().setSessionsLoading(true);
+          get().setSessionsError(null);
+
+          const params = new URLSearchParams();
+          if (options?.status) params.append('status', options.status);
+          if (options?.limit) params.append('limit', options.limit.toString());
+          if (options?.offset !== undefined)
+            params.append('offset', options.offset.toString());
+
+          const queryString = params.toString();
+          const url = queryString
+            ? `/api/chat/sessions?${queryString}`
+            : '/api/chat/sessions';
+
+          const { data: sessions } = await apiClient.get<ChatSession[]>(url);
+          get().setSessions(sessions);
+        } catch (error) {
+          const errorMessage =
+            error instanceof Error ? error.message : 'Failed to load sessions';
+          get().setSessionsError(errorMessage);
+        } finally {
+          get().setSessionsLoading(false);
+        }
+      },
+
+      loadSession: async (id: string) => {
+        try {
+          get().setMessagesLoading(true);
+          get().setMessagesError(null);
+
+          const { data: sessionWithMessages } = await apiClient.get<
+            ChatSession & { messages: ChatMessage[] }
+          >(`/api/chat/sessions/${id}`);
+
+          const { messages, ...session } = sessionWithMessages;
+
+          // Update or add the session
+          const existingSession = get().sessions.find(s => s.id === id);
+          if (existingSession) {
+            get().updateSession(id, session);
+          } else {
+            get().addSession(session);
+          }
+
+          get().setActiveSession(id);
+          get().setMessages(messages || []);
+        } catch (error) {
+          const errorMessage =
+            error instanceof Error ? error.message : 'Failed to load messages';
+          get().setMessagesError(errorMessage);
+        } finally {
+          get().setMessagesLoading(false);
+        }
+      },
+
+      archiveSessionWithAPI: async (id: string) => {
+        try {
+          const { data: updatedSession } = await apiClient.patch<ChatSession>(
+            `/api/chat/sessions/${id}`,
+            { status: 'archived' }
+          );
+
+          get().updateSession(id, updatedSession);
+        } catch (error) {
+          throw error;
+        }
+      },
+
       // Message Actions
       setMessages: messages => set({ messages }, false, 'setMessages'),
 
@@ -236,15 +352,106 @@ export const useChatStore = create<ChatState>()(
         get().setSending(true);
 
         try {
-          // API call would go here
-          // const response = await api.sendMessage(content);
+          const { data: sentMessage } = await apiClient.post<ChatMessage>(
+            `/api/chat/sessions/${sessionId}/messages`,
+            { content, stream: false }
+          );
 
-          // Simulate API call
-          await new Promise(resolve => setTimeout(resolve, 500));
+          // Replace temp message with real message
+          get().deleteMessage(tempId);
+          get().addMessage({
+            ...sentMessage,
+            status: 'sent',
+          });
+        } catch (error) {
+          get().updateMessage(tempId, {
+            status: 'error',
+            error:
+              error instanceof Error ? error.message : 'Failed to send message',
+          });
+          throw error;
+        } finally {
+          get().setSending(false);
+        }
+      },
+
+      sendMessageWithStream: async (content: string) => {
+        const tempId = `temp-${Date.now()}`;
+        const sessionId = get().activeSessionId;
+
+        if (!sessionId) {
+          throw new Error('No active session');
+        }
+
+        const message: MessageWithStatus = {
+          id: tempId,
+          session_id: sessionId,
+          role: 'user' as Database['public']['Enums']['message_role'],
+          content,
+          created_at: new Date().toISOString(),
+          metadata: null,
+          status: 'sending',
+        };
+
+        get().addMessage(message);
+        get().setSending(true);
+
+        try {
+          const response = await apiClient.post<{ stream?: ReadableStream }>(
+            `/api/chat/sessions/${sessionId}/messages`,
+            { content, stream: true }
+          );
+
+          // Handle streaming response
+          if (response.data.stream) {
+            const reader = response.data.stream.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+
+            const assistantMessageId = `assistant-${Date.now()}`;
+            const assistantMessage: MessageWithStatus = {
+              id: assistantMessageId,
+              session_id: sessionId,
+              role: 'assistant',
+              content: '',
+              created_at: new Date().toISOString(),
+              metadata: null,
+              status: 'sending',
+            };
+            get().addMessage(assistantMessage);
+
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+
+              buffer += decoder.decode(value, { stream: true });
+              const lines = buffer.split('\n');
+              buffer = lines.pop() || '';
+
+              for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                  try {
+                    const data = JSON.parse(line.slice(6));
+                    if (data.content) {
+                      get().updateMessage(assistantMessageId, {
+                        content: data.content,
+                      });
+                    }
+                    if (data.done) {
+                      get().updateMessage(assistantMessageId, {
+                        status: 'sent',
+                      });
+                    }
+                  } catch {
+                    // Ignore parse errors
+                  }
+                }
+              }
+            }
+          }
 
           get().updateMessage(tempId, {
             status: 'sent',
-            // id: response.id, // Update with real ID from server
           });
         } catch (error) {
           get().updateMessage(tempId, {
@@ -260,15 +467,22 @@ export const useChatStore = create<ChatState>()(
 
       retryMessage: async (id: string) => {
         const message = get().messages.find(m => m.id === id);
-        if (!message) return;
+        if (!message?.session_id) return;
 
         get().updateMessage(id, { status: 'sending', error: undefined });
 
         try {
-          // API call would go here
-          await new Promise(resolve => setTimeout(resolve, 500));
+          const { data: sentMessage } = await apiClient.post<ChatMessage>(
+            `/api/chat/sessions/${message.session_id}/messages`,
+            { content: message.content, stream: false }
+          );
 
-          get().updateMessage(id, { status: 'sent' });
+          // Replace failed message with successful message
+          get().deleteMessage(id);
+          get().addMessage({
+            ...sentMessage,
+            status: 'sent',
+          });
         } catch (error) {
           get().updateMessage(id, {
             status: 'error',
@@ -407,6 +621,31 @@ export const useChatStore = create<ChatState>()(
         }
       },
 
+      // New API methods for device actions
+      approveActionWithAPI: async (id: string) => {
+        try {
+          const { data: updatedAction } = await apiClient.post<DeviceAction>(
+            `/api/device-actions/${id}/approve`
+          );
+
+          get().updateDeviceAction(id, updatedAction);
+        } catch (error) {
+          throw error;
+        }
+      },
+
+      rejectActionWithAPI: async (id: string) => {
+        try {
+          const { data: updatedAction } = await apiClient.post<DeviceAction>(
+            `/api/device-actions/${id}/reject`
+          );
+
+          get().updateDeviceAction(id, updatedAction);
+        } catch (error) {
+          throw error;
+        }
+      },
+
       addActionOutput: (id, output) => {
         set(
           state => ({
@@ -461,6 +700,58 @@ export const useChatStore = create<ChatState>()(
 
       setConnectionError: error =>
         set({ connectionError: error }, false, 'setConnectionError'),
+
+      handleWebSocketMessage: (message: WebSocketMessage) => {
+        const state = get();
+
+        switch (message.type) {
+          case 'chat:message':
+            // Add new message if it's for the active session
+            if (message.sessionId === state.activeSessionId && message.data) {
+              const chatMessage = message.data as ChatMessage;
+              // Only add if message doesn't already exist
+              if (!state.messages.find(m => m.id === chatMessage.id)) {
+                get().addMessage(chatMessage);
+              }
+            }
+            break;
+
+          case 'device:action:update':
+            // Update device action status
+            if (message.data && typeof message.data === 'object') {
+              const update = message.data as Partial<DeviceAction> & {
+                id: string;
+              };
+              if (update.id) {
+                get().updateDeviceAction(update.id, update);
+              }
+            }
+            break;
+
+          case 'session:update':
+            // Update session status
+            if (message.data && typeof message.data === 'object') {
+              const sessionUpdate = message.data as Partial<ChatSession> & {
+                id: string;
+              };
+              if (sessionUpdate.id) {
+                get().updateSession(sessionUpdate.id, sessionUpdate);
+              }
+            }
+            break;
+
+          default:
+            break;
+        }
+      },
+
+      resyncOnReconnect: async () => {
+        const activeSessionId = get().activeSessionId;
+        if (activeSessionId) {
+          // Reload the current session to get any messages we might have missed
+          await get().loadSession(activeSessionId);
+        }
+      },
 
       // Loading State Actions
       setSessionsLoading: loading =>
