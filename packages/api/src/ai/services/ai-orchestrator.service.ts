@@ -152,7 +152,9 @@ export class AIOrchestrator extends EventEmitter {
     console.log('Calling Claude SDK with options:', {
       model: queryOptions.model,
       hasEnv: !!queryOptions.env,
-      envKeys: queryOptions.env ? Object.keys(queryOptions.env) : [],
+      envKeys: queryOptions.env
+        ? Object.keys(queryOptions.env as Record<string, unknown>)
+        : [],
       hasAnthropicKey: !!queryOptions.env?.ANTHROPIC_API_KEY,
       actualApiKey: process.env.ANTHROPIC_API_KEY
         ? 'Set in process.env'
@@ -174,8 +176,8 @@ export class AIOrchestrator extends EventEmitter {
       const testOptions: Partial<Options> = {
         model: 'claude-3-5-sonnet-20241022',
         env: {
-          ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY!,
-          PATH: process.env.PATH!,
+          ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY ?? '',
+          PATH: process.env.PATH ?? '/usr/bin:/bin',
         },
       };
 
