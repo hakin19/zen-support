@@ -33,6 +33,6 @@
   - [x] 6.2 Replace mock chat adapters with real API wiring until tests pass
   - [x] 6.3 Add tests (or extend existing) for live updates post-send via websocket/polling
 
-- [ ] 7. QA & Documentation
-  - [ ] 7.1 Run the full Vitest suite, update snapshots, and ensure all new tests cover key flows
-  - [ ] 7.2 Update docs with MVP scope, deferred features, and onboarding flow overview
+- [x] 7. QA & Documentation
+  - [x] 7.1 Run the full Vitest suite, update snapshots, and ensure all new tests cover key flows
+  - [x] 7.2 Update docs with MVP scope, deferred features, and onboarding flow overview
