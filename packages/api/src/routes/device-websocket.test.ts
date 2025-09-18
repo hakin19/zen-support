@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import net from 'node:net';
 import WebSocket from 'ws';
 
 import { createApp } from '../server';
@@ -7,6 +8,18 @@ import { getSupabaseAdminClient } from '@aizen/shared/utils/supabase-client';
 import { commandQueueService } from '../services/command-queue.service';
 
 import type { FastifyInstance } from 'fastify';
+
+const canBindLoopback = await new Promise<boolean>(resolve => {
+  const server = net.createServer();
+  server.once('error', () => {
+    server.close(() => resolve(false));
+  });
+  server.listen(0, '127.0.0.1', () => {
+    server.close(() => resolve(true));
+  });
+});
+
+const describeIf = canBindLoopback ? describe : describe.skip;
 
 // Mock dependencies
 vi.mock('@aizen/shared/utils/redis-client');
@@ -21,7 +34,7 @@ vi.mock('../services/command-queue.service', () => ({
   stopVisibilityCheck: vi.fn(),
 }));
 
-describe('Device WebSocket Communication', () => {
+describeIf('Device WebSocket Communication', () => {
   let app: FastifyInstance;
   let serverUrl: string;
   let mockRedis: any;
@@ -56,9 +69,9 @@ describe('Device WebSocket Communication', () => {
 
     // Create and start the server
     app = await createApp();
-    await app.listen({ port: 0 });
+    await app.listen({ port: 0, host: '127.0.0.1' });
     const address = app.server.address() as { port: number };
-    serverUrl = `ws://localhost:${address.port}`;
+    serverUrl = `ws://127.0.0.1:${address.port}`;
   });
 
   afterEach(async () => {

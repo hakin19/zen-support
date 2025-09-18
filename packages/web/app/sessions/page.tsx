@@ -107,7 +107,7 @@ function SessionsPage(): JSX.Element {
   const [transcriptModal, setTranscriptModal] = useState<{
     open: boolean;
     sessionId: string | null;
-    transcript: TranscriptEntry[];
+    transcript: TranscriptEntry[] | undefined;
   }>({
     open: false,
     sessionId: null,
@@ -255,7 +255,7 @@ function SessionsPage(): JSX.Element {
 
     try {
       const transcript = await fetchTranscript(session.id);
-      setTranscriptModal(prev => ({ ...prev, transcript }));
+    setTranscriptModal(prev => ({ ...prev, transcript }));
     } catch (error) {
       toast({
         title: 'Failed to load transcript',
@@ -658,7 +658,8 @@ function SessionsPage(): JSX.Element {
               <div className='flex items-center justify-center py-8'>
                 <RefreshCw className='h-6 w-6 animate-spin text-muted-foreground' />
               </div>
-            ) : transcriptModal.transcript.length > 0 ? (
+            ) : Array.isArray(transcriptModal.transcript) &&
+              transcriptModal.transcript.length > 0 ? (
               transcriptModal.transcript.map((entry, index) => (
                 <div
                   key={index}

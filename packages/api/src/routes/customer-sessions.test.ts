@@ -389,7 +389,7 @@ describe('Customer Session Routes', () => {
 
       const response = await app.inject({
         method: 'POST',
-        url: '/api/v1/customer/sessions/session-123/approve',
+        url: '/api/v1/customer/sessions/session-123/approve-command',
         headers: {
           authorization: 'Bearer test-token',
         },
@@ -461,7 +461,7 @@ describe('Customer Session Routes', () => {
 
       const response = await app.inject({
         method: 'POST',
-        url: '/api/v1/customer/sessions/session-123/approve',
+        url: '/api/v1/customer/sessions/session-123/approve-command',
         headers: {
           authorization: 'Bearer test-token',
         },
@@ -502,7 +502,7 @@ describe('Customer Session Routes', () => {
 
       const response = await app.inject({
         method: 'POST',
-        url: '/api/v1/customer/sessions/session-123/approve',
+        url: '/api/v1/customer/sessions/session-123/approve-command',
         headers: {
           authorization: 'Bearer test-token',
         },
@@ -568,7 +568,7 @@ describe('Customer Session Routes', () => {
 
       const response = await app.inject({
         method: 'POST',
-        url: '/api/v1/customer/sessions/session-123/approve',
+        url: '/api/v1/customer/sessions/session-123/approve-command',
         headers: {
           authorization: 'Bearer test-token',
         },
@@ -616,7 +616,7 @@ describe('Customer Session Routes', () => {
 
       const response = await app.inject({
         method: 'POST',
-        url: '/api/v1/customer/sessions/session-123/approve',
+        url: '/api/v1/customer/sessions/session-123/approve-command',
         headers: {
           authorization: 'Bearer test-token',
         },
