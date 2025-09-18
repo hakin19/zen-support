@@ -105,6 +105,46 @@ See [docs/architecture.md](docs/architecture.md) for detailed system architectur
 
 See [docs/implementation-plan.md](docs/implementation-plan.md) for the development roadmap.
 
+## MVP Scope & Current Status
+
+### ✅ Completed Features (Phase 200 MVP)
+
+The customer portal MVP is complete with the following features:
+
+- **Dashboard**: Real-time health overview with organization counts, device status, and pending approvals
+- **Organization Settings**: Profile management with billing portal integration and security controls
+- **Device Management**: Registration flow with activation codes and real-time status monitoring
+- **User Administration**: Invitation system with role management and license enforcement
+- **Sessions Queue**: HITL approval interface for diagnostic commands with audit trails
+- **Chat Persistence**: Full API integration replacing mocked chat store with real persistence
+
+### 🧪 Test Coverage
+
+- **300+ Component Tests**: Comprehensive coverage of all UI components
+- **Integration Tests**: End-to-end workflows for critical user journeys
+- **Quality Gates**: >60% code coverage, TypeScript strict mode, automated linting
+- **CI Integration**: Automated testing with Vitest and Testing Library
+
+### 📋 Customer Onboarding Flow
+
+1. **Account Setup** (5 min): Organization profile, billing setup, user invitations
+2. **Device Registration** (10 min): Generate activation code, connect device, verify status
+3. **First Session** (15 min): Submit diagnostic request, approve commands, review results
+4. **Ongoing Management**: Monitor dashboard, manage users, review session history
+
+### 🚀 Deferred Features (Post-MVP)
+
+- Advanced analytics and custom reporting
+- Voice service integration for phone support
+- SSO integration and enterprise security features
+- Multi-organization management for MSPs
+
 ## Development Guidelines
 
 See [docs/development-guidelines.md](docs/development-guidelines.md) for coding standards and best practices.
+
+## MVP Documentation
+
+- [MVP Scope & Onboarding](docs/mvp-scope-and-onboarding.md) - Detailed feature scope and customer workflows
+- [Architecture Overview](docs/architecture.md) - System design and technical architecture
+- [Testing Strategy](docs/testing-guide.md) - Test framework and coverage requirements
