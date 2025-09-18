@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, no-undef */
 /** Sessions Store - Manages diagnostic session state and real-time updates
  */
 
@@ -7,7 +6,8 @@ import { subscribeWithSelector } from 'zustand/middleware';
 
 import type { RealtimeChannel } from '@supabase/supabase-js';
 
-import { createBrowserClient } from '@/lib/supabase/client';
+import { apiClient } from '@/lib/api-client';
+import { createClient } from '@/lib/supabase/client';
 
 export type SessionStatus =
   | 'pending'
@@ -83,6 +83,12 @@ interface SessionsState {
   ) => Promise<void>;
   approveSession: (sessionId: string) => Promise<void>;
   rejectSession: (sessionId: string, reason?: string) => Promise<void>;
+  approveCommand: (sessionId: string, commandId: string) => Promise<void>;
+  rejectCommand: (
+    sessionId: string,
+    commandId: string,
+    reason?: string
+  ) => Promise<void>;
   fetchTranscript: (sessionId: string) => Promise<TranscriptEntry[]>;
   setSearchQuery: (query: string) => void;
   setStatusFilter: (filter: SessionStatus | 'all') => void;
@@ -127,17 +133,12 @@ export const useSessionsStore = create<SessionsState>()(
           params.append('search', search);
         }
 
-        const response = await fetch(`/api/v1/customer/sessions?${params}`, {
-          headers: {
-            Authorization: `Bearer ${typeof window !== 'undefined' ? localStorage.getItem('auth_token') : ''}`,
-          },
-        });
-
-        if (!response.ok) {
-          throw new Error(`Failed to fetch sessions: ${response.statusText}`);
-        }
-
-        const data = await response.json();
+        const { data } = await apiClient.get<{
+          sessions: DiagnosticSession[];
+          devices: Record<string, SessionDevice>;
+          users: Record<string, SessionUser>;
+          totalCount: number;
+        }>(`/api/v1/customer/sessions?${params}`);
 
         set({
           sessions: data.sessions ?? [],
@@ -158,94 +159,73 @@ export const useSessionsStore = create<SessionsState>()(
     },
 
     approveSession: async (sessionId: string) => {
-      try {
-        const response = await fetch(
-          `/api/v1/customer/sessions/${sessionId}/approve`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${typeof window !== 'undefined' ? localStorage.getItem('auth_token') : ''}`,
-            },
-            body: JSON.stringify({ approved: true }),
-          }
-        );
+      await apiClient.post(`/api/v1/customer/sessions/${sessionId}/approve`, {
+        approved: true,
+      });
 
-        if (!response.ok) {
-          throw new Error(`Failed to approve session: ${response.statusText}`);
-        }
+      // Update local state
+      set(state => ({
+        sessions: state.sessions.map(s =>
+          s.id === sessionId ? { ...s, status: 'approved' as SessionStatus } : s
+        ),
+      }));
 
-        // Update local state
-        set(state => ({
-          sessions: state.sessions.map(s =>
-            s.id === sessionId
-              ? { ...s, status: 'approved' as SessionStatus }
-              : s
-          ),
-        }));
-
-        // Refresh sessions
-        const { currentPage, statusFilter, searchQuery } = get();
-        void get().fetchSessions(currentPage, statusFilter, searchQuery);
-      } catch (error) {
-        throw error;
-      }
+      // Refresh sessions
+      const { currentPage, statusFilter, searchQuery } = get();
+      void get().fetchSessions(currentPage, statusFilter, searchQuery);
     },
 
     rejectSession: async (sessionId: string, reason?: string) => {
-      try {
-        const response = await fetch(
-          `/api/v1/customer/sessions/${sessionId}/reject`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${typeof window !== 'undefined' ? localStorage.getItem('auth_token') : ''}`,
-            },
-            body: JSON.stringify({ approved: false, reason }),
-          }
-        );
+      await apiClient.post(`/api/v1/customer/sessions/${sessionId}/reject`, {
+        reason,
+      });
 
-        if (!response.ok) {
-          throw new Error(`Failed to reject session: ${response.statusText}`);
-        }
+      // Update local state
+      set(state => ({
+        sessions: state.sessions.map(s =>
+          s.id === sessionId ? { ...s, status: 'rejected' as SessionStatus } : s
+        ),
+      }));
 
-        // Update local state
-        set(state => ({
-          sessions: state.sessions.map(s =>
-            s.id === sessionId
-              ? { ...s, status: 'rejected' as SessionStatus }
-              : s
-          ),
-        }));
+      // Refresh sessions
+      const { currentPage, statusFilter, searchQuery } = get();
+      void get().fetchSessions(currentPage, statusFilter, searchQuery);
+    },
 
-        // Refresh sessions
-        const { currentPage, statusFilter, searchQuery } = get();
-        void get().fetchSessions(currentPage, statusFilter, searchQuery);
-      } catch (error) {
-        throw error;
-      }
+    approveCommand: async (sessionId: string, commandId: string) => {
+      await apiClient.post(
+        `/api/v1/customer/sessions/${sessionId}/approve-command`,
+        { commandId, approved: true }
+      );
+
+      // Refresh sessions to get updated command status
+      const { currentPage, statusFilter, searchQuery } = get();
+      void get().fetchSessions(currentPage, statusFilter, searchQuery);
+    },
+
+    rejectCommand: async (
+      sessionId: string,
+      commandId: string,
+      reason?: string
+    ) => {
+      await apiClient.post(
+        `/api/v1/customer/sessions/${sessionId}/approve-command`,
+        { commandId, approved: false, reason }
+      );
+
+      // Refresh sessions to get updated command status
+      const { currentPage, statusFilter, searchQuery } = get();
+      void get().fetchSessions(currentPage, statusFilter, searchQuery);
     },
 
     fetchTranscript: async (sessionId: string) => {
       try {
-        const response = await fetch(
-          `/api/v1/customer/sessions/${sessionId}/transcript`,
-          {
-            headers: {
-              Authorization: `Bearer ${typeof window !== 'undefined' ? localStorage.getItem('auth_token') : ''}`,
-            },
-          }
-        );
-
-        if (!response.ok) {
-          throw new Error(`Failed to fetch transcript: ${response.statusText}`);
-        }
-
-        const data = await response.json();
+        const { data } = await apiClient.get<{
+          transcript: TranscriptEntry[];
+        }>(`/api/v1/customer/sessions/${sessionId}/transcript`);
         return data.transcript ?? [];
-      } catch (error) {
-        console.error('Failed to fetch transcript:', error);
+      } catch {
+        // Failed to fetch transcript - return empty array
         return [];
       }
     },
@@ -263,8 +243,7 @@ export const useSessionsStore = create<SessionsState>()(
     },
 
     subscribeToUpdates: () => {
-      /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call */
-      const supabase = createBrowserClient();
+      const supabase = createClient();
       const channel = supabase
         .channel('sessions-updates')
         .on(
@@ -292,13 +271,12 @@ export const useSessionsStore = create<SessionsState>()(
         .subscribe();
 
       set({ channel });
-      /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call */
     },
 
     unsubscribeFromUpdates: () => {
       const { channel } = get();
       if (channel) {
-        channel.unsubscribe();
+        void channel.unsubscribe();
         set({ channel: null });
       }
     },

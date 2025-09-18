@@ -1,6 +1,6 @@
 'use client';
 
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */import {
+import {
   Search,
   CheckCircle,
   XCircle,
@@ -117,10 +117,7 @@ function SessionsPage(): JSX.Element {
 
   // Check if user has permission to approve/reject
   const canApprove = useMemo(() => {
-    return (
-      (user?.user_metadata?.role as string) === 'owner' ||
-      (user?.user_metadata?.role as string) === 'admin'
-    );
+    return user?.role === 'owner' || user?.role === 'admin';
   }, [user]);
 
   // Status badge styling

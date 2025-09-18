@@ -11,6 +11,7 @@ import type {
 } from '@supabase/supabase-js';
 
 import { createClient } from '@/lib/supabase/client';
+import { useAuthStore } from '@/store/auth.store';
 
 interface AuthContextType {
   user: User | null;
@@ -34,6 +35,7 @@ export function AuthProvider({
   const [loading, setLoading] = useState(true);
   const router = useRouter();
   const supabase = createClient();
+  const authStore = useAuthStore();
 
   const mapSupabaseUserToUser = (
     supabaseUser: SupabaseUser | null
@@ -57,11 +59,27 @@ export function AuthProvider({
           data: { session },
         } = await supabase.auth.getSession();
         setSession(session);
-        setUser(mapSupabaseUserToUser(session?.user ?? null));
+        const mappedUser = mapSupabaseUserToUser(session?.user ?? null);
+        setUser(mappedUser);
+
+        // Sync with auth store
+        if (mappedUser) {
+          authStore.setUser({
+            id: mappedUser.id,
+            email: mappedUser.email,
+            role: mappedUser.role,
+            full_name: undefined,
+          });
+          authStore.setSession(session as Record<string, unknown>);
+        } else {
+          authStore.clearAuth();
+        }
       } catch {
         // Error checking session
+        authStore.clearAuth();
       } finally {
         setLoading(false);
+        authStore.setLoading(false);
       }
     };
 
@@ -72,7 +90,21 @@ export function AuthProvider({
     } = supabase.auth.onAuthStateChange(
       (_event: AuthChangeEvent, session: Session | null): void => {
         setSession(session);
-        setUser(mapSupabaseUserToUser(session?.user ?? null));
+        const mappedUser = mapSupabaseUserToUser(session?.user ?? null);
+        setUser(mappedUser);
+
+        // Sync with auth store
+        if (mappedUser) {
+          authStore.setUser({
+            id: mappedUser.id,
+            email: mappedUser.email,
+            role: mappedUser.role,
+            full_name: undefined,
+          });
+          authStore.setSession(session as Record<string, unknown>);
+        } else {
+          authStore.clearAuth();
+        }
 
         if (_event === 'SIGNED_OUT') {
           router.replace('/login');
@@ -83,7 +115,7 @@ export function AuthProvider({
     return (): void => {
       subscription.unsubscribe();
     };
-  }, [router, supabase]);
+  }, [router, supabase, authStore]);
 
   const signIn = async (email: string, password: string): Promise<void> => {
     const { error } = await supabase.auth.signInWithPassword({
@@ -118,7 +150,21 @@ export function AuthProvider({
     } = await supabase.auth.refreshSession();
     if (error) throw error;
     setSession(session);
-    setUser(mapSupabaseUserToUser(session?.user ?? null));
+    const mappedUser = mapSupabaseUserToUser(session?.user ?? null);
+    setUser(mappedUser);
+
+    // Sync with auth store
+    if (mappedUser) {
+      authStore.setUser({
+        id: mappedUser.id,
+        email: mappedUser.email,
+        role: mappedUser.role,
+        full_name: undefined,
+      });
+      authStore.setSession(session as Record<string, unknown>);
+    } else {
+      authStore.clearAuth();
+    }
   };
 
   return (

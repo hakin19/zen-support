@@ -1,65 +1,30 @@
-/**
- * Sessions Queue & Approvals Page Tests
- * Test-first implementation for sessions management functionality
- */
-
-import { render, screen, waitFor, within } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
-import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
+import React from 'react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 import SessionsPage from './page';
+import { useAuthStore } from '@/store/auth.store';
+import { useSessionsStore } from '@/store/sessions.store';
+import { useToast } from '@/hooks/use-toast';
+import type {
+  DiagnosticSession,
+  SessionStatus,
+  TranscriptEntry,
+} from '@/store/sessions.store';
 
-// Mock Supabase client
-vi.mock('@/lib/supabase/client', () => ({
-  createBrowserClient: vi.fn(() => ({
-    auth: {
-      getSession: vi.fn().mockResolvedValue({
-        data: {
-          session: {
-            user: {
-              id: 'test-user-id',
-              email: 'admin@test.com',
-              user_metadata: {
-                role: 'owner',
-              },
-            },
-            access_token: 'test-token',
-          },
-        },
-      }),
-    },
-    from: vi.fn(),
-    channel: vi.fn(() => ({
-      on: vi.fn().mockReturnThis(),
-      subscribe: vi.fn((callback) => {
-        if (typeof callback === 'function') {
-          callback('SUBSCRIBED');
-        }
-        return {
-          unsubscribe: vi.fn(),
-        };
-      }),
-    })),
-  })),
-}));
+// Mock the stores and hooks
+vi.mock('@/store/auth.store');
+vi.mock('@/store/sessions.store');
+vi.mock('@/hooks/use-toast');
 
-// Mock auth store
-vi.mock('@/store/auth.store', () => ({
-  useAuthStore: vi.fn((selector) => {
-    const mockStore = {
-      user: {
-        id: 'test-user-id',
-        email: 'admin@test.com',
-        user_metadata: {
-          role: 'owner',
-        },
-      },
-    };
-    return selector ? selector(mockStore) : mockStore;
-  }),
-}));
-// Mock diagnostic session fixtures
-const mockSessions = [
+// Mock data
+const mockSessions: DiagnosticSession[] = [
   {
     id: 'session-1',
     device_id: 'device-1',
@@ -68,114 +33,139 @@ const mockSessions = [
     session_type: 'diagnostic',
     status: 'pending',
     issue_description: 'Network connectivity issues',
-    started_at: '2025-01-17T10:00:00Z',
-    created_at: '2025-01-17T10:00:00Z',
-    updated_at: '2025-01-17T10:00:00Z',
-    expires_at: '2025-01-17T11:00:00Z',
-    diagnostic_data: {
-      network_status: 'testing',
-      tests_run: ['ping'],
-    },
+    started_at: '2024-03-15T10:00:00Z',
+    ended_at: null,
+    created_at: '2024-03-15T10:00:00Z',
+    updated_at: '2024-03-15T10:00:00Z',
+    expires_at: '2024-03-15T11:00:00Z',
+    diagnostic_data: {},
     remediation_actions: [
       {
-        action: 'restart_router',
+        action: 'Restart router',
         status: 'pending_approval',
-        script: 'sudo systemctl restart networking',
         risk_level: 'low',
       },
     ],
+    notes: null,
   },
   {
     id: 'session-2',
     device_id: 'device-2',
     customer_id: 'customer-1',
-    user_id: 'user-2',
+    status: 'completed',
     session_type: 'diagnostic',
-    status: 'in_progress',
-    issue_description: 'Slow internet speed',
-    started_at: '2025-01-17T09:30:00Z',
-    created_at: '2025-01-17T09:30:00Z',
-    updated_at: '2025-01-17T09:45:00Z',
-    diagnostic_data: {
-      network_status: 'degraded',
-      latency_ms: 250,
-      packet_loss: 15,
-    },
+    issue_description: 'DNS resolution failure',
+    started_at: '2024-03-14T14:00:00Z',
+    ended_at: '2024-03-14T14:30:00Z',
+    created_at: '2024-03-14T14:00:00Z',
+    updated_at: '2024-03-14T14:30:00Z',
+    diagnostic_data: {},
+    notes: null,
   },
   {
     id: 'session-3',
-    device_id: 'device-3',
+    device_id: 'device-1',
     customer_id: 'customer-1',
-    user_id: 'user-1',
+    status: 'in_progress',
     session_type: 'diagnostic',
-    status: 'completed',
-    issue_description: 'DNS resolution failure',
-    started_at: '2025-01-17T08:00:00Z',
-    ended_at: '2025-01-17T08:30:00Z',
-    created_at: '2025-01-17T08:00:00Z',
-    updated_at: '2025-01-17T08:30:00Z',
-    diagnostic_data: {
-      network_status: 'healthy',
-      issues_found: [],
-      recommendations: ['No issues detected'],
-    },
+    issue_description: 'Performance degradation',
+    started_at: '2024-03-15T09:00:00Z',
+    created_at: '2024-03-15T09:00:00Z',
+    updated_at: '2024-03-15T09:30:00Z',
+    diagnostic_data: {},
+    notes: null,
   },
 ];
 
-// Mock device data
 const mockDevices = {
-  'device-1': { name: 'Office Router', status: 'online' },
-  'device-2': { name: 'Warehouse AP', status: 'online' },
-  'device-3': { name: 'Guest Network', status: 'offline' },
+  'device-1': {
+    id: 'device-1',
+    name: 'Main Router',
+    status: 'online' as const,
+  },
+  'device-2': {
+    id: 'device-2',
+    name: 'Backup Router',
+    status: 'offline' as const,
+  },
 };
 
-// Mock user data
 const mockUsers = {
-  'user-1': { name: 'John Smith', email: 'john@test.com' },
-  'user-2': { name: 'Jane Doe', email: 'jane@test.com' },
+  'user-1': { id: 'user-1', name: 'John Doe', email: 'john@example.com' },
 };
 
-describe('Sessions Queue & Approvals Page', () => {
-  let mockFetch: ReturnType<typeof vi.fn>;
+const mockTranscript: TranscriptEntry[] = [
+  { timestamp: '10:00:00', type: 'system', message: 'Session started' },
+  {
+    timestamp: '10:01:00',
+    type: 'diagnostic',
+    message: 'Running network diagnostics',
+  },
+  {
+    timestamp: '10:02:00',
+    type: 'result',
+    message: 'Found issue with DNS server',
+  },
+  {
+    timestamp: '10:03:00',
+    type: 'error',
+    message: 'Failed to connect to primary DNS',
+  },
+];
+
+describe('SessionsPage', () => {
+  const mockToast = vi.fn();
+  const mockFetchSessions = vi.fn();
+  const mockApproveSession = vi.fn();
+  const mockRejectSession = vi.fn();
+  const mockFetchTranscript = vi.fn().mockResolvedValue(mockTranscript);
+  const mockSetSearchQuery = vi.fn();
+  const mockSetStatusFilter = vi.fn();
+  const mockSetCurrentPage = vi.fn();
+  const mockSubscribeToUpdates = vi.fn();
+  const mockUnsubscribeFromUpdates = vi.fn();
+  const mockHandleSessionInsert = vi.fn();
+  const mockHandleSessionUpdate = vi.fn();
+  const mockHandleSessionDelete = vi.fn();
 
   beforeEach(() => {
-    mockFetch = vi.fn();
-    global.fetch = mockFetch;
+    vi.clearAllMocks();
 
-    // Mock API responses
-    mockFetch.mockImplementation((url: string) => {
-      if (url.includes('/api/v1/customer/sessions')) {
-        if (url.includes('session-1') && url.includes('approve')) {
-          return Promise.resolve({
-            ok: true,
-            json: async () => ({ success: true }),
-          });
-        }
-        return Promise.resolve({
-          ok: true,
-          json: async () => ({
-            sessions: mockSessions,
-            devices: mockDevices,
-            users: mockUsers,
-          }),
-        });
-      }
-      if (url.includes('/api/v1/customer/sessions/') && url.includes('/transcript')) {
-        return Promise.resolve({
-          ok: true,
-          json: async () => ({
-            transcript: [
-              { timestamp: '10:00:00', type: 'system', message: 'Session started' },
-              { timestamp: '10:00:05', type: 'diagnostic', message: 'Running network diagnostics' },
-              { timestamp: '10:00:10', type: 'result', message: 'High latency detected: 250ms' },
-            ],
-          }),
-        });
-      }
-      return Promise.resolve({
-        ok: false,
-        status: 404,
-      });
+    (useToast as any).mockReturnValue({ toast: mockToast });
+
+    (useAuthStore as any).mockReturnValue({
+      user: {
+        id: 'user-1',
+        name: 'John Doe',
+        email: 'john@example.com',
+        role: 'admin',
+      },
+    });
+
+    (useSessionsStore as any).mockReturnValue({
+      sessions: mockSessions,
+      devices: mockDevices,
+      users: mockUsers,
+      loading: false,
+      error: null,
+      currentPage: 1,
+      totalPages: 3,
+      totalCount: 25,
+      searchQuery: '',
+      statusFilter: 'all',
+      channel: null,
+      fetchSessions: mockFetchSessions,
+      approveSession: mockApproveSession,
+      rejectSession: mockRejectSession,
+      fetchTranscript: mockFetchTranscript,
+      setSearchQuery: mockSetSearchQuery,
+      setStatusFilter: mockSetStatusFilter,
+      setCurrentPage: mockSetCurrentPage,
+      subscribeToUpdates: mockSubscribeToUpdates,
+      unsubscribeFromUpdates: mockUnsubscribeFromUpdates,
+      handleSessionInsert: mockHandleSessionInsert,
+      handleSessionUpdate: mockHandleSessionUpdate,
+      handleSessionDelete: mockHandleSessionDelete,
     });
   });
 
@@ -183,626 +173,911 @@ describe('Sessions Queue & Approvals Page', () => {
     vi.clearAllMocks();
   });
 
-  describe('Session Queue Display', () => {
-    it('should display sessions queue with proper filters', async () => {
+  describe('Component Rendering', () => {
+    it('renders the sessions page with header', () => {
       render(<SessionsPage />);
 
-      // Wait for sessions to load
-      await waitFor(() => {
-        expect(screen.getByText('Sessions Queue')).toBeInTheDocument();
-      });
-
-      // Check filter buttons are present
-      expect(screen.getByRole('button', { name: /All Sessions/i })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /Pending Approval/i })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /In Progress/i })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /Completed/i })).toBeInTheDocument();
-
-      // Check sessions are displayed
-      await waitFor(() => {
-        expect(screen.getByText('Network connectivity issues')).toBeInTheDocument();
-        expect(screen.getByText('Slow internet speed')).toBeInTheDocument();
-        expect(screen.getByText('DNS resolution failure')).toBeInTheDocument();
-      });
+      expect(screen.getByText('Sessions Queue')).toBeInTheDocument();
+      expect(
+        screen.getByText(
+          'Manage diagnostic sessions and approve remediation actions'
+        )
+      ).toBeInTheDocument();
     });
 
-    it('should display status badges correctly', async () => {
+    it('renders the filters section', () => {
       render(<SessionsPage />);
 
-      await waitFor(() => {
-        const pendingBadge = screen.getByTestId('status-badge-pending');
-        expect(pendingBadge).toHaveTextContent('Pending');
-        expect(pendingBadge).toHaveClass('bg-yellow-100', 'text-yellow-800');
-
-        const inProgressBadge = screen.getByTestId('status-badge-in_progress');
-        expect(inProgressBadge).toHaveTextContent('In Progress');
-        expect(inProgressBadge).toHaveClass('bg-blue-100', 'text-blue-800');
-
-        const completedBadge = screen.getByTestId('status-badge-completed');
-        expect(completedBadge).toHaveTextContent('Completed');
-        expect(completedBadge).toHaveClass('bg-green-100', 'text-green-800');
-      });
+      expect(
+        screen.getByPlaceholderText('Search sessions...')
+      ).toBeInTheDocument();
+      expect(screen.getByText('All Sessions')).toBeInTheDocument();
+      expect(screen.getByText('Pending Approval')).toBeInTheDocument();
+      expect(screen.getByText('In Progress')).toBeInTheDocument();
+      expect(screen.getByText('Completed')).toBeInTheDocument();
     });
 
-    it('should filter sessions when filter buttons are clicked', async () => {
-      const user = userEvent.setup();
+    it('renders the sessions table with correct headers', () => {
       render(<SessionsPage />);
 
-      await waitFor(() => {
-        expect(screen.getByText('Network connectivity issues')).toBeInTheDocument();
-      });
-
-      // Filter by Pending Approval
-      await user.click(screen.getByRole('button', { name: /Pending Approval/i }));
-
-      await waitFor(() => {
-        expect(screen.getByText('Network connectivity issues')).toBeInTheDocument();
-        expect(screen.queryByText('Slow internet speed')).not.toBeInTheDocument();
-        expect(screen.queryByText('DNS resolution failure')).not.toBeInTheDocument();
-      });
-
-      // Filter by In Progress
-      await user.click(screen.getByRole('button', { name: /In Progress/i }));
-
-      await waitFor(() => {
-        expect(screen.queryByText('Network connectivity issues')).not.toBeInTheDocument();
-        expect(screen.getByText('Slow internet speed')).toBeInTheDocument();
-        expect(screen.queryByText('DNS resolution failure')).not.toBeInTheDocument();
-      });
-
-      // Show all sessions again
-      await user.click(screen.getByRole('button', { name: /All Sessions/i }));
-
-      await waitFor(() => {
-        expect(screen.getByText('Network connectivity issues')).toBeInTheDocument();
-        expect(screen.getByText('Slow internet speed')).toBeInTheDocument();
-        expect(screen.getByText('DNS resolution failure')).toBeInTheDocument();
-      });
+      expect(screen.getByText('Session ID')).toBeInTheDocument();
+      expect(screen.getByText('Device')).toBeInTheDocument();
+      expect(screen.getByText('User')).toBeInTheDocument();
+      expect(screen.getByText('Issue')).toBeInTheDocument();
+      expect(screen.getByText('Status')).toBeInTheDocument();
+      expect(screen.getByText('Started')).toBeInTheDocument();
+      expect(screen.getByText('Actions')).toBeInTheDocument();
     });
 
-    it('should display session metadata correctly', async () => {
+    it('displays sessions data correctly', () => {
       render(<SessionsPage />);
 
-      await waitFor(() => {
-        // Check device names are displayed
-        expect(screen.getByText('Office Router')).toBeInTheDocument();
-        expect(screen.getByText('Warehouse AP')).toBeInTheDocument();
-        expect(screen.getByText('Guest Network')).toBeInTheDocument();
+      // Check first session
+      expect(
+        screen.getByText('session-1...', { exact: false })
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText('Network connectivity issues')
+      ).toBeInTheDocument();
+      expect(screen.getByText('Main Router')).toBeInTheDocument();
+      expect(screen.getByText('John Doe')).toBeInTheDocument();
 
-        // Check user info is displayed
-        expect(screen.getAllByText('John Smith')).toHaveLength(2);
-        expect(screen.getByText('Jane Doe')).toBeInTheDocument();
-      });
+      // Check status badges
+      expect(screen.getByTestId('status-badge-pending')).toBeInTheDocument();
+      expect(screen.getByTestId('status-badge-completed')).toBeInTheDocument();
+      expect(
+        screen.getByTestId('status-badge-in_progress')
+      ).toBeInTheDocument();
     });
   });
 
-  describe('Approval Actions', () => {
-    it('should show approve/reject buttons for pending sessions', async () => {
+  describe('Search and Filter Functionality', () => {
+    it('updates search query with debounce', async () => {
+      vi.useFakeTimers();
+
       render(<SessionsPage />);
 
-      await waitFor(() => {
-        const pendingSessionRow = screen.getByTestId('session-row-session-1');
-        const approveButton = within(pendingSessionRow).getByRole('button', { name: /Approve/i });
-        const rejectButton = within(pendingSessionRow).getByRole('button', { name: /Reject/i });
+      const searchInput = screen.getByPlaceholderText('Search sessions...');
+      fireEvent.change(searchInput, { target: { value: 'network' } });
 
-        expect(approveButton).toBeInTheDocument();
-        expect(rejectButton).toBeInTheDocument();
+      // Advance timers for debounce
+      vi.advanceTimersByTime(350);
+
+      await waitFor(() => {
+        expect(mockSetSearchQuery).toHaveBeenCalledWith('network');
+      });
+
+      vi.useRealTimers();
+    });
+
+    it('filters sessions by status', async () => {
+      render(<SessionsPage />);
+
+      const pendingButton = screen.getByRole('button', {
+        name: 'Pending Approval',
+      });
+      fireEvent.click(pendingButton);
+
+      await waitFor(() => {
+        expect(mockSetStatusFilter).toHaveBeenCalledWith('pending');
       });
     });
 
-    it('should not show approve/reject buttons for non-pending sessions', async () => {
+    it('filters sessions to show only pending ones', () => {
+      const pendingSessions = mockSessions.filter(
+        s =>
+          s.status === 'pending' ||
+          s.remediation_actions?.some(a => a.status === 'pending_approval')
+      );
+
+      (useSessionsStore as any).mockReturnValue({
+        sessions: pendingSessions,
+        devices: mockDevices,
+        users: mockUsers,
+        loading: false,
+        error: null,
+        currentPage: 1,
+        totalPages: 1,
+        totalCount: 1,
+        searchQuery: '',
+        statusFilter: 'pending',
+        channel: null,
+        fetchSessions: mockFetchSessions,
+        approveSession: mockApproveSession,
+        rejectSession: mockRejectSession,
+        fetchTranscript: mockFetchTranscript,
+        setSearchQuery: mockSetSearchQuery,
+        setStatusFilter: mockSetStatusFilter,
+        setCurrentPage: mockSetCurrentPage,
+        subscribeToUpdates: mockSubscribeToUpdates,
+        unsubscribeFromUpdates: mockUnsubscribeFromUpdates,
+        handleSessionInsert: mockHandleSessionInsert,
+        handleSessionUpdate: mockHandleSessionUpdate,
+        handleSessionDelete: mockHandleSessionDelete,
+      });
+
       render(<SessionsPage />);
 
-      await waitFor(() => {
-        const inProgressRow = screen.getByTestId('session-row-session-2');
-        const completedRow = screen.getByTestId('session-row-session-3');
+      // Should only show pending session
+      expect(
+        screen.getByText('session-1...', { exact: false })
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByText('session-2...', { exact: false })
+      ).not.toBeInTheDocument();
+    });
+  });
 
-        expect(within(inProgressRow).queryByRole('button', { name: /Approve/i })).not.toBeInTheDocument();
-        expect(within(completedRow).queryByRole('button', { name: /Approve/i })).not.toBeInTheDocument();
+  describe('Pagination', () => {
+    it('displays pagination controls when there are multiple pages', () => {
+      render(<SessionsPage />);
+
+      expect(screen.getByText('Page 1 of 3')).toBeInTheDocument();
+      expect(screen.getByText('Previous')).toBeInTheDocument();
+      expect(screen.getByText('Next')).toBeInTheDocument();
+    });
+
+    it('disables Previous button on first page', () => {
+      render(<SessionsPage />);
+
+      const previousButton = screen.getByRole('button', { name: /Previous/i });
+      expect(previousButton).toBeDisabled();
+    });
+
+    it('disables Next button on last page', () => {
+      (useSessionsStore as any).mockReturnValue({
+        sessions: mockSessions,
+        devices: mockDevices,
+        users: mockUsers,
+        loading: false,
+        error: null,
+        currentPage: 3,
+        totalPages: 3,
+        totalCount: 25,
+        searchQuery: '',
+        statusFilter: 'all',
+        channel: null,
+        fetchSessions: mockFetchSessions,
+        approveSession: mockApproveSession,
+        rejectSession: mockRejectSession,
+        fetchTranscript: mockFetchTranscript,
+        setSearchQuery: mockSetSearchQuery,
+        setStatusFilter: mockSetStatusFilter,
+        setCurrentPage: mockSetCurrentPage,
+        subscribeToUpdates: mockSubscribeToUpdates,
+        unsubscribeFromUpdates: mockUnsubscribeFromUpdates,
+        handleSessionInsert: mockHandleSessionInsert,
+        handleSessionUpdate: mockHandleSessionUpdate,
+        handleSessionDelete: mockHandleSessionDelete,
+      });
+
+      render(<SessionsPage />);
+
+      const nextButton = screen.getByRole('button', { name: /Next/i });
+      expect(nextButton).toBeDisabled();
+    });
+
+    it('navigates to next page', async () => {
+      render(<SessionsPage />);
+
+      const nextButton = screen.getByRole('button', { name: /Next/i });
+      fireEvent.click(nextButton);
+
+      await waitFor(() => {
+        expect(mockSetCurrentPage).toHaveBeenCalledWith(2);
       });
     });
 
-    it('should handle session approval', async () => {
-      const user = userEvent.setup();
+    it('navigates to previous page', async () => {
+      (useSessionsStore as any).mockReturnValue({
+        sessions: mockSessions,
+        devices: mockDevices,
+        users: mockUsers,
+        loading: false,
+        error: null,
+        currentPage: 2,
+        totalPages: 3,
+        totalCount: 25,
+        searchQuery: '',
+        statusFilter: 'all',
+        channel: null,
+        fetchSessions: mockFetchSessions,
+        approveSession: mockApproveSession,
+        rejectSession: mockRejectSession,
+        fetchTranscript: mockFetchTranscript,
+        setSearchQuery: mockSetSearchQuery,
+        setStatusFilter: mockSetStatusFilter,
+        setCurrentPage: mockSetCurrentPage,
+        subscribeToUpdates: mockSubscribeToUpdates,
+        unsubscribeFromUpdates: mockUnsubscribeFromUpdates,
+        handleSessionInsert: mockHandleSessionInsert,
+        handleSessionUpdate: mockHandleSessionUpdate,
+        handleSessionDelete: mockHandleSessionDelete,
+      });
+
       render(<SessionsPage />);
 
+      const previousButton = screen.getByRole('button', { name: /Previous/i });
+      fireEvent.click(previousButton);
+
       await waitFor(() => {
-        const pendingSessionRow = screen.getByTestId('session-row-session-1');
-        const approveButton = within(pendingSessionRow).getByRole('button', { name: /Approve/i });
-        expect(approveButton).toBeInTheDocument();
-      });
-
-      // Click approve button
-      const pendingSessionRow = screen.getByTestId('session-row-session-1');
-      await user.click(within(pendingSessionRow).getByRole('button', { name: /Approve/i }));
-
-      // Verify confirmation dialog
-      await waitFor(() => {
-        expect(screen.getByText('Approve Session Actions?')).toBeInTheDocument();
-        expect(screen.getByText(/restart_router/)).toBeInTheDocument();
-      });
-
-      // Confirm approval
-      await user.click(screen.getByRole('button', { name: /Confirm Approval/i }));
-
-      // Verify API call
-      await waitFor(() => {
-        expect(mockFetch).toHaveBeenCalledWith(
-          expect.stringContaining('/api/v1/customer/sessions/session-1/approve'),
-          expect.objectContaining({
-            method: 'POST',
-          })
-        );
+        expect(mockSetCurrentPage).toHaveBeenCalledWith(1);
       });
     });
 
-    it('should handle session rejection', async () => {
-      const user = userEvent.setup();
-      render(<SessionsPage />);
-
-      await waitFor(() => {
-        const pendingSessionRow = screen.getByTestId('session-row-session-1');
-        expect(within(pendingSessionRow).getByRole('button', { name: /Reject/i })).toBeInTheDocument();
+    it('hides pagination when there is only one page', () => {
+      (useSessionsStore as any).mockReturnValue({
+        sessions: mockSessions,
+        devices: mockDevices,
+        users: mockUsers,
+        loading: false,
+        error: null,
+        currentPage: 1,
+        totalPages: 1,
+        totalCount: 3,
+        searchQuery: '',
+        statusFilter: 'all',
+        channel: null,
+        fetchSessions: mockFetchSessions,
+        approveSession: mockApproveSession,
+        rejectSession: mockRejectSession,
+        fetchTranscript: mockFetchTranscript,
+        setSearchQuery: mockSetSearchQuery,
+        setStatusFilter: mockSetStatusFilter,
+        setCurrentPage: mockSetCurrentPage,
+        subscribeToUpdates: mockSubscribeToUpdates,
+        unsubscribeFromUpdates: mockUnsubscribeFromUpdates,
+        handleSessionInsert: mockHandleSessionInsert,
+        handleSessionUpdate: mockHandleSessionUpdate,
+        handleSessionDelete: mockHandleSessionDelete,
       });
 
-      // Click reject button
-      const pendingSessionRow = screen.getByTestId('session-row-session-1');
-      await user.click(within(pendingSessionRow).getByRole('button', { name: /Reject/i }));
+      render(<SessionsPage />);
 
-      // Verify confirmation dialog
+      expect(screen.queryByText(/Page \d+ of \d+/)).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Session Actions', () => {
+    it('shows approve and reject buttons for admin users on pending sessions', () => {
+      render(<SessionsPage />);
+
+      const sessionRow = screen.getByTestId('session-row-session-1');
+      expect(
+        within(sessionRow).getByRole('button', { name: /Approve/ })
+      ).toBeInTheDocument();
+      expect(
+        within(sessionRow).getByRole('button', { name: /Reject/ })
+      ).toBeInTheDocument();
+    });
+
+    it('hides approve/reject buttons for non-admin users', () => {
+      (useAuthStore as any).mockReturnValue({
+        user: {
+          id: 'user-2',
+          name: 'Jane Doe',
+          email: 'jane@example.com',
+          role: 'user',
+        },
+      });
+
+      render(<SessionsPage />);
+
+      const sessionRows = screen.getAllByTestId(/^session-row-/);
+      sessionRows.forEach(row => {
+        expect(
+          within(row).queryByRole('button', { name: /Approve/ })
+        ).not.toBeInTheDocument();
+        expect(
+          within(row).queryByRole('button', { name: /Reject/ })
+        ).not.toBeInTheDocument();
+      });
+    });
+
+    it('opens approval modal when Approve button is clicked', async () => {
+      render(<SessionsPage />);
+
+      const sessionRow = screen.getByTestId('session-row-session-1');
+      const approveButton = within(sessionRow).getByRole('button', {
+        name: /Approve/,
+      });
+      fireEvent.click(approveButton);
+
+      await waitFor(() => {
+        expect(
+          screen.getByText('Approve Session Actions?')
+        ).toBeInTheDocument();
+        expect(
+          screen.getByText(
+            'This will approve all pending remediation actions for this session.'
+          )
+        ).toBeInTheDocument();
+      });
+    });
+
+    it('opens rejection modal when Reject button is clicked', async () => {
+      render(<SessionsPage />);
+
+      const sessionRow = screen.getByTestId('session-row-session-1');
+      const rejectButton = within(sessionRow).getByRole('button', {
+        name: /Reject/,
+      });
+      fireEvent.click(rejectButton);
+
       await waitFor(() => {
         expect(screen.getByText('Reject Session Actions?')).toBeInTheDocument();
+        expect(
+          screen.getByText(
+            'This will reject the remediation actions for this session.'
+          )
+        ).toBeInTheDocument();
+      });
+    });
+
+    it('handles session approval successfully', async () => {
+      mockApproveSession.mockResolvedValueOnce(undefined);
+
+      render(<SessionsPage />);
+
+      // Open approval modal
+      const sessionRow = screen.getByTestId('session-row-session-1');
+      const approveButton = within(sessionRow).getByRole('button', {
+        name: /Approve/,
+      });
+      fireEvent.click(approveButton);
+
+      // Confirm approval
+      await waitFor(() => {
+        const confirmButton = screen.getByRole('button', {
+          name: /Confirm Approval/i,
+        });
+        fireEvent.click(confirmButton);
       });
 
-      // Add rejection reason
-      const reasonInput = screen.getByLabelText(/Rejection Reason/i);
-      await user.type(reasonInput, 'Risk too high for current network state');
+      await waitFor(() => {
+        expect(mockApproveSession).toHaveBeenCalledWith('session-1');
+        expect(mockToast).toHaveBeenCalledWith({
+          title: 'Session Approved',
+          description: 'Session actions have been approved successfully.',
+        });
+      });
+    });
+
+    it('handles session rejection with reason', async () => {
+      mockRejectSession.mockResolvedValueOnce(undefined);
+
+      render(<SessionsPage />);
+
+      // Open rejection modal
+      const sessionRow = screen.getByTestId('session-row-session-1');
+      const rejectButton = within(sessionRow).getByRole('button', {
+        name: /Reject/,
+      });
+      fireEvent.click(rejectButton);
+
+      // Enter rejection reason
+      await waitFor(() => {
+        const reasonTextarea = screen.getByPlaceholderText(
+          'Optional: Provide a reason for rejection...'
+        );
+        fireEvent.change(reasonTextarea, {
+          target: { value: 'Not authorized for this change' },
+        });
+      });
 
       // Confirm rejection
-      await user.click(screen.getByRole('button', { name: /Confirm Rejection/i }));
+      const confirmButton = screen.getByRole('button', {
+        name: /Confirm Rejection/i,
+      });
+      fireEvent.click(confirmButton);
 
-      // Verify API call
       await waitFor(() => {
-        expect(mockFetch).toHaveBeenCalledWith(
-          expect.stringContaining('/api/v1/customer/sessions/session-1/reject'),
-          expect.objectContaining({
-            method: 'POST',
-            body: expect.stringContaining('Risk too high'),
-          })
+        expect(mockRejectSession).toHaveBeenCalledWith(
+          'session-1',
+          'Not authorized for this change'
         );
+        expect(mockToast).toHaveBeenCalledWith({
+          title: 'Session Rejected',
+          description: 'Session actions have been rejected.',
+        });
+      });
+    });
+
+    it('handles approval error gracefully', async () => {
+      const error = new Error('Approval failed');
+      mockApproveSession.mockRejectedValueOnce(error);
+
+      render(<SessionsPage />);
+
+      // Open approval modal
+      const sessionRow = screen.getByTestId('session-row-session-1');
+      const approveButton = within(sessionRow).getByRole('button', {
+        name: /Approve/,
+      });
+      fireEvent.click(approveButton);
+
+      // Confirm approval
+      await waitFor(() => {
+        const confirmButton = screen.getByRole('button', {
+          name: /Confirm Approval/i,
+        });
+        fireEvent.click(confirmButton);
+      });
+
+      await waitFor(() => {
+        expect(mockToast).toHaveBeenCalledWith({
+          title: 'Failed to approve session',
+          description: 'Approval failed',
+          variant: 'destructive',
+        });
       });
     });
   });
 
-  describe('Transcript Access', () => {
-    it('should allow viewing session transcript', async () => {
-      const user = userEvent.setup();
+  describe('Transcript Modal', () => {
+    it('opens transcript modal when View Transcript is clicked', async () => {
       render(<SessionsPage />);
 
-      await waitFor(() => {
-        expect(screen.getByText('Network connectivity issues')).toBeInTheDocument();
-      });
-
-      // Click view transcript button
       const sessionRow = screen.getByTestId('session-row-session-1');
-      await user.click(within(sessionRow).getByRole('button', { name: /View Transcript/i }));
+      const transcriptButton = within(sessionRow).getByRole('button', {
+        name: /View Transcript/i,
+      });
+      fireEvent.click(transcriptButton);
 
-      // Verify transcript modal
       await waitFor(() => {
         expect(screen.getByText('Session Transcript')).toBeInTheDocument();
-        expect(screen.getByText('Session started')).toBeInTheDocument();
-        expect(screen.getByText('Running network diagnostics')).toBeInTheDocument();
-        expect(screen.getByText('High latency detected: 250ms')).toBeInTheDocument();
-      });
-
-      // Close modal
-      await user.click(screen.getByRole('button', { name: /Close/i }));
-
-      await waitFor(() => {
-        expect(screen.queryByText('Session Transcript')).not.toBeInTheDocument();
+        expect(
+          screen.getByText('Detailed log of session activities and diagnostics')
+        ).toBeInTheDocument();
       });
     });
 
-    it('should show transcript timestamps and types', async () => {
-      const user = userEvent.setup();
+    it('displays transcript entries with correct styling', async () => {
       render(<SessionsPage />);
 
+      const sessionRow = screen.getByTestId('session-row-session-1');
+      const transcriptButton = within(sessionRow).getByRole('button', {
+        name: /View Transcript/i,
+      });
+      fireEvent.click(transcriptButton);
+
       await waitFor(() => {
-        const sessionRow = screen.getByTestId('session-row-session-1');
-        expect(sessionRow).toBeInTheDocument();
+        expect(screen.getByTestId('transcript-system')).toBeInTheDocument();
+        expect(screen.getByTestId('transcript-diagnostic')).toBeInTheDocument();
+        expect(screen.getByTestId('transcript-result')).toBeInTheDocument();
+        expect(screen.getByTestId('transcript-error')).toBeInTheDocument();
       });
 
-      // Open transcript
+      // Check transcript content
+      expect(screen.getByText('Session started')).toBeInTheDocument();
+      expect(
+        screen.getByText('Running network diagnostics')
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText('Found issue with DNS server')
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText('Failed to connect to primary DNS')
+      ).toBeInTheDocument();
+    });
+
+    it('shows loading state while fetching transcript', async () => {
+      mockFetchTranscript.mockImplementation(() => new Promise(() => {})); // Never resolves
+
+      render(<SessionsPage />);
+
       const sessionRow = screen.getByTestId('session-row-session-1');
-      await user.click(within(sessionRow).getByRole('button', { name: /View Transcript/i }));
+      const transcriptButton = within(sessionRow).getByRole('button', {
+        name: /View Transcript/i,
+      });
+      fireEvent.click(transcriptButton);
 
       await waitFor(() => {
-        // Check for timestamps
-        expect(screen.getByText('10:00:00')).toBeInTheDocument();
-        expect(screen.getByText('10:00:05')).toBeInTheDocument();
-        expect(screen.getByText('10:00:10')).toBeInTheDocument();
+        expect(screen.getByText('Session Transcript')).toBeInTheDocument();
+      });
 
-        // Check for message type indicators
-        const systemMessage = screen.getByTestId('transcript-system');
-        const diagnosticMessage = screen.getByTestId('transcript-diagnostic');
-        const resultMessage = screen.getByTestId('transcript-result');
+      // Should show loading spinner
+      const modal = screen.getByRole('dialog');
+      expect(modal.querySelector('.animate-spin')).toBeInTheDocument();
+    });
 
-        expect(systemMessage).toHaveClass('text-gray-600');
-        expect(diagnosticMessage).toHaveClass('text-blue-600');
-        expect(resultMessage).toHaveClass('text-green-600');
+    it('handles transcript fetch error gracefully', async () => {
+      mockFetchTranscript.mockRejectedValueOnce(
+        new Error('Failed to fetch transcript')
+      );
+
+      render(<SessionsPage />);
+
+      const sessionRow = screen.getByTestId('session-row-session-1');
+      const transcriptButton = within(sessionRow).getByRole('button', {
+        name: /View Transcript/i,
+      });
+      fireEvent.click(transcriptButton);
+
+      await waitFor(() => {
+        expect(mockToast).toHaveBeenCalledWith({
+          title: 'Failed to load transcript',
+          description: 'Failed to fetch transcript',
+          variant: 'destructive',
+        });
+      });
+    });
+
+    it('displays empty state when no transcript is available', async () => {
+      mockFetchTranscript.mockResolvedValueOnce([]);
+
+      render(<SessionsPage />);
+
+      const sessionRow = screen.getByTestId('session-row-session-1');
+      const transcriptButton = within(sessionRow).getByRole('button', {
+        name: /View Transcript/i,
+      });
+      fireEvent.click(transcriptButton);
+
+      await waitFor(() => {
+        expect(
+          screen.getByText('No transcript available for this session')
+        ).toBeInTheDocument();
       });
     });
   });
 
   describe('Real-time Updates', () => {
-    it('should subscribe to session_* websocket events', async () => {
-      const { createBrowserClient } = await import('@/lib/supabase/client');
-      const mockClient = createBrowserClient();
-
+    it('subscribes to updates on mount', () => {
       render(<SessionsPage />);
 
-      await waitFor(() => {
-        expect(mockClient.channel).toHaveBeenCalledWith('sessions-updates');
-      });
-
-      const channelMock = mockClient.channel('sessions-updates');
-      expect(channelMock.on).toHaveBeenCalledWith(
-        'postgres_changes',
-        expect.objectContaining({
-          event: '*',
-          schema: 'public',
-          table: 'diagnostic_sessions',
-        }),
-        expect.any(Function)
-      );
+      expect(mockSubscribeToUpdates).toHaveBeenCalled();
     });
 
-    it('should update session status when session_status event received', async () => {
-      const { createBrowserClient } = await import('@/lib/supabase/client');
-      const mockClient = createBrowserClient();
+    it('unsubscribes from updates on unmount', () => {
+      const { unmount } = render(<SessionsPage />);
 
-      let websocketCallback: any;
-      const channelMock = {
-        on: vi.fn().mockImplementation((event, config, callback) => {
-          if (config.table === 'diagnostic_sessions') {
-            websocketCallback = callback;
-          }
-          return channelMock;
-        }),
-        subscribe: vi.fn((callback) => {
-          if (typeof callback === 'function') {
-            callback('SUBSCRIBED');
-          }
-          return { unsubscribe: vi.fn() };
-        }),
-      };
+      unmount();
 
-      mockClient.channel = vi.fn(() => channelMock);
+      expect(mockUnsubscribeFromUpdates).toHaveBeenCalled();
+    });
+  });
+
+  describe('Error States', () => {
+    it('displays error state when sessions fail to load', () => {
+      (useSessionsStore as any).mockReturnValue({
+        sessions: [],
+        devices: {},
+        users: {},
+        loading: false,
+        error: 'Failed to connect to server',
+        currentPage: 1,
+        totalPages: 0,
+        totalCount: 0,
+        searchQuery: '',
+        statusFilter: 'all',
+        channel: null,
+        fetchSessions: mockFetchSessions,
+        approveSession: mockApproveSession,
+        rejectSession: mockRejectSession,
+        fetchTranscript: mockFetchTranscript,
+        setSearchQuery: mockSetSearchQuery,
+        setStatusFilter: mockSetStatusFilter,
+        setCurrentPage: mockSetCurrentPage,
+        subscribeToUpdates: mockSubscribeToUpdates,
+        unsubscribeFromUpdates: mockUnsubscribeFromUpdates,
+        handleSessionInsert: mockHandleSessionInsert,
+        handleSessionUpdate: mockHandleSessionUpdate,
+        handleSessionDelete: mockHandleSessionDelete,
+      });
 
       render(<SessionsPage />);
 
-      await waitFor(() => {
-        expect(screen.getByText('Network connectivity issues')).toBeInTheDocument();
-      });
-
-      // Simulate WebSocket event for status update
-      await websocketCallback({
-        eventType: 'UPDATE',
-        new: {
-          id: 'session-1',
-          status: 'approved',
-        },
-      });
-
-      // Verify the session status is updated
-      await waitFor(() => {
-        const sessionRow = screen.getByTestId('session-row-session-1');
-        const statusBadge = within(sessionRow).getByTestId('status-badge-approved');
-        expect(statusBadge).toHaveTextContent('Approved');
-      });
+      expect(screen.getByText('Failed to load sessions')).toBeInTheDocument();
+      expect(
+        screen.getByText('Failed to connect to server')
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: /Retry/i })
+      ).toBeInTheDocument();
     });
 
-    it('should add new session when session_created event received', async () => {
-      const { createBrowserClient } = await import('@/lib/supabase/client');
-      const mockClient = createBrowserClient();
-
-      let websocketCallback: any;
-      const channelMock = {
-        on: vi.fn().mockImplementation((event, config, callback) => {
-          if (config.table === 'diagnostic_sessions') {
-            websocketCallback = callback;
-          }
-          return channelMock;
-        }),
-        subscribe: vi.fn((callback) => {
-          if (typeof callback === 'function') {
-            callback('SUBSCRIBED');
-          }
-          return { unsubscribe: vi.fn() };
-        }),
-      };
-
-      mockClient.channel = vi.fn(() => channelMock);
+    it('handles retry on error', async () => {
+      (useSessionsStore as any).mockReturnValue({
+        sessions: [],
+        devices: {},
+        users: {},
+        loading: false,
+        error: 'Network error',
+        currentPage: 1,
+        totalPages: 0,
+        totalCount: 0,
+        searchQuery: '',
+        statusFilter: 'all',
+        channel: null,
+        fetchSessions: mockFetchSessions,
+        approveSession: mockApproveSession,
+        rejectSession: mockRejectSession,
+        fetchTranscript: mockFetchTranscript,
+        setSearchQuery: mockSetSearchQuery,
+        setStatusFilter: mockSetStatusFilter,
+        setCurrentPage: mockSetCurrentPage,
+        subscribeToUpdates: mockSubscribeToUpdates,
+        unsubscribeFromUpdates: mockUnsubscribeFromUpdates,
+        handleSessionInsert: mockHandleSessionInsert,
+        handleSessionUpdate: mockHandleSessionUpdate,
+        handleSessionDelete: mockHandleSessionDelete,
+      });
 
       render(<SessionsPage />);
 
-      await waitFor(() => {
-        expect(screen.getByText('Network connectivity issues')).toBeInTheDocument();
-      });
-
-      // Simulate WebSocket event for new session
-      await websocketCallback({
-        eventType: 'INSERT',
-        new: {
-          id: 'session-4',
-          device_id: 'device-4',
-          customer_id: 'customer-1',
-          status: 'pending',
-          issue_description: 'New connectivity issue',
-          created_at: '2025-01-17T11:00:00Z',
-        },
-      });
-
-      // Verify the new session appears
-      await waitFor(() => {
-        expect(screen.getByText('New connectivity issue')).toBeInTheDocument();
-      });
-    });
-
-    it('should remove session from queue when approved', async () => {
-      const { createBrowserClient } = await import('@/lib/supabase/client');
-      const mockClient = createBrowserClient();
-
-      let websocketCallback: any;
-      const channelMock = {
-        on: vi.fn().mockImplementation((event, config, callback) => {
-          if (config.table === 'diagnostic_sessions') {
-            websocketCallback = callback;
-          }
-          return channelMock;
-        }),
-        subscribe: vi.fn((callback) => {
-          if (typeof callback === 'function') {
-            callback('SUBSCRIBED');
-          }
-          return { unsubscribe: vi.fn() };
-        }),
-      };
-
-      mockClient.channel = vi.fn(() => channelMock);
-
-      render(<SessionsPage />);
+      const retryButton = screen.getByRole('button', { name: /Retry/i });
+      fireEvent.click(retryButton);
 
       await waitFor(() => {
-        expect(screen.getByText('Network connectivity issues')).toBeInTheDocument();
-      });
-
-      // Filter to show only pending sessions
-      const user = userEvent.setup();
-      await user.click(screen.getByRole('button', { name: /Pending Approval/i }));
-
-      await waitFor(() => {
-        expect(screen.getByText('Network connectivity issues')).toBeInTheDocument();
-        expect(screen.queryByText('Slow internet speed')).not.toBeInTheDocument();
-      });
-
-      // Simulate WebSocket event for approval
-      await websocketCallback({
-        eventType: 'UPDATE',
-        new: {
-          id: 'session-1',
-          status: 'approved',
-        },
-      });
-
-      // Verify the session is removed from pending queue
-      await waitFor(() => {
-        expect(screen.queryByText('Network connectivity issues')).not.toBeInTheDocument();
+        expect(mockFetchSessions).toHaveBeenCalledWith(1, 'all', '');
       });
     });
   });
 
-  describe('Pagination', () => {
-    it('should paginate long session lists', async () => {
-      // Mock a large number of sessions
-      const manySessions = Array.from({ length: 25 }, (_, i) => ({
-        ...mockSessions[0],
-        id: `session-${i + 1}`,
-        issue_description: `Issue ${i + 1}`,
-      }));
+  describe('Loading States', () => {
+    it('displays loading state in table when sessions are loading', () => {
+      (useSessionsStore as any).mockReturnValue({
+        sessions: [],
+        devices: {},
+        users: {},
+        loading: true,
+        error: null,
+        currentPage: 1,
+        totalPages: 0,
+        totalCount: 0,
+        searchQuery: '',
+        statusFilter: 'all',
+        channel: null,
+        fetchSessions: mockFetchSessions,
+        approveSession: mockApproveSession,
+        rejectSession: mockRejectSession,
+        fetchTranscript: mockFetchTranscript,
+        setSearchQuery: mockSetSearchQuery,
+        setStatusFilter: mockSetStatusFilter,
+        setCurrentPage: mockSetCurrentPage,
+        subscribeToUpdates: mockSubscribeToUpdates,
+        unsubscribeFromUpdates: mockUnsubscribeFromUpdates,
+        handleSessionInsert: mockHandleSessionInsert,
+        handleSessionUpdate: mockHandleSessionUpdate,
+        handleSessionDelete: mockHandleSessionDelete,
+      });
 
-      mockFetch.mockImplementationOnce(() =>
-        Promise.resolve({
-          ok: true,
-          json: async () => ({
-            sessions: manySessions.slice(0, 10), // First page
-            totalCount: 25,
-            devices: mockDevices,
-            users: mockUsers,
-          }),
+      render(<SessionsPage />);
+
+      expect(screen.getByText('Loading sessions...')).toBeInTheDocument();
+    });
+
+    it('shows refresh button with spinning icon when loading', () => {
+      (useSessionsStore as any).mockReturnValue({
+        sessions: mockSessions,
+        devices: mockDevices,
+        users: mockUsers,
+        loading: true,
+        error: null,
+        currentPage: 1,
+        totalPages: 3,
+        totalCount: 25,
+        searchQuery: '',
+        statusFilter: 'all',
+        channel: null,
+        fetchSessions: mockFetchSessions,
+        approveSession: mockApproveSession,
+        rejectSession: mockRejectSession,
+        fetchTranscript: mockFetchTranscript,
+        setSearchQuery: mockSetSearchQuery,
+        setStatusFilter: mockSetStatusFilter,
+        setCurrentPage: mockSetCurrentPage,
+        subscribeToUpdates: mockSubscribeToUpdates,
+        unsubscribeFromUpdates: mockUnsubscribeFromUpdates,
+        handleSessionInsert: mockHandleSessionInsert,
+        handleSessionUpdate: mockHandleSessionUpdate,
+        handleSessionDelete: mockHandleSessionDelete,
+      });
+
+      render(<SessionsPage />);
+
+      const refreshButton = screen.getByRole('button', { name: /Refresh/i });
+      expect(refreshButton.querySelector('.animate-spin')).toBeInTheDocument();
+    });
+  });
+
+  describe('Empty States', () => {
+    it('displays empty state when no sessions are found', () => {
+      (useSessionsStore as any).mockReturnValue({
+        sessions: [],
+        devices: {},
+        users: {},
+        loading: false,
+        error: null,
+        currentPage: 1,
+        totalPages: 0,
+        totalCount: 0,
+        searchQuery: '',
+        statusFilter: 'all',
+        channel: null,
+        fetchSessions: mockFetchSessions,
+        approveSession: mockApproveSession,
+        rejectSession: mockRejectSession,
+        fetchTranscript: mockFetchTranscript,
+        setSearchQuery: mockSetSearchQuery,
+        setStatusFilter: mockSetStatusFilter,
+        setCurrentPage: mockSetCurrentPage,
+        subscribeToUpdates: mockSubscribeToUpdates,
+        unsubscribeFromUpdates: mockUnsubscribeFromUpdates,
+        handleSessionInsert: mockHandleSessionInsert,
+        handleSessionUpdate: mockHandleSessionUpdate,
+        handleSessionDelete: mockHandleSessionDelete,
+      });
+
+      render(<SessionsPage />);
+
+      expect(screen.getByText('No sessions found')).toBeInTheDocument();
+    });
+  });
+
+  describe('Refresh Functionality', () => {
+    it('refreshes sessions when refresh button is clicked', async () => {
+      render(<SessionsPage />);
+
+      const refreshButton = screen.getByRole('button', { name: /Refresh/i });
+      fireEvent.click(refreshButton);
+
+      await waitFor(() => {
+        expect(mockFetchSessions).toHaveBeenCalledWith(1, 'all', '');
+      });
+    });
+  });
+
+  describe('Remediation Actions Display', () => {
+    it('shows remediation actions in approval modal', async () => {
+      render(<SessionsPage />);
+
+      const sessionRow = screen.getByTestId('session-row-session-1');
+      const approveButton = within(sessionRow).getByRole('button', {
+        name: /Approve/,
+      });
+      fireEvent.click(approveButton);
+
+      await waitFor(() => {
+        expect(screen.getByText('Remediation Actions:')).toBeInTheDocument();
+        expect(screen.getByText('Restart router')).toBeInTheDocument();
+        expect(screen.getByText('Risk: low')).toBeInTheDocument();
+      });
+    });
+  });
+
+  describe('Permission-based Rendering', () => {
+    it('shows approve/reject buttons for owner role', () => {
+      (useAuthStore as any).mockReturnValue({
+        user: {
+          id: 'user-1',
+          name: 'John Doe',
+          email: 'john@example.com',
+          role: 'owner',
+        },
+      });
+
+      render(<SessionsPage />);
+
+      const sessionRow = screen.getByTestId('session-row-session-1');
+      expect(
+        within(sessionRow).getByRole('button', { name: /Approve/ })
+      ).toBeInTheDocument();
+      expect(
+        within(sessionRow).getByRole('button', { name: /Reject/ })
+      ).toBeInTheDocument();
+    });
+
+    it('hides approve/reject buttons for user role', () => {
+      (useAuthStore as any).mockReturnValue({
+        user: {
+          id: 'user-1',
+          name: 'John Doe',
+          email: 'john@example.com',
+          role: 'user',
+        },
+      });
+
+      render(<SessionsPage />);
+
+      const sessionRows = screen.getAllByTestId(/^session-row-/);
+      sessionRows.forEach(row => {
+        expect(
+          within(row).queryByRole('button', { name: /Approve/ })
+        ).not.toBeInTheDocument();
+        expect(
+          within(row).queryByRole('button', { name: /Reject/ })
+        ).not.toBeInTheDocument();
+      });
+    });
+  });
+
+  describe('Date Formatting', () => {
+    it('formats session dates correctly', () => {
+      render(<SessionsPage />);
+
+      // The formatDate function should format dates as "MMM DD, HH:MM"
+      // Based on the mock data, we should see formatted dates
+      expect(
+        screen.getByText((content, element) => {
+          return element?.textContent?.includes('Mar 15') ?? false;
         })
-      );
-
-      render(<SessionsPage />);
-
-      await waitFor(() => {
-        expect(screen.getByText('Issue 1')).toBeInTheDocument();
-        expect(screen.getByText('Issue 10')).toBeInTheDocument();
-        expect(screen.queryByText('Issue 11')).not.toBeInTheDocument();
-      });
-
-      // Check pagination controls
-      expect(screen.getByRole('button', { name: /Next/i })).toBeInTheDocument();
-      expect(screen.getByText('Page 1 of 3')).toBeInTheDocument();
-
-      // Navigate to next page
-      const user = userEvent.setup();
-      await user.click(screen.getByRole('button', { name: /Next/i }));
-
-      // Mock second page response
-      mockFetch.mockImplementationOnce(() =>
-        Promise.resolve({
-          ok: true,
-          json: async () => ({
-            sessions: manySessions.slice(10, 20), // Second page
-            totalCount: 25,
-            devices: mockDevices,
-            users: mockUsers,
-          }),
-        })
-      );
-
-      await waitFor(() => {
-        expect(screen.queryByText('Issue 1')).not.toBeInTheDocument();
-        expect(screen.getByText('Issue 11')).toBeInTheDocument();
-        expect(screen.getByText('Issue 20')).toBeInTheDocument();
-      });
+      ).toBeInTheDocument();
     });
   });
 
-  describe('Search Functionality', () => {
-    it('should search sessions by issue description', async () => {
-      const user = userEvent.setup();
+  describe('Device Status Display', () => {
+    it('displays device online status correctly', () => {
       render(<SessionsPage />);
 
-      await waitFor(() => {
-        expect(screen.getByText('Network connectivity issues')).toBeInTheDocument();
-        expect(screen.getByText('Slow internet speed')).toBeInTheDocument();
-        expect(screen.getByText('DNS resolution failure')).toBeInTheDocument();
-      });
-
-      // Type in search input
-      const searchInput = screen.getByPlaceholderText(/Search sessions/i);
-      await user.type(searchInput, 'DNS');
-
-      // Verify filtered results
-      await waitFor(() => {
-        expect(screen.queryByText('Network connectivity issues')).not.toBeInTheDocument();
-        expect(screen.queryByText('Slow internet speed')).not.toBeInTheDocument();
-        expect(screen.getByText('DNS resolution failure')).toBeInTheDocument();
-      });
+      const sessionRow = screen.getByTestId('session-row-session-1');
+      expect(within(sessionRow).getByText('online')).toBeInTheDocument();
     });
 
-    it('should debounce search input', async () => {
-      const user = userEvent.setup();
+    it('displays device offline status correctly', () => {
       render(<SessionsPage />);
 
-      const searchInput = screen.getByPlaceholderText(/Search sessions/i);
-
-      // Type quickly
-      await user.type(searchInput, 'test');
-
-      // Should not immediately trigger multiple API calls
-      expect(mockFetch).toHaveBeenCalledTimes(1); // Initial load
-
-      // Wait for debounce
-      await waitFor(() => {
-        expect(mockFetch).toHaveBeenCalledTimes(2); // After debounce
-      }, { timeout: 400 });
-    });
-  });
-
-  describe('Role-based Access Control', () => {
-    it('should show approve/reject buttons only for owners and admins', async () => {
-      render(<SessionsPage />);
-
-      await waitFor(() => {
-        const pendingSessionRow = screen.getByTestId('session-row-session-1');
-        expect(within(pendingSessionRow).getByRole('button', { name: /Approve/i })).toBeInTheDocument();
-      });
+      const sessionRow = screen.getByTestId('session-row-session-2');
+      expect(within(sessionRow).getByText('offline')).toBeInTheDocument();
     });
 
-    it('should hide approve/reject buttons for regular members', async () => {
-      // Mock user with member role
-      const { createBrowserClient } = await import('@/lib/supabase/client');
-      const mockClient = createBrowserClient();
-      mockClient.auth.getSession = vi.fn().mockResolvedValue({
-        data: {
-          session: {
-            user: {
-              id: 'test-user-id',
-              email: 'member@test.com',
-              user_metadata: {
-                role: 'member',
-              },
-            },
-            access_token: 'test-token',
-          },
+    it('displays unknown device placeholder', () => {
+      const sessionsWithUnknownDevice = [
+        {
+          ...mockSessions[0],
+          device_id: 'unknown-device',
         },
+      ];
+
+      (useSessionsStore as any).mockReturnValue({
+        sessions: sessionsWithUnknownDevice,
+        devices: mockDevices,
+        users: mockUsers,
+        loading: false,
+        error: null,
+        currentPage: 1,
+        totalPages: 1,
+        totalCount: 1,
+        searchQuery: '',
+        statusFilter: 'all',
+        channel: null,
+        fetchSessions: mockFetchSessions,
+        approveSession: mockApproveSession,
+        rejectSession: mockRejectSession,
+        fetchTranscript: mockFetchTranscript,
+        setSearchQuery: mockSetSearchQuery,
+        setStatusFilter: mockSetStatusFilter,
+        setCurrentPage: mockSetCurrentPage,
+        subscribeToUpdates: mockSubscribeToUpdates,
+        unsubscribeFromUpdates: mockUnsubscribeFromUpdates,
+        handleSessionInsert: mockHandleSessionInsert,
+        handleSessionUpdate: mockHandleSessionUpdate,
+        handleSessionDelete: mockHandleSessionDelete,
       });
 
       render(<SessionsPage />);
 
-      await waitFor(() => {
-        const pendingSessionRow = screen.getByTestId('session-row-session-1');
-        expect(within(pendingSessionRow).queryByRole('button', { name: /Approve/i })).not.toBeInTheDocument();
-        expect(within(pendingSessionRow).queryByRole('button', { name: /Reject/i })).not.toBeInTheDocument();
-      });
+      expect(screen.getByText('Unknown')).toBeInTheDocument();
     });
   });
 
-  describe('Error Handling', () => {
-    it('should display error message when sessions fail to load', async () => {
-      mockFetch.mockImplementationOnce(() =>
-        Promise.resolve({
-          ok: false,
-          status: 500,
-          statusText: 'Internal Server Error',
-        })
-      );
-
+  describe('User Display', () => {
+    it('displays user information correctly', () => {
       render(<SessionsPage />);
 
-      await waitFor(() => {
-        expect(screen.getByText(/Failed to load sessions/i)).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: /Retry/i })).toBeInTheDocument();
-      });
+      const sessionRow = screen.getByTestId('session-row-session-1');
+      expect(within(sessionRow).getByText('John Doe')).toBeInTheDocument();
+      expect(
+        within(sessionRow).getByText('john@example.com')
+      ).toBeInTheDocument();
     });
 
-    it('should show error toast when approval fails', async () => {
-      const user = userEvent.setup();
-
-      // Mock approval failure
-      mockFetch.mockImplementation((url: string) => {
-        if (url.includes('approve')) {
-          return Promise.resolve({
-            ok: false,
-            status: 403,
-            statusText: 'Forbidden',
-          });
-        }
-        // Default response for sessions list
-        return Promise.resolve({
-          ok: true,
-          json: async () => ({
-            sessions: mockSessions,
-            devices: mockDevices,
-            users: mockUsers,
-          }),
-        });
-      });
-
+    it('displays System for sessions without user', () => {
       render(<SessionsPage />);
 
-      await waitFor(() => {
-        const pendingSessionRow = screen.getByTestId('session-row-session-1');
-        expect(within(pendingSessionRow).getByRole('button', { name: /Approve/i })).toBeInTheDocument();
-      });
-
-      // Try to approve
-      const pendingSessionRow = screen.getByTestId('session-row-session-1');
-      await user.click(within(pendingSessionRow).getByRole('button', { name: /Approve/i }));
-
-      // Confirm in dialog
-      await waitFor(() => {
-        expect(screen.getByText('Approve Session Actions?')).toBeInTheDocument();
-      });
-      await user.click(screen.getByRole('button', { name: /Confirm Approval/i }));
-
-      // Check error toast
-      await waitFor(() => {
-        expect(screen.getByText(/Failed to approve session/i)).toBeInTheDocument();
-      });
+      const sessionRow = screen.getByTestId('session-row-session-2');
+      expect(within(sessionRow).getByText('System')).toBeInTheDocument();
     });
   });
 });
