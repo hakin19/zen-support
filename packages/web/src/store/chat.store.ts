@@ -373,7 +373,6 @@ export const useChatStore = create<ChatState>()(
 
       sendMessageWithStream: async (content: string) => {
         const tempUserMessageId = `temp-${Date.now()}`;
-        const tempAssistantMessageId = `assistant-${Date.now()}`;
         const sessionId = get().activeSessionId;
 
         if (!sessionId) {
@@ -394,133 +393,31 @@ export const useChatStore = create<ChatState>()(
         get().setSending(true);
 
         try {
-          const response = await apiClient.post<{
-            stream?: ReadableStream;
-            userMessage?: ChatMessage;
-            assistantMessage?: ChatMessage;
-          }>(`/api/chat/sessions/${sessionId}/messages`, {
-            content,
-            stream: true,
+          // The API returns the bare chat_messages row, not a stream object
+          // We'll send the message and rely on WebSocket broadcasts for the AI response
+          const { data: userMessage } = await apiClient.post<ChatMessage>(
+            `/api/chat/sessions/${sessionId}/messages`,
+            { content, stream: true }
+          );
+
+          // Replace temp user message with real one from server
+          get().deleteMessage(tempUserMessageId);
+          get().addMessage({
+            ...userMessage,
+            status: 'sent',
           });
 
-          // Replace temp user message with real one if provided
-          if (response.data.userMessage) {
-            get().deleteMessage(tempUserMessageId);
-            get().addMessage({
-              ...response.data.userMessage,
-              status: 'sent',
-            });
-          }
+          // The AI response will arrive via WebSocket broadcast
+          // No need for streaming setup here since the API doesn't support it this way
+          // The server processes AI response asynchronously and broadcasts it
 
-          // Handle streaming response
-          if (response.data.stream) {
-            const reader = response.data.stream.getReader();
-            const decoder = new TextDecoder();
-            let buffer = '';
-            let realUserMessageId: string | null = null;
-            let realAssistantMessageId: string | null = null;
+          // Note: If we want true streaming, we need to:
+          // 1. First POST to create the message (done above)
+          // 2. Then open an EventSource to /api/chat/sessions/:id/stream
+          // This would be a separate implementation using SSE, not part of this POST
 
-            // Add temporary assistant message
-            const tempAssistantMessage: MessageWithStatus = {
-              id: tempAssistantMessageId,
-              session_id: sessionId,
-              role: 'assistant',
-              content: '',
-              created_at: new Date().toISOString(),
-              metadata: null,
-              status: 'sending',
-            };
-            get().addMessage(tempAssistantMessage);
-
-            while (true) {
-              const result = await reader.read();
-              if (result.done || !result.value) break;
-
-              buffer += decoder.decode(result.value as Uint8Array, {
-                stream: true,
-              });
-              const lines = buffer.split('\n');
-              buffer = lines.pop() ?? '';
-
-              for (const line of lines) {
-                if (line.startsWith('data: ')) {
-                  try {
-                    const data = JSON.parse(line.slice(6)) as {
-                      userMessageId?: string;
-                      assistantMessageId?: string;
-                      content?: string;
-                      done?: boolean;
-                    };
-
-                    // Handle message ID updates to replace temp messages
-                    if (data.userMessageId && !realUserMessageId) {
-                      realUserMessageId = data.userMessageId;
-                      // Replace temp user message with real ID
-                      const tempMessage = get().messages.find(
-                        m => m.id === tempUserMessageId
-                      );
-                      if (tempMessage && realUserMessageId) {
-                        get().deleteMessage(tempUserMessageId);
-                        get().addMessage({
-                          ...tempMessage,
-                          id: realUserMessageId,
-                          status: 'sent',
-                        });
-                      }
-                    }
-
-                    if (data.assistantMessageId && !realAssistantMessageId) {
-                      realAssistantMessageId = data.assistantMessageId;
-                      // Replace temp assistant message with real ID
-                      const tempMessage = get().messages.find(
-                        m => m.id === tempAssistantMessageId
-                      );
-                      if (tempMessage && realAssistantMessageId) {
-                        get().deleteMessage(tempAssistantMessageId);
-                        get().addMessage({
-                          ...tempMessage,
-                          id: realAssistantMessageId,
-                        });
-                      }
-                    }
-
-                    // Update content on the real assistant message
-                    if (data.content) {
-                      const targetId =
-                        realAssistantMessageId ?? tempAssistantMessageId;
-                      get().updateMessage(targetId, {
-                        content: data.content,
-                      });
-                    }
-
-                    // Mark as complete
-                    if (data.done) {
-                      const targetId =
-                        realAssistantMessageId ?? tempAssistantMessageId;
-                      get().updateMessage(targetId, {
-                        status: 'sent',
-                      });
-                    }
-                  } catch {
-                    // Ignore parse errors
-                  }
-                }
-              }
-            }
-
-            // If we still have temp messages after streaming, mark them as sent
-            // This is a fallback in case the server doesn't send real IDs
-            if (!realUserMessageId) {
-              get().updateMessage(tempUserMessageId, {
-                status: 'sent',
-              });
-            }
-            if (!realAssistantMessageId) {
-              get().updateMessage(tempAssistantMessageId, {
-                status: 'sent',
-              });
-            }
-          }
+          // For now, we'll rely on the WebSocket broadcast which is already working
+          // The handleWebSocketMessage method will receive and display the AI response
         } catch (error) {
           get().updateMessage(tempUserMessageId, {
             status: 'error',
