@@ -19,6 +19,7 @@ import { registerChatRoutes } from './routes/chat';
 import { registerCustomerDeviceRoutes } from './routes/customer-devices';
 import { registerCustomerSessionRoutes } from './routes/customer-sessions';
 import { registerDevHelperRoutes } from './routes/dev-helpers';
+import { registerDeviceActionRoutes } from './routes/device-actions';
 import { registerDeviceAuthRoutes } from './routes/device-auth';
 import { registerDeviceCommandRoutes } from './routes/device-commands';
 import { devicesRoutes } from './routes/devices';
@@ -99,6 +100,7 @@ export async function createApp(): Promise<FastifyInstance> {
   registerHealthRoutes(app);
   registerDeviceAuthRoutes(app);
   registerDeviceCommandRoutes(app);
+  registerDeviceActionRoutes(app);
   registerCustomerDeviceRoutes(app);
   registerCustomerSessionRoutes(app);
 
