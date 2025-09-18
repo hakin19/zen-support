@@ -1,0 +1,1 @@
+commit all and push to remote branch with --no-verify

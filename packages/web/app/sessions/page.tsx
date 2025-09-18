@@ -255,7 +255,7 @@ function SessionsPage(): JSX.Element {
 
     try {
       const transcript = await fetchTranscript(session.id);
-    setTranscriptModal(prev => ({ ...prev, transcript }));
+      setTranscriptModal(prev => ({ ...prev, transcript }));
     } catch (error) {
       toast({
         title: 'Failed to load transcript',
