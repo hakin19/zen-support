@@ -66,11 +66,11 @@ export function AuthProvider({
         if (mappedUser) {
           authStore.setUser({
             id: mappedUser.id,
-            email: mappedUser.email,
-            role: mappedUser.role,
+            email: mappedUser.email!,
+            role: mappedUser.role!,
             full_name: undefined,
           });
-          authStore.setSession(session as Record<string, unknown>);
+          authStore.setSession(session as unknown as Record<string, unknown>);
         } else {
           authStore.clearAuth();
         }
@@ -97,11 +97,11 @@ export function AuthProvider({
         if (mappedUser) {
           authStore.setUser({
             id: mappedUser.id,
-            email: mappedUser.email,
-            role: mappedUser.role,
+            email: mappedUser.email!,
+            role: mappedUser.role!,
             full_name: undefined,
           });
-          authStore.setSession(session as Record<string, unknown>);
+          authStore.setSession(session as unknown as Record<string, unknown>);
         } else {
           authStore.clearAuth();
         }
@@ -157,11 +157,11 @@ export function AuthProvider({
     if (mappedUser) {
       authStore.setUser({
         id: mappedUser.id,
-        email: mappedUser.email,
-        role: mappedUser.role,
+        email: mappedUser.email!,
+        role: mappedUser.role!,
         full_name: undefined,
       });
-      authStore.setSession(session as Record<string, unknown>);
+      authStore.setSession(session as unknown as Record<string, unknown>);
     } else {
       authStore.clearAuth();
     }

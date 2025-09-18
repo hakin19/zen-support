@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-type UserRole = 'owner' | 'admin' | 'viewer';
+type UserRole = 'owner' | 'admin' | 'viewer' | 'operator' | 'super_admin';
 
 interface User {
   id: string;

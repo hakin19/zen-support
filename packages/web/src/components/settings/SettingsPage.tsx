@@ -41,7 +41,7 @@ interface Tab {
   label: string;
   icon: React.ComponentType<{ className?: string; 'data-testid'?: string }>;
   component: React.ComponentType<Record<string, unknown>>;
-  roles: Array<'owner' | 'admin' | 'viewer'>;
+  roles: Array<'owner' | 'admin' | 'viewer' | 'operator' | 'super_admin'>;
 }
 
 interface ErrorBoundaryState {
@@ -149,7 +149,7 @@ export function SettingsPage(): JSX.Element {
 
   // Filter tabs based on user role
   const visibleTabs = useMemo(() => {
-    if (!user) return [];
+    if (!user?.role) return [];
     return tabs.filter(tab => tab.roles.includes(user.role));
   }, [tabs, user]);
 
