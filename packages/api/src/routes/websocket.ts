@@ -625,7 +625,10 @@ export async function registerWebSocketRoutes(
                             requestId
                           )
                         );
-                      } else if (isDevBypass && subscribedChannels.has(channel)) {
+                      } else if (
+                        isDevBypass &&
+                        subscribedChannels.has(channel)
+                      ) {
                         subscribedChannels.delete(channel);
                         await manager.sendToConnection(
                           connectionId,
