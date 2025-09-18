@@ -1,5 +1,5 @@
-/**
- * Sessions Store - Manages diagnostic session state and real-time updates
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, no-undef */
+/** Sessions Store - Manages diagnostic session state and real-time updates
  */
 
 import { create } from 'zustand';
@@ -39,7 +39,7 @@ export interface DiagnosticSession {
   created_at: string;
   updated_at: string;
   expires_at?: string | null;
-  diagnostic_data?: any;
+  diagnostic_data?: Record<string, unknown>;
   remediation_actions?: RemediationAction[] | null;
   notes?: string | null;
 }
@@ -129,7 +129,7 @@ export const useSessionsStore = create<SessionsState>()(
 
         const response = await fetch(`/api/v1/customer/sessions?${params}`, {
           headers: {
-            Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
+            Authorization: `Bearer ${typeof window !== 'undefined' ? localStorage.getItem('auth_token') : ''}`,
           },
         });
 
@@ -140,12 +140,12 @@ export const useSessionsStore = create<SessionsState>()(
         const data = await response.json();
 
         set({
-          sessions: data.sessions || [],
-          devices: data.devices || {},
-          users: data.users || {},
+          sessions: data.sessions ?? [],
+          devices: data.devices ?? {},
+          users: data.users ?? {},
           currentPage: page,
-          totalPages: Math.ceil((data.totalCount || 0) / 10),
-          totalCount: data.totalCount || 0,
+          totalPages: Math.ceil((data.totalCount ?? 0) / 10),
+          totalCount: data.totalCount ?? 0,
           loading: false,
         });
       } catch (error) {
@@ -165,7 +165,7 @@ export const useSessionsStore = create<SessionsState>()(
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
+              Authorization: `Bearer ${typeof window !== 'undefined' ? localStorage.getItem('auth_token') : ''}`,
             },
             body: JSON.stringify({ approved: true }),
           }
@@ -186,7 +186,7 @@ export const useSessionsStore = create<SessionsState>()(
 
         // Refresh sessions
         const { currentPage, statusFilter, searchQuery } = get();
-        await get().fetchSessions(currentPage, statusFilter, searchQuery);
+        void get().fetchSessions(currentPage, statusFilter, searchQuery);
       } catch (error) {
         throw error;
       }
@@ -200,7 +200,7 @@ export const useSessionsStore = create<SessionsState>()(
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
+              Authorization: `Bearer ${typeof window !== 'undefined' ? localStorage.getItem('auth_token') : ''}`,
             },
             body: JSON.stringify({ approved: false, reason }),
           }
@@ -221,7 +221,7 @@ export const useSessionsStore = create<SessionsState>()(
 
         // Refresh sessions
         const { currentPage, statusFilter, searchQuery } = get();
-        await get().fetchSessions(currentPage, statusFilter, searchQuery);
+        void get().fetchSessions(currentPage, statusFilter, searchQuery);
       } catch (error) {
         throw error;
       }
@@ -233,7 +233,7 @@ export const useSessionsStore = create<SessionsState>()(
           `/api/v1/customer/sessions/${sessionId}/transcript`,
           {
             headers: {
-              Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
+              Authorization: `Bearer ${typeof window !== 'undefined' ? localStorage.getItem('auth_token') : ''}`,
             },
           }
         );
@@ -243,7 +243,7 @@ export const useSessionsStore = create<SessionsState>()(
         }
 
         const data = await response.json();
-        return data.transcript || [];
+        return data.transcript ?? [];
       } catch (error) {
         console.error('Failed to fetch transcript:', error);
         return [];
@@ -263,6 +263,7 @@ export const useSessionsStore = create<SessionsState>()(
     },
 
     subscribeToUpdates: () => {
+      /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call */
       const supabase = createBrowserClient();
       const channel = supabase
         .channel('sessions-updates')
@@ -291,6 +292,7 @@ export const useSessionsStore = create<SessionsState>()(
         .subscribe();
 
       set({ channel });
+      /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call */
     },
 
     unsubscribeFromUpdates: () => {

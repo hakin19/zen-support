@@ -43,6 +43,21 @@ vi.mock('@/lib/supabase/client', () => ({
   })),
 }));
 
+// Mock auth store
+vi.mock('@/store/auth.store', () => ({
+  useAuthStore: vi.fn((selector) => {
+    const mockStore = {
+      user: {
+        id: 'test-user-id',
+        email: 'admin@test.com',
+        user_metadata: {
+          role: 'owner',
+        },
+      },
+    };
+    return selector ? selector(mockStore) : mockStore;
+  }),
+}));
 // Mock diagnostic session fixtures
 const mockSessions = [
   {
@@ -255,7 +270,7 @@ describe('Sessions Queue & Approvals Page', () => {
         expect(screen.getByText('Guest Network')).toBeInTheDocument();
 
         // Check user info is displayed
-        expect(screen.getByText('John Smith')).toBeInTheDocument();
+        expect(screen.getAllByText('John Smith')).toHaveLength(2);
         expect(screen.getByText('Jane Doe')).toBeInTheDocument();
       });
     });

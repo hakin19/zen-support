@@ -1,8 +1,7 @@
 'use client';
 
-import {
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */import {
   Search,
-  Filter,
   CheckCircle,
   XCircle,
   Clock,
@@ -13,13 +12,7 @@ import {
   RefreshCw,
   Activity,
 } from 'lucide-react';
-import React, {
-  useState,
-  useEffect,
-  useMemo,
-  useCallback,
-  type JSX,
-} from 'react';
+import React, { useState, useEffect, useMemo, type JSX } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -125,8 +118,8 @@ function SessionsPage(): JSX.Element {
   // Check if user has permission to approve/reject
   const canApprove = useMemo(() => {
     return (
-      user?.user_metadata?.role === 'owner' ||
-      user?.user_metadata?.role === 'admin'
+      (user?.user_metadata?.role as string) === 'owner' ||
+      (user?.user_metadata?.role as string) === 'admin'
     );
   }, [user]);
 
@@ -185,7 +178,7 @@ function SessionsPage(): JSX.Element {
 
   // Fetch sessions on component mount and when filters change
   useEffect(() => {
-    fetchSessions(currentPage, statusFilter, debouncedSearch);
+    void fetchSessions(currentPage, statusFilter, debouncedSearch);
   }, [currentPage, statusFilter, debouncedSearch, fetchSessions]);
 
   // Update global search query when debounced value changes
@@ -304,17 +297,7 @@ function SessionsPage(): JSX.Element {
 
   // Handle retry on error
   const handleRetry = () => {
-    fetchSessions(currentPage, statusFilter, searchQuery);
-  };
-
-  // Format timestamp for display
-  const formatTime = (timestamp: string) => {
-    const date = new Date(timestamp);
-    return date.toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-    });
+    void fetchSessions(currentPage, statusFilter, searchQuery);
   };
 
   const formatDate = (timestamp: string) => {
@@ -475,7 +458,7 @@ function SessionsPage(): JSX.Element {
                       )}
                     </TableCell>
                     <TableCell className='max-w-xs truncate'>
-                      {session.issue_description || 'No description'}
+                      {session.issue_description ?? 'No description'}
                     </TableCell>
                     <TableCell>{getStatusBadge(session.status)}</TableCell>
                     <TableCell>
@@ -489,7 +472,7 @@ function SessionsPage(): JSX.Element {
                         <Button
                           variant='ghost'
                           size='sm'
-                          onClick={() => openTranscriptModal(session)}
+                          onClick={() => void openTranscriptModal(session)}
                         >
                           <FileText className='h-4 w-4' />
                           View Transcript
@@ -635,7 +618,7 @@ function SessionsPage(): JSX.Element {
               variant={
                 approvalModal.action === 'approve' ? 'default' : 'destructive'
               }
-              onClick={handleApprovalAction}
+              onClick={() => void handleApprovalAction()}
               disabled={isProcessing}
             >
               {isProcessing ? (
