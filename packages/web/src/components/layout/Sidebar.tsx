@@ -7,6 +7,7 @@ import {
   Menu,
   X,
   LogOut,
+  Loader2,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -14,15 +15,19 @@ import React, { useState } from 'react';
 
 import type { User } from '@aizen/shared';
 
+import { LogoutButton } from '@/components/auth/LogoutButton';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 interface SidebarProps {
-  user: User;
-  onSignOut?: () => void;
+  user: User | null;
+  loading?: boolean;
 }
 
-export function Sidebar({ user, onSignOut }: SidebarProps): React.ReactElement {
+export function Sidebar({
+  user,
+  loading = false,
+}: SidebarProps): React.ReactElement {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(true);
 
@@ -94,21 +99,30 @@ export function Sidebar({ user, onSignOut }: SidebarProps): React.ReactElement {
 
           {/* User Info & Sign Out */}
           <div className='border-t p-4'>
-            <div className='mb-3'>
-              <p className='text-sm font-medium'>{user.email ?? 'No email'}</p>
+            <div className='mb-3 space-y-1'>
+              <p className='text-sm font-medium'>
+                {loading ? 'Loading…' : (user?.email ?? 'Signed in')}
+              </p>
               <p className='text-xs text-muted-foreground capitalize'>
-                {user.role ?? 'viewer'}
+                {loading ? 'Authenticating' : (user?.role ?? 'member')}
               </p>
             </div>
-            {onSignOut && (
-              <Button
+            {!loading && user ? (
+              <LogoutButton
+                className='w-full'
                 variant='outline'
                 size='sm'
-                className='w-full'
-                onClick={onSignOut}
-              >
-                <LogOut className='mr-2 h-4 w-4' />
-                Sign out
+                label={
+                  <span className='flex items-center justify-center'>
+                    <LogOut className='mr-2 h-4 w-4' />
+                    Sign out
+                  </span>
+                }
+              />
+            ) : (
+              <Button variant='outline' size='sm' className='w-full' disabled>
+                <Loader2 className='mr-2 h-4 w-4 animate-spin' />
+                Loading…
               </Button>
             )}
           </div>

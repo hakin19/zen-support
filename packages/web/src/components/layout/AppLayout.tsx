@@ -4,23 +4,21 @@ import React from 'react';
 
 import { Sidebar } from './Sidebar';
 
-import type { User } from '@aizen/shared';
+import { useAuth } from '@/components/providers/AuthProvider';
 
 interface AppLayoutProps {
   children: React.ReactNode;
-  user: User;
-  onSignOut?: () => void;
 }
 
-export function AppLayout({
-  children,
-  user,
-  onSignOut,
-}: AppLayoutProps): React.ReactElement {
+export function AppLayout({ children }: AppLayoutProps): React.ReactElement {
+  const { user, loading } = useAuth();
+
   return (
-    <div className='min-h-screen bg-background'>
-      <Sidebar user={user} onSignOut={onSignOut} />
-      <div className='main-content'>{children}</div>
+    <div className='flex min-h-screen bg-background'>
+      <Sidebar user={user} loading={loading} />
+      <main className='main-content flex min-h-screen flex-col bg-background'>
+        {children}
+      </main>
     </div>
   );
 }

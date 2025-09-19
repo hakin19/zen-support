@@ -5,11 +5,11 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import React, { useState } from 'react';
 
+import { useAuth } from '@/components/providers/AuthProvider';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { createClient } from '@/lib/supabase/client';
 
 export default function LoginPage(): React.ReactElement {
   const [email, setEmail] = useState('');
@@ -17,7 +17,7 @@ export default function LoginPage(): React.ReactElement {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
-  const supabase = createClient();
+  const { signIn } = useAuth();
 
   const handleLogin = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
@@ -25,18 +25,12 @@ export default function LoginPage(): React.ReactElement {
     setError(null);
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (error) {
-        setError(error.message);
-      } else {
-        router.push('/chat');
-      }
-    } catch {
-      setError('An unexpected error occurred');
+      await signIn(email, password);
+      router.push('/chat');
+      router.refresh();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : undefined;
+      setError(message ?? 'An unexpected error occurred');
     } finally {
       setLoading(false);
     }

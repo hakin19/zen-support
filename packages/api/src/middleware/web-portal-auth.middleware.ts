@@ -24,32 +24,6 @@ export async function webPortalAuthMiddleware(
   const token = request.headers.authorization?.replace('Bearer ', '');
 
   if (!token) {
-    const shouldBypassAuth = process.env.NODE_ENV !== 'production';
-
-    if (shouldBypassAuth) {
-      const devUser = {
-        id: 'dev-user',
-        customerId: 'dev-customer',
-        role: 'owner' as UserRole,
-        email: 'dev@example.com',
-      };
-
-      request.userId = devUser.id;
-      request.customerId = devUser.customerId;
-      request.userRole = devUser.role;
-      request.customerEmail = devUser.email;
-      request.user = devUser;
-
-      request.log.warn(
-        {
-          requestId: request.id,
-        },
-        'Bypassing web portal auth (development mode)'
-      );
-
-      return;
-    }
-
     return reply.status(401).send({
       error: 'Unauthorized',
       message: 'Missing authentication token',

@@ -2,7 +2,7 @@ import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '../../../test/test-utils';
 import '@testing-library/jest-dom';
-import OrganizationSettingsPage from './page';
+import { OrganizationSettingsPageClient as OrganizationSettingsPage } from './page';
 import { useAuthStore } from '@/store/auth.store';
 import { api } from '@/lib/api-client';
 

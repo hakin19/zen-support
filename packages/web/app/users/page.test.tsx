@@ -2,7 +2,7 @@ import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '../../test/test-utils';
 import '@testing-library/jest-dom';
-import UsersPage from './page';
+import { UsersPageClient } from './page';
 import { useAuthStore } from '@/store/auth.store';
 import { api } from '@/lib/api-client';
 import { useRouter } from 'next/navigation';
@@ -121,7 +121,7 @@ describe('Users Page', () => {
         return selector ? selector(state) : state;
       });
 
-      render(<UsersPage />);
+      render(<UsersPageClient />);
 
       expect(screen.getByTestId('auth-loading')).toBeInTheDocument();
       expect(screen.getByText('Loading...')).toBeInTheDocument();
@@ -145,7 +145,7 @@ describe('Users Page', () => {
         return selector ? selector(state) : state;
       });
 
-      render(<UsersPage />);
+      render(<UsersPageClient />);
 
       await waitFor(() => {
         expect(mockPush).toHaveBeenCalledWith('/login');
@@ -157,7 +157,7 @@ describe('Users Page', () => {
 
     it('should render content when authenticated', async () => {
       // Default mock is authenticated, so just test it renders
-      render(<UsersPage />);
+      render(<UsersPageClient />);
 
       await waitFor(() => {
         expect(screen.getByText('User Administration')).toBeInTheDocument();
@@ -173,7 +173,7 @@ describe('Users Page', () => {
 
   describe('Page Rendering', () => {
     it('should render the users page with title and description', () => {
-      render(<UsersPage />);
+      render(<UsersPageClient />);
       expect(screen.getByText('User Administration')).toBeInTheDocument();
       expect(
         screen.getByText('Manage team members and their access')
@@ -181,7 +181,7 @@ describe('Users Page', () => {
     });
 
     it('should render the UserManagement component', async () => {
-      render(<UsersPage />);
+      render(<UsersPageClient />);
 
       await waitFor(() => {
         // Verify the component is mounted by checking for its header

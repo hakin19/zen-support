@@ -3,6 +3,33 @@ import { NextResponse } from 'next/server';
 
 import type { NextRequest } from 'next/server';
 
+const PROTECTED_PATHS = [
+  '/chat',
+  '/settings',
+  '/dashboard',
+  '/devices',
+  '/sessions',
+  '/users',
+];
+
+const PUBLIC_PATHS = ['/', '/login', '/signup'];
+const AUTH_PATH_PREFIX = '/auth';
+
+const isProtectedPath = (pathname: string): boolean =>
+  PROTECTED_PATHS.some(
+    path => pathname === path || pathname.startsWith(`${path}/`)
+  );
+
+const isAuthPath = (pathname: string): boolean =>
+  pathname === '/login' || pathname === '/signup';
+
+const isPublicPath = (pathname: string): boolean => {
+  if (PUBLIC_PATHS.includes(pathname)) return true;
+  return (
+    pathname === AUTH_PATH_PREFIX || pathname.startsWith(`${AUTH_PATH_PREFIX}/`)
+  );
+};
+
 export async function middleware(request: NextRequest): Promise<NextResponse> {
   let response = NextResponse.next({
     request: {
@@ -14,11 +41,9 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!supabaseUrl || !supabaseAnonKey) {
-    // Missing Supabase configuration - only redirect if not already on login page
-    if (request.nextUrl.pathname !== '/login') {
+    if (!isPublicPath(request.nextUrl.pathname)) {
       return NextResponse.redirect(new URL('/login', request.url));
     }
-    // If already on login page, allow access despite missing config
     return response;
   }
 
@@ -44,23 +69,22 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
           ...options,
         });
       },
-      remove(name: string, options: CookieOptions) {
-        request.cookies.set({
-          name,
-          value: '',
-          ...options,
-        });
+      remove(name: string) {
+        request.cookies.delete(name);
         response = NextResponse.next({
           request: {
             headers: request.headers,
           },
         });
-        response.cookies.set({
-          name,
-          value: '',
-          ...options,
-        });
+        response.cookies.delete(name);
       },
+    },
+    cookieOptions: {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 60 * 60 * 24 * 7,
     },
   });
 
@@ -68,31 +92,11 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
     data: { session },
   } = await supabase.auth.getSession();
 
-  // Protected routes that require authentication
-  const protectedPaths = ['/chat', '/settings', '/dashboard'];
-  const isProtectedPath = protectedPaths.some(path =>
-    request.nextUrl.pathname.startsWith(path)
-  );
-
-  // Public routes that don't require authentication
-  const publicPaths = ['/login', '/signup', '/auth', '/'];
-  publicPaths.some(
-    path =>
-      request.nextUrl.pathname === path ||
-      request.nextUrl.pathname.startsWith('/auth/')
-  );
-
-  // If trying to access protected route without session, redirect to login
-  if (isProtectedPath && !session) {
+  if (isProtectedPath(request.nextUrl.pathname) && !session) {
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
-  // If logged in and trying to access login/signup, redirect to chat
-  if (
-    session &&
-    (request.nextUrl.pathname === '/login' ||
-      request.nextUrl.pathname === '/signup')
-  ) {
+  if (session && isAuthPath(request.nextUrl.pathname)) {
     return NextResponse.redirect(new URL('/chat', request.url));
   }
 
@@ -100,15 +104,5 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
 }
 
 export const config = {
-  matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - public folder
-     * - api routes
-     */
-    '/((?!_next/static|_next/image|favicon.ico|public|api).*)',
-  ],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|public|api).*)'],
 };
