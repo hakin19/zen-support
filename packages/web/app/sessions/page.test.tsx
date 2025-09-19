@@ -10,8 +10,11 @@ import userEvent from '@testing-library/user-event';
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import SessionsPage from './page';
-import type { DiagnosticSession, TranscriptEntry } from '@/store/sessions.store';
+import SessionsPage from './SessionsPageClient';
+import type {
+  DiagnosticSession,
+  TranscriptEntry,
+} from '@/store/sessions.store';
 
 const mockToast = vi.fn();
 
@@ -93,8 +96,16 @@ const baseSessions: DiagnosticSession[] = [
 ];
 
 const devices = {
-  'device-1': { id: 'device-1', name: 'Main Router', status: 'online' as const },
-  'device-2': { id: 'device-2', name: 'Backup Router', status: 'offline' as const },
+  'device-1': {
+    id: 'device-1',
+    name: 'Main Router',
+    status: 'online' as const,
+  },
+  'device-2': {
+    id: 'device-2',
+    name: 'Backup Router',
+    status: 'offline' as const,
+  },
 };
 
 const users = {
@@ -171,10 +182,14 @@ describe('SessionsPage', () => {
     const firstRow = screen.getByTestId('session-row-session-1');
     expect(within(firstRow).getByText('Main Router')).toBeInTheDocument();
     expect(within(firstRow).getByText('john@example.com')).toBeInTheDocument();
-    expect(within(firstRow).getByTestId('status-badge-pending')).toBeInTheDocument();
+    expect(
+      within(firstRow).getByTestId('status-badge-pending')
+    ).toBeInTheDocument();
 
     const secondRow = screen.getByTestId('session-row-session-2');
-    expect(within(secondRow).getByTestId('status-badge-completed')).toBeInTheDocument();
+    expect(
+      within(secondRow).getByTestId('status-badge-completed')
+    ).toBeInTheDocument();
   });
 
   it('debounces search input and updates store query', async () => {
@@ -239,7 +254,10 @@ describe('SessionsPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /Confirm Rejection/i }));
 
     await waitFor(() => {
-      expect(mockRejectSession).toHaveBeenCalledWith('session-1', 'Unsafe command');
+      expect(mockRejectSession).toHaveBeenCalledWith(
+        'session-1',
+        'Unsafe command'
+      );
     });
   });
 
@@ -249,7 +267,9 @@ describe('SessionsPage', () => {
     render(<SessionsPage />);
 
     const row = screen.getByTestId('session-row-session-1');
-    fireEvent.click(within(row).getByRole('button', { name: /View Transcript/i }));
+    fireEvent.click(
+      within(row).getByRole('button', { name: /View Transcript/i })
+    );
 
     await waitFor(() => {
       expect(mockFetchTranscript).toHaveBeenCalledWith('session-1');
@@ -269,7 +289,9 @@ describe('SessionsPage', () => {
     render(<SessionsPage />);
 
     const row = screen.getByTestId('session-row-session-1');
-    fireEvent.click(within(row).getByRole('button', { name: /View Transcript/i }));
+    fireEvent.click(
+      within(row).getByRole('button', { name: /View Transcript/i })
+    );
 
     await waitFor(() => {
       expect(mockFetchTranscript).toHaveBeenCalledWith('session-1');
@@ -304,7 +326,9 @@ describe('SessionsPage', () => {
     render(<SessionsPage />);
 
     const row = screen.getByTestId('session-row-session-1');
-    fireEvent.click(within(row).getByRole('button', { name: /View Transcript/i }));
+    fireEvent.click(
+      within(row).getByRole('button', { name: /View Transcript/i })
+    );
 
     await waitFor(() => {
       expect(mockFetchTranscript).toHaveBeenCalledWith('session-1');

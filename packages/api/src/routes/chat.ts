@@ -1045,20 +1045,14 @@ export function registerChatRoutes(fastify: FastifyInstance): void {
 
         const messages = ensureMemoryMessages(sessionId);
         const index = messages.findIndex(msg => msg.id === assistantMessageId);
-        if (index !== -1) {
-          messages[index] = {
-            ...messages[index],
-            content: fullResponse,
-          };
+        if (index !== -1 && messages[index]) {
+          messages[index].content = fullResponse;
         }
       } else {
         const messages = getMemoryMessages(sessionId);
         const index = messages.findIndex(msg => msg.id === assistantMessageId);
-        if (index !== -1) {
-          messages[index] = {
-            ...messages[index],
-            content: fullResponse,
-          };
+        if (index !== -1 && messages[index]) {
+          messages[index].content = fullResponse;
           touchMemorySession(sessionId);
         }
       }

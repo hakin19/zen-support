@@ -1,10 +1,13 @@
-import { createServerClient, type CookieOptions } from '@supabase/ssr';
+import {
+  createServerClient as createSupabaseServerClient,
+  type CookieOptions,
+} from '@supabase/ssr';
 import { cookies } from 'next/headers';
 
 import type { Database } from '@aizen/shared';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-export function createClient(): SupabaseClient<Database> {
+export function createServerClient(): SupabaseClient<Database> {
   const cookieStore = cookies();
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -14,7 +17,7 @@ export function createClient(): SupabaseClient<Database> {
     throw new Error('Missing Supabase environment variables');
   }
 
-  return createServerClient<Database>(supabaseUrl, supabaseAnonKey, {
+  return createSupabaseServerClient<Database>(supabaseUrl, supabaseAnonKey, {
     cookies: {
       get(name: string) {
         return cookieStore.get(name)?.value;
@@ -23,20 +26,23 @@ export function createClient(): SupabaseClient<Database> {
         try {
           cookieStore.set({ name, value, ...options });
         } catch {
-          // The `set` method was called from a Server Component.
-          // This can be ignored if you have middleware refreshing
-          // user sessions.
+          // When invoked from a Server Component `set` can throw; ignore and rely on middleware refresh.
         }
       },
-      remove(name: string, options: CookieOptions) {
+      remove(name: string) {
         try {
-          cookieStore.set({ name, value: '', ...options });
+          cookieStore.delete(name);
         } catch {
-          // The `delete` method was called from a Server Component.
-          // This can be ignored if you have middleware refreshing
-          // user sessions.
+          // Same as above – fall back to middleware cookie handling if necessary.
         }
       },
+    },
+    cookieOptions: {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 60 * 60 * 24 * 7,
     },
   });
 }

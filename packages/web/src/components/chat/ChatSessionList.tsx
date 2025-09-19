@@ -259,8 +259,6 @@ export function ChatSessionList({
       <div className='p-4 space-y-3 border-b'>
         <Button
           onClick={() => {
-            console.log('New Chat button clicked');
-            alert('Button clicked!');
             onSessionCreate();
           }}
           className='w-full'
@@ -270,7 +268,7 @@ export function ChatSessionList({
           New Chat
         </Button>
         <button
-          onClick={() => alert('Test button works!')}
+          onClick={() => window.alert('Test button works!')}
           style={{
             padding: '8px',
             background: 'red',

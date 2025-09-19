@@ -12,7 +12,7 @@ import {
 } from '../../test/test-utils';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
-import DeviceManagement from './page';
+import { DeviceManagementPageClient as DeviceManagement } from './page';
 import { useAuthStore } from '@/store/auth.store';
 import { useDeviceStore } from '@/store/device.store';
 import { useWebSocketStore } from '@/store/websocket.store';

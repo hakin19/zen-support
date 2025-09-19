@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 
+import type { SignOutScope } from '@/lib/auth/types';
 import type { User } from '@aizen/shared';
 import type {
   User as SupabaseUser,
@@ -19,7 +20,7 @@ interface AuthContextType {
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signInWithOTP: (email: string) => Promise<void>;
-  signOut: () => Promise<void>;
+  signOut: (scope?: SignOutScope) => Promise<void>;
   refreshSession: () => Promise<void>;
 }
 
@@ -131,16 +132,36 @@ export function AuthProvider({
       email,
       options: {
         emailRedirectTo: `${window.location.origin}/auth/callback`,
+        shouldCreateUser: false,
       },
     });
 
     if (error) throw error;
   };
 
-  const signOut = async (): Promise<void> => {
-    const { error } = await supabase.auth.signOut();
-    if (error) throw error;
+  const signOut = async (scope: SignOutScope = 'local'): Promise<void> => {
+    const response = await fetch('/auth/signout', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include',
+      body: JSON.stringify({ scope }),
+    });
+
+    if (!response.ok) {
+      const data = (await response.json().catch(() => null)) as {
+        error?: string;
+      } | null;
+      throw new Error(data?.error ?? 'Failed to sign out');
+    }
+
+    setUser(null);
+    setSession(null);
+    authStore.clearAuth();
+
     router.replace('/login');
+    router.refresh();
   };
 
   const refreshSession = async (): Promise<void> => {

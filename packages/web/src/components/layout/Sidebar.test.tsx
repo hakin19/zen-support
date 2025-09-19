@@ -5,6 +5,20 @@ import '@testing-library/jest-dom';
 import { Sidebar } from './Sidebar';
 import type { User } from '@aizen/shared';
 
+const signOutMock = vi.fn();
+
+vi.mock('@/components/providers/AuthProvider', () => ({
+  useAuth: () => ({
+    signOut: signOutMock,
+  }),
+}));
+
+vi.mock('@/hooks/use-toast', () => ({
+  useToast: () => ({
+    toast: vi.fn(),
+  }),
+}));
+
 // Mock Next.js navigation
 const mockPush = vi.fn();
 const mockPathname = vi.fn();
@@ -40,6 +54,7 @@ describe('Sidebar', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockPathname.mockReturnValue('/chat');
+    signOutMock.mockReset();
   });
 
   describe('rendering', () => {
@@ -86,8 +101,7 @@ describe('Sidebar', () => {
     });
 
     it('should render sign out button', () => {
-      const onSignOut = vi.fn();
-      render(<Sidebar user={mockUser} onSignOut={onSignOut} />);
+      render(<Sidebar user={mockUser} />);
 
       expect(
         screen.getByRole('button', { name: /sign out/i })
@@ -172,14 +186,13 @@ describe('Sidebar', () => {
   });
 
   describe('sign out', () => {
-    it('should call sign out handler when sign out button is clicked', async () => {
-      const onSignOut = vi.fn();
-      render(<Sidebar user={mockUser} onSignOut={onSignOut} />);
+    it('should trigger sign out when button is clicked', async () => {
+      render(<Sidebar user={mockUser} />);
 
       const signOutButton = screen.getByRole('button', { name: /sign out/i });
       fireEvent.click(signOutButton);
 
-      expect(onSignOut).toHaveBeenCalled();
+      expect(signOutMock).toHaveBeenCalledWith('local');
     });
   });
 
