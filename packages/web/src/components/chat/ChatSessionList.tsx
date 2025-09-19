@@ -267,17 +267,6 @@ export function ChatSessionList({
           <Plus className='h-4 w-4 mr-2' />
           New Chat
         </Button>
-        <button
-          onClick={() => window.alert('Test button works!')}
-          style={{
-            padding: '8px',
-            background: 'red',
-            color: 'white',
-            width: '100%',
-          }}
-        >
-          TEST BUTTON
-        </button>
         <div className='relative'>
           <Search className='absolute left-2 top-2.5 h-4 w-4 text-muted-foreground' />
           <Input
