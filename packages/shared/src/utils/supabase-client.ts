@@ -141,6 +141,8 @@ export function getAuthenticatedSupabaseClient(
   }
 
   // Create a new client with the provided access token
+  // We MUST use the anon key as the second parameter (it's the API key)
+  // The user's JWT should be passed in the Authorization header
   return createClient<Database>(supabaseConfig.url, supabaseConfig.anonKey, {
     auth: {
       persistSession: false,

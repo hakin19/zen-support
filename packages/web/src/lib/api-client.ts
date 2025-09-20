@@ -1,11 +1,14 @@
 export class ApiClient {
   private baseUrl: string;
   private getAuthToken: (() => Promise<string | null>) | null = null;
+  private timeoutMs: number;
 
   constructor(
-    baseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001'
+    baseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001',
+    timeoutMs = 5000
   ) {
     this.baseUrl = baseUrl;
+    this.timeoutMs = timeoutMs;
   }
 
   setAuthTokenProvider(provider: () => Promise<string | null>): void {
@@ -31,23 +34,44 @@ export class ApiClient {
       (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
     }
 
-    const response = await fetch(url, {
-      ...options,
-      headers,
-      credentials: 'include',
-    });
+    const controller = options.signal ? null : new AbortController();
+    const timeoutId = controller
+      ? setTimeout(() => {
+          controller.abort();
+        }, this.timeoutMs)
+      : undefined;
 
-    if (!response.ok) {
-      const error = (await response
-        .json()
-        .catch(() => ({ message: 'Request failed' }))) as { message?: string };
-      throw new Error(
-        error.message ?? `Request failed with status ${response.status}`
-      );
+    try {
+      const response = await fetch(url, {
+        ...options,
+        headers,
+        credentials: 'include',
+        signal: controller?.signal ?? options.signal,
+      });
+
+      if (!response.ok) {
+        const error = (await response
+          .json()
+          .catch(() => ({ message: 'Request failed' }))) as {
+          message?: string;
+        };
+        throw new Error(
+          error.message ?? `Request failed with status ${response.status}`
+        );
+      }
+
+      const data = (await response.json()) as T;
+      return { data };
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        throw new Error('Request timed out');
+      }
+      throw error;
+    } finally {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
     }
-
-    const data = (await response.json()) as T;
-    return { data };
   }
 
   async getBlob(path: string, options: RequestInit = {}): Promise<Blob> {

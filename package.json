@@ -25,10 +25,9 @@
   "scripts": {
     "// Development": "Scripts for local development",
     "dev": "nx run-many --target=dev --all --parallel",
-    "dev:api": "nx run @aizen/api-gateway:dev",
-    "dev:web": "nx run @aizen/web-portal:dev",
-    "dev:device": "nx run @aizen/device-agent:dev",
-    "dev:ai": "nx run @aizen/ai-orchestrator:dev",
+    "dev:api": "nx run api:dev",
+    "dev:web": "nx run web:dev",
+    "dev:device": "nx run device-agent:dev",
     "dev:docker": "docker-compose --env-file .env -f infrastructure/docker/docker-compose.yml up",
     "dev:docker:build": "docker-compose --env-file .env -f infrastructure/docker/docker-compose.yml build",
     "dev:docker:down": "docker-compose --env-file .env -f infrastructure/docker/docker-compose.yml down",

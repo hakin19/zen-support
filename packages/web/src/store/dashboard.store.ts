@@ -70,6 +70,7 @@ interface DashboardState {
     pendingInvites: number;
   };
   summary: DashboardSummary | null;
+  hasLoaded: boolean;
   fetchInitial: () => Promise<void>;
   refreshDevices: () => Promise<void>;
   refreshUsers: () => Promise<void>;
@@ -102,6 +103,7 @@ const initialState = {
     pendingInvites: 0,
   },
   summary: null,
+  hasLoaded: false,
 };
 
 const fallbackOrganization: OrganizationSummary = {
@@ -220,10 +222,12 @@ function buildSummary(
 }
 
 export const useDashboardStore = create<DashboardState>()(
-  devtools((set, _get) => ({
+  devtools((set, get) => ({
     ...initialState,
 
     fetchInitial: async (): Promise<void> => {
+      const { loading, hasLoaded } = get();
+      if (loading || hasLoaded) return;
       set(
         { loading: true, error: null },
         false,
@@ -244,6 +248,13 @@ export const useDashboardStore = create<DashboardState>()(
           api.get<UsersResponse>('/api/users?page=1&limit=1&status=invited'),
         ]);
 
+        console.log('Dashboard API responses:', {
+          orgResponse: orgResponse.data,
+          devicesResponse: devicesResponse.data,
+          usersResponse: usersResponse.data,
+          invitedUsersResponse: invitedUsersResponse.data,
+        });
+
         const organization = orgResponse.data.organization ?? null;
         const devices = devicesResponse.data.devices ?? [];
         const users = usersResponse.data.users ?? [];
@@ -251,6 +262,30 @@ export const useDashboardStore = create<DashboardState>()(
           total: usersResponse.data.total ?? users.length,
           pendingInvites: invitedUsersResponse.data.total ?? 0,
         };
+
+        // If we don't have an organization, use fallback data in development
+        if (!organization && process.env.NODE_ENV !== 'production') {
+          const summary = buildSummary(
+            fallbackOrganization,
+            fallbackDevices,
+            fallbackUserMetrics
+          );
+
+          set(
+            {
+              organization: fallbackOrganization,
+              devices: fallbackDevices,
+              users: [],
+              userMetrics: fallbackUserMetrics,
+              summary,
+              loading: false,
+              error: null,
+            },
+            false,
+            'dashboard/fetchInitial:fallback'
+          );
+          return;
+        }
 
         set(
           {
@@ -261,11 +296,13 @@ export const useDashboardStore = create<DashboardState>()(
             summary: buildSummary(organization, devices, userMetrics),
             loading: false,
             error: null,
+            hasLoaded: true,
           },
           false,
           'dashboard/fetchInitial:success'
         );
       } catch (error) {
+        console.error('Dashboard fetch error:', error);
         const message =
           error instanceof Error ? error.message : 'Failed to load dashboard';
 
@@ -285,13 +322,14 @@ export const useDashboardStore = create<DashboardState>()(
               summary,
               loading: false,
               error: message,
+              hasLoaded: true,
             },
             false,
             'dashboard/fetchInitial:fallback'
           );
         } else {
           set(
-            { error: message, loading: false },
+            { error: message, loading: false, hasLoaded: true },
             false,
             'dashboard/fetchInitial:error'
           );
@@ -313,6 +351,7 @@ export const useDashboardStore = create<DashboardState>()(
               state.userMetrics
             ),
             error: null,
+            hasLoaded: true,
           }),
           false,
           'dashboard/refreshDevices:success'
@@ -347,6 +386,7 @@ export const useDashboardStore = create<DashboardState>()(
               userMetrics
             ),
             error: null,
+            hasLoaded: true,
           }),
           false,
           'dashboard/refreshUsers:success'

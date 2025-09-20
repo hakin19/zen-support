@@ -105,11 +105,9 @@ export async function createApp(): Promise<FastifyInstance> {
   registerCustomerSessionRoutes(app);
 
   // Register new UI routes
-  await app.register(organizationRoutes);
+  await app.register(organizationRoutes, { prefix: '/api' });
   registerPromptsRoutes(app);
-  await app.register(devicesRoutes);
-  await app.register(usersRoutes);
-  // Also expose user management under /api prefix for consistency with other UI endpoints
+  await app.register(devicesRoutes, { prefix: '/api' });
   await app.register(usersRoutes, { prefix: '/api' });
 
   // Register AI orchestration routes

@@ -66,7 +66,7 @@ const allowedOriginSchema = z.object({
 export const organizationRoutes: FastifyPluginAsync = async fastify => {
   // Get organization
   fastify.get(
-    '/api/organization',
+    '/organization',
     { preHandler: [webPortalAuth] },
     async (request, reply) => {
       const { user } = request;
@@ -79,7 +79,7 @@ export const organizationRoutes: FastifyPluginAsync = async fastify => {
           fastify.log.warn(
             {
               requestId: request.id,
-              route: '/api/organization',
+              route: '/organization',
             },
             'SUPABASE_SERVICE_KEY missing – returning stub organization data'
           );
@@ -142,7 +142,16 @@ export const organizationRoutes: FastifyPluginAsync = async fastify => {
         const error = result.error;
 
         if (error || !org) {
-          fastify.log.error('Failed to fetch organization: %s', error);
+          fastify.log.error(
+            {
+              error,
+              customerId: user.customerId,
+              userId: user.id,
+              hasOrg: !!org,
+              orgData: org,
+            },
+            'Failed to fetch organization'
+          );
           return reply.code(404).send({ error: 'Organization not found' });
         }
 
@@ -229,7 +238,7 @@ export const organizationRoutes: FastifyPluginAsync = async fastify => {
 
   // Update organization
   fastify.patch(
-    '/api/organization',
+    '/organization',
     { preHandler: [webPortalAuth] },
     async (request, reply) => {
       const { user } = request;
@@ -308,7 +317,7 @@ export const organizationRoutes: FastifyPluginAsync = async fastify => {
 
   // Update security settings
   fastify.patch(
-    '/api/organization/settings',
+    '/organization/settings',
     { preHandler: [webPortalAuth] },
     async (request, reply) => {
       const { user } = request;
@@ -346,7 +355,7 @@ export const organizationRoutes: FastifyPluginAsync = async fastify => {
 
   // Update notification settings
   fastify.patch(
-    '/api/organization/notifications',
+    '/organization/notifications',
     { preHandler: [webPortalAuth] },
     async (request, reply) => {
       const { user } = request;
@@ -384,7 +393,7 @@ export const organizationRoutes: FastifyPluginAsync = async fastify => {
 
   // Update API settings
   fastify.patch(
-    '/api/organization/api-settings',
+    '/organization/api-settings',
     { preHandler: [webPortalAuth] },
     async (request, reply) => {
       const { user } = request;
@@ -417,7 +426,7 @@ export const organizationRoutes: FastifyPluginAsync = async fastify => {
 
   // Add IP to whitelist
   fastify.post(
-    '/api/organization/ip-whitelist',
+    '/organization/ip-whitelist',
     { preHandler: [webPortalAuth] },
     async (request, reply) => {
       const { user } = request;
@@ -484,7 +493,7 @@ export const organizationRoutes: FastifyPluginAsync = async fastify => {
 
   // Remove IP from whitelist
   fastify.delete(
-    '/api/organization/ip-whitelist/:ip',
+    '/organization/ip-whitelist/:ip',
     { preHandler: [webPortalAuth] },
     async (request, reply) => {
       const { user } = request;
@@ -537,7 +546,7 @@ export const organizationRoutes: FastifyPluginAsync = async fastify => {
 
   // Add allowed origin
   fastify.post(
-    '/api/organization/allowed-origins',
+    '/organization/allowed-origins',
     { preHandler: [webPortalAuth] },
     async (request, reply) => {
       const { user } = request;
@@ -585,7 +594,7 @@ export const organizationRoutes: FastifyPluginAsync = async fastify => {
 
   // Remove allowed origin
   fastify.delete(
-    '/api/organization/allowed-origins/:origin',
+    '/organization/allowed-origins/:origin',
     { preHandler: [webPortalAuth] },
     async (request, reply) => {
       const { user } = request;
@@ -629,7 +638,7 @@ export const organizationRoutes: FastifyPluginAsync = async fastify => {
 
   // Test webhook
   fastify.post(
-    '/api/organization/test-webhook',
+    '/organization/test-webhook',
     { preHandler: [webPortalAuth] },
     async (request, reply) => {
       const { user } = request;
@@ -654,7 +663,7 @@ export const organizationRoutes: FastifyPluginAsync = async fastify => {
 
   // Get billing portal URL
   fastify.post(
-    '/api/organization/billing-portal',
+    '/organization/billing-portal',
     { preHandler: [webPortalAuth] },
     async (request, reply) => {
       const { user } = request;
@@ -679,7 +688,7 @@ export const organizationRoutes: FastifyPluginAsync = async fastify => {
 
   // Delete organization
   fastify.delete(
-    '/api/organization',
+    '/organization',
     { preHandler: [webPortalAuth] },
     async (request, reply) => {
       const { user } = request;

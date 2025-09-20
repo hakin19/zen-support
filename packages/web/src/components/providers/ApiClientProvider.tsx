@@ -13,11 +13,26 @@ export function ApiClientProvider({
   useEffect(() => {
     const supabase = createClient();
 
-    // Set up the auth token provider
+    // Set up the auth token provider with automatic refresh
     apiClient.setAuthTokenProvider(async () => {
-      const {
+      // Try to get the current session
+      let {
         data: { session },
       } = await supabase.auth.getSession();
+
+      // If session exists but might be expired, refresh it
+      if (session?.expires_at) {
+        const expiresAt = new Date(session.expires_at * 1000);
+        const now = new Date();
+        // Refresh if expires within 60 seconds
+        if (expiresAt.getTime() - now.getTime() < 60000) {
+          const refreshResult = await supabase.auth.refreshSession();
+          if (!refreshResult.error && refreshResult.data.session) {
+            session = refreshResult.data.session;
+          }
+        }
+      }
+
       return session?.access_token ?? null;
     });
   }, []);

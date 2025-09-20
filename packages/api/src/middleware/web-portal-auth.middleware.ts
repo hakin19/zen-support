@@ -1,7 +1,4 @@
-import {
-  getSupabaseAdminClient,
-  getAuthenticatedSupabaseClient,
-} from '@aizen/shared/utils/supabase-client';
+import { getSupabaseAdminClient } from '@aizen/shared/utils/supabase-client';
 
 import type { FastifyRequest, FastifyReply } from 'fastify';
 
@@ -32,17 +29,41 @@ export async function webPortalAuthMiddleware(
   }
 
   try {
-    // Get authenticated client with user's token
-    const supabase = getAuthenticatedSupabaseClient(token);
+    // Bypass SDK and call Supabase auth API directly to avoid hanging issue
+    const supabaseUrl =
+      process.env.SUPABASE_URL || 'https://cgesudxbpqocqwixecdx.supabase.co';
+    const anonKey =
+      process.env.SUPABASE_ANON_KEY ||
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNnZXN1ZHhicHFvY3F3aXhlY2R4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3MjQzNTY0MDIsImV4cCI6MjAzOTkzMjQwMn0.rCTgLi5XfDeW7THCUavu9-i4ChFNDjf4MQVz0NKuVp0';
 
-    // Verify token and get user
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
+    request.log.debug('Calling Supabase auth API directly');
 
-    if (authError || !user) {
-      request.log.debug({ authError }, 'Authentication failed');
+    const authResponse = await fetch(`${supabaseUrl}/auth/v1/user`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        apikey: anonKey,
+      },
+      signal: AbortSignal.timeout(3000), // 3 second timeout
+    });
+
+    if (!authResponse.ok) {
+      const errorText = await authResponse.text();
+      request.log.info(
+        { status: authResponse.status, error: errorText },
+        'Authentication failed'
+      );
+      return reply.status(401).send({
+        error: 'Unauthorized',
+        message: 'Invalid authentication token',
+        requestId: request.id,
+      });
+    }
+
+    const user = (await authResponse.json()) as { id: string; email?: string };
+
+    if (!user?.id) {
+      request.log.info({ user }, 'Invalid user data from auth');
       return reply.status(401).send({
         error: 'Unauthorized',
         message: 'Invalid authentication token',
@@ -148,20 +169,35 @@ export async function optionalWebPortalAuthMiddleware(
   }
 
   try {
-    // Get authenticated client with user's token
-    const supabase = getAuthenticatedSupabaseClient(token);
+    // Bypass SDK and call Supabase auth API directly to avoid hanging issue
+    const supabaseUrl =
+      process.env.SUPABASE_URL || 'https://cgesudxbpqocqwixecdx.supabase.co';
+    const anonKey =
+      process.env.SUPABASE_ANON_KEY ||
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNnZXN1ZHhicHFvY3F3aXhlY2R4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3MjQzNTY0MDIsImV4cCI6MjAzOTkzMjQwMn0.rCTgLi5XfDeW7THCUavu9-i4ChFNDjf4MQVz0NKuVp0';
 
-    // Verify token and get user
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
+    const authResponse = await fetch(`${supabaseUrl}/auth/v1/user`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        apikey: anonKey,
+      },
+      signal: AbortSignal.timeout(3000), // 3 second timeout
+    });
 
-    if (authError || !user) {
+    if (!authResponse.ok) {
+      const errorText = await authResponse.text();
       request.log.debug(
-        { authError },
+        { status: authResponse.status, error: errorText },
         'Optional auth failed, continuing as anonymous'
       );
+      return; // Continue without auth instead of sending error response
+    }
+
+    const user = (await authResponse.json()) as { id: string; email?: string };
+
+    if (!user?.id) {
+      request.log.debug({ user }, 'Invalid user data, continuing as anonymous');
       return; // Continue without auth instead of sending error response
     }
 

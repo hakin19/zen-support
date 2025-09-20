@@ -149,7 +149,8 @@ export const useWebSocketStore = create<WebSocketState>((set, get) => ({
   // Connection management
   connect: async () => {
     const state = get();
-    if (state.wsClient?.isConnected()) return;
+    // Prevent multiple connections
+    if (state.wsClient || state.isConnected) return;
 
     try {
       const supabase = createClient();
@@ -182,6 +183,9 @@ export const useWebSocketStore = create<WebSocketState>((set, get) => ({
         autoConnect: true,
         reconnect: true,
       });
+
+      // Set the client immediately to prevent multiple connection attempts
+      set({ wsClient });
 
       // Set the WebSocket client in the device store for device page subscriptions
       useDeviceStore.getState().setWebSocketClient(wsClient);

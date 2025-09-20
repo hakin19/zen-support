@@ -1,7 +1,8 @@
 import { z } from 'zod';
 
-import { webPortalAuthMiddleware } from '../middleware/web-portal-auth.middleware';
-import { supabase } from '../services/supabase';
+import { getSupabaseAdminClient } from '@aizen/shared/utils/supabase-client';
+
+import { webPortalAuthHook } from '../middleware/web-portal-auth.middleware';
 
 import { getConnectionManager } from './websocket';
 
@@ -44,101 +45,11 @@ const queryParamsSchema = z.object({
 export const devicesRoutes: FastifyPluginAsync = async (
   fastify
 ): Promise<void> => {
-  // Get devices list - simplified endpoint for UI compatibility
-  fastify.get(
-    '/api/devices',
-    {
-      preHandler: (request: FastifyRequest, reply: FastifyReply) =>
-        void webPortalAuthMiddleware(request, reply),
-    },
-    async (request, reply) => {
-      const { user } = request;
-      if (!user) {
-        return reply.code(401).send({ error: 'Unauthorized' });
-      }
-
-      try {
-        if (!process.env.SUPABASE_SERVICE_KEY) {
-          fastify.log.warn(
-            {
-              requestId: request.id,
-              route: '/api/devices',
-            },
-            'SUPABASE_SERVICE_KEY missing – returning stub device list'
-          );
-
-          return reply.send({
-            devices: [
-              {
-                id: 'dev-1',
-                name: 'Demo Router',
-                device_id: 'DEV-ROUTER-001',
-                customer_id: user.customerId,
-                location: 'Main Office',
-                status: 'online',
-                registered_at: new Date().toISOString(),
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-                last_heartbeat: new Date().toISOString(),
-                ip_address: '10.0.0.1',
-                firmware_version: '1.0.0',
-              },
-              {
-                id: 'dev-2',
-                name: 'Demo Sensor',
-                device_id: 'DEV-SENSOR-002',
-                customer_id: user.customerId,
-                location: 'Warehouse',
-                status: 'offline',
-                registered_at: new Date().toISOString(),
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-                last_heartbeat: null,
-                ip_address: null,
-                firmware_version: '0.9.4',
-              },
-            ],
-            firmware_updates: {},
-          });
-        }
-
-        const { data: devices, error } = await supabase
-          .from('devices')
-          .select('*')
-          .eq('customer_id', user.customerId)
-          .order('created_at', { ascending: false });
-
-        if (error) {
-          fastify.log.error('Failed to fetch devices: %s', error);
-          return reply.code(500).send({ error: 'Failed to fetch devices' });
-        }
-
-        // Get firmware update status
-        const deviceIds = (devices as DeviceRow[])?.map(d => d.id) ?? [];
-        const firmwareUpdates: Record<string, unknown> = {};
-
-        if (deviceIds.length > 0) {
-          // Note: firmware_updates table doesn't exist in current schema
-          // Skipping this functionality for now
-        }
-
-        return reply.send({
-          devices: devices ?? [],
-          firmware_updates: firmwareUpdates,
-        });
-      } catch (error: unknown) {
-        fastify.log.error('Error fetching devices: %s', error);
-        return reply.code(500).send({ error: 'Internal server error' });
-      }
-    }
-  );
-
   // Register device - simplified endpoint for UI compatibility
   fastify.post(
-    '/api/devices/register',
+    '/devices/register',
     {
-      preHandler: (request: FastifyRequest, reply: FastifyReply) =>
-        void webPortalAuthMiddleware(request, reply),
+      preHandler: webPortalAuthHook,
     },
     async (request, reply) => {
       const { user } = request;
@@ -147,6 +58,7 @@ export const devicesRoutes: FastifyPluginAsync = async (
       }
 
       try {
+        const supabase = getSupabaseAdminClient();
         const body = request.body as {
           name: string;
           serial_number: string;
@@ -226,8 +138,7 @@ export const devicesRoutes: FastifyPluginAsync = async (
   fastify.get(
     '/devices',
     {
-      preHandler: (request: FastifyRequest, reply: FastifyReply) =>
-        void webPortalAuthMiddleware(request, reply),
+      preHandler: webPortalAuthHook,
     },
     async (request, reply) => {
       const { user } = request;
@@ -236,10 +147,15 @@ export const devicesRoutes: FastifyPluginAsync = async (
       }
 
       try {
+        fastify.log.info('Starting devices query, getting admin client...');
+        const supabase = getSupabaseAdminClient();
+        fastify.log.info('Got admin client, parsing params...');
         const params = queryParamsSchema.parse(request.query);
         const page = parseInt(params.page);
         const limit = parseInt(params.limit);
         const offset = (page - 1) * limit;
+
+        fastify.log.info('Fetching devices for customer: %s', user.customerId);
 
         // Build query
         let query = supabase
@@ -247,7 +163,7 @@ export const devicesRoutes: FastifyPluginAsync = async (
           .select('*', { count: 'exact' })
           .eq('customer_id', user.customerId)
           .range(offset, offset + limit - 1)
-          .order('created_at', { ascending: false });
+          .order('registered_at', { ascending: false });
 
         // Apply filters
         if (params.status) {
@@ -256,32 +172,38 @@ export const devicesRoutes: FastifyPluginAsync = async (
 
         if (params.search) {
           query = query.or(
-            `name.ilike.%${params.search}%,serial_number.ilike.%${params.search}%,location.ilike.%${params.search}%`
+            `name.ilike.%${params.search}%,device_id.ilike.%${params.search}%,location.ilike.%${params.search}%`
           );
         }
 
+        fastify.log.info('Executing devices query...');
         const { data: devices, error, count } = await query;
+        fastify.log.info(
+          'Query completed. Devices found: %d',
+          devices?.length || 0
+        );
 
         if (error) {
           fastify.log.error('Failed to fetch devices: %s', error);
           return reply.code(500).send({ error: 'Failed to fetch devices' });
         }
 
-        // Get firmware update status
-        const deviceIds = devices?.map((d: { id: string }) => d.id) || [];
+        // Get firmware update status - skip for now to avoid timeout
         const firmwareUpdates: Record<string, unknown> = {};
 
-        if (deviceIds.length > 0) {
-          const { data: updates } = await supabase
-            .from('firmware_updates')
-            .select('*')
-            .in('device_id', deviceIds)
-            .eq('status', 'available');
-
-          updates?.forEach((update: { device_id: string }) => {
-            firmwareUpdates[update.device_id] = update;
-          });
-        }
+        // TODO: Re-enable when firmware_updates table schema cache is refreshed
+        // const deviceIds = devices?.map((d: { id: string }) => d.id) || [];
+        // if (deviceIds.length > 0) {
+        //   const { data: updates } = await supabase
+        //     .from('firmware_updates')
+        //     .select('*')
+        //     .in('device_id', deviceIds)
+        //     .eq('status', 'available');
+        //
+        //   updates?.forEach((update: { device_id: string }) => {
+        //     firmwareUpdates[update.device_id] = update;
+        //   });
+        // }
 
         return reply.send({
           devices: devices || [],
@@ -301,8 +223,7 @@ export const devicesRoutes: FastifyPluginAsync = async (
   fastify.post(
     '/devices',
     {
-      preHandler: (request: FastifyRequest, reply: FastifyReply) =>
-        void webPortalAuthMiddleware(request, reply),
+      preHandler: webPortalAuthHook,
     },
     async (request, reply) => {
       const { user } = request;
@@ -311,6 +232,7 @@ export const devicesRoutes: FastifyPluginAsync = async (
       }
 
       try {
+        const supabase = getSupabaseAdminClient();
         const body = registerDeviceSchema.parse(request.body);
 
         // Check if device already exists
@@ -360,8 +282,7 @@ export const devicesRoutes: FastifyPluginAsync = async (
   fastify.patch(
     '/devices/:deviceId',
     {
-      preHandler: (request: FastifyRequest, reply: FastifyReply) =>
-        void webPortalAuthMiddleware(request, reply),
+      preHandler: webPortalAuthHook,
     },
     async (request, reply) => {
       const { user } = request;
@@ -370,6 +291,7 @@ export const devicesRoutes: FastifyPluginAsync = async (
       }
 
       try {
+        const supabase = getSupabaseAdminClient();
         const { deviceId } = request.params as { deviceId: string };
         const body = updateDeviceSchema.parse(request.body);
 
@@ -417,8 +339,7 @@ export const devicesRoutes: FastifyPluginAsync = async (
   fastify.delete(
     '/devices/:deviceId',
     {
-      preHandler: (request: FastifyRequest, reply: FastifyReply) =>
-        void webPortalAuthMiddleware(request, reply),
+      preHandler: webPortalAuthHook,
     },
     async (request, reply) => {
       const { user } = request;
@@ -429,6 +350,7 @@ export const devicesRoutes: FastifyPluginAsync = async (
       }
 
       try {
+        const supabase = getSupabaseAdminClient();
         const { deviceId } = request.params as { deviceId: string };
 
         // Check device exists and belongs to organization
@@ -473,8 +395,7 @@ export const devicesRoutes: FastifyPluginAsync = async (
   fastify.post(
     '/devices/:deviceId/restart',
     {
-      preHandler: (request: FastifyRequest, reply: FastifyReply) =>
-        void webPortalAuthMiddleware(request, reply),
+      preHandler: webPortalAuthHook,
     },
     async (request, reply) => {
       const { user } = request;
@@ -483,6 +404,7 @@ export const devicesRoutes: FastifyPluginAsync = async (
       }
 
       try {
+        const supabase = getSupabaseAdminClient();
         const { deviceId } = request.params as { deviceId: string };
 
         // Check device exists and is online
@@ -533,8 +455,7 @@ export const devicesRoutes: FastifyPluginAsync = async (
   fastify.post(
     '/devices/:deviceId/firmware',
     {
-      preHandler: (request: FastifyRequest, reply: FastifyReply) =>
-        void webPortalAuthMiddleware(request, reply),
+      preHandler: webPortalAuthHook,
     },
     async (request, reply) => {
       const { user } = request;
@@ -543,6 +464,7 @@ export const devicesRoutes: FastifyPluginAsync = async (
       }
 
       try {
+        const supabase = getSupabaseAdminClient();
         const { deviceId } = request.params as { deviceId: string };
         const { version } = request.body as { version: string };
 
@@ -615,8 +537,7 @@ export const devicesRoutes: FastifyPluginAsync = async (
   fastify.get(
     '/devices/:deviceId/diagnostics',
     {
-      preHandler: (request: FastifyRequest, reply: FastifyReply) =>
-        void webPortalAuthMiddleware(request, reply),
+      preHandler: webPortalAuthHook,
     },
     async (request, reply) => {
       const { user } = request;
@@ -625,6 +546,7 @@ export const devicesRoutes: FastifyPluginAsync = async (
       }
 
       try {
+        const supabase = getSupabaseAdminClient();
         const { deviceId } = request.params as { deviceId: string };
 
         // Check device exists and belongs to organization
@@ -669,10 +591,9 @@ export const devicesRoutes: FastifyPluginAsync = async (
 
   // Export devices to CSV
   fastify.get(
-    '/api/devices/export',
+    '/devices/export',
     {
-      preHandler: (request: FastifyRequest, reply: FastifyReply) =>
-        void webPortalAuthMiddleware(request, reply),
+      preHandler: webPortalAuthHook,
     },
     async (request, reply) => {
       const { user } = request;
@@ -681,6 +602,7 @@ export const devicesRoutes: FastifyPluginAsync = async (
       }
 
       try {
+        const supabase = getSupabaseAdminClient();
         // Fetch all devices for the organization
         const { data: devices, error: exportError } = await supabase
           .from('devices')
@@ -765,10 +687,9 @@ export const devicesRoutes: FastifyPluginAsync = async (
 
   // Bulk restart devices
   fastify.post(
-    '/api/devices/bulk-restart',
+    '/devices/bulk-restart',
     {
-      preHandler: (request: FastifyRequest, reply: FastifyReply) =>
-        void webPortalAuthMiddleware(request, reply),
+      preHandler: webPortalAuthHook,
     },
     async (request, reply) => {
       const { user } = request;
@@ -777,6 +698,7 @@ export const devicesRoutes: FastifyPluginAsync = async (
       }
 
       try {
+        const supabase = getSupabaseAdminClient();
         const { device_ids } = request.body as { device_ids: string[] };
 
         if (!device_ids || device_ids.length === 0) {
@@ -838,10 +760,9 @@ export const devicesRoutes: FastifyPluginAsync = async (
 
   // Bulk enable devices
   fastify.post(
-    '/api/devices/bulk-enable',
+    '/devices/bulk-enable',
     {
-      preHandler: (request: FastifyRequest, reply: FastifyReply) =>
-        void webPortalAuthMiddleware(request, reply),
+      preHandler: webPortalAuthHook,
     },
     async (request, reply) => {
       const { user } = request;
@@ -850,6 +771,7 @@ export const devicesRoutes: FastifyPluginAsync = async (
       }
 
       try {
+        const supabase = getSupabaseAdminClient();
         const { device_ids } = request.body as { device_ids: string[] };
 
         if (!device_ids || device_ids.length === 0) {
@@ -903,10 +825,9 @@ export const devicesRoutes: FastifyPluginAsync = async (
 
   // Bulk disable devices
   fastify.post(
-    '/api/devices/bulk-disable',
+    '/devices/bulk-disable',
     {
-      preHandler: (request: FastifyRequest, reply: FastifyReply) =>
-        void webPortalAuthMiddleware(request, reply),
+      preHandler: webPortalAuthHook,
     },
     async (request, reply) => {
       const { user } = request;
@@ -915,6 +836,7 @@ export const devicesRoutes: FastifyPluginAsync = async (
       }
 
       try {
+        const supabase = getSupabaseAdminClient();
         const { device_ids } = request.body as { device_ids: string[] };
 
         if (!device_ids || device_ids.length === 0) {
@@ -968,10 +890,9 @@ export const devicesRoutes: FastifyPluginAsync = async (
 
   // Bulk remove devices
   fastify.post(
-    '/api/devices/bulk-remove',
+    '/devices/bulk-remove',
     {
-      preHandler: (request: FastifyRequest, reply: FastifyReply) =>
-        void webPortalAuthMiddleware(request, reply),
+      preHandler: webPortalAuthHook,
     },
     async (request, reply) => {
       const { user } = request;
@@ -982,6 +903,7 @@ export const devicesRoutes: FastifyPluginAsync = async (
       }
 
       try {
+        const supabase = getSupabaseAdminClient();
         const { device_ids } = request.body as { device_ids: string[] };
 
         if (!device_ids || device_ids.length === 0) {
